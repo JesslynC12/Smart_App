@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/login.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// Import file project Anda
 import 'auth_service.dart';
-import 'home_page.dart';
-import 'login.dart'; // Pastikan nama file sesuai (sebelumnya Anda pakai login.dart)
+import 'login.dart'; // Pastikan nama file sesuai (login.dart atau login_page.dart)
+import 'home_page.dart'; // Dashboard Admin
+import 'homepage_vendor.dart'; // Dashboard Vendor
 import 'register_vendor.dart';
 
 void main() async {
@@ -27,17 +25,18 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Smart App - WMS',
+      title: 'Smart App',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue.shade800),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red.shade700),
         useMaterial3: true,
       ),
-      // AuthWrapper menentukan apakah user harus login atau langsung ke Home
+      // AuthWrapper sebagai pintu masuk utama
       home: const AuthWrapper(),
       routes: {
         '/login': (context) => const LoginPage(),
         '/register-vendor': (context) => const RegisterVendorPage(),
-        '/home': (context) => const HomePage(),
+        '/home-admin': (context) => const HomePage(),
+        '/home-vendor': (context) => const HomepageVendor(),
       },
     );
   }
@@ -58,32 +57,62 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkAuth() async {
-    // Beri sedikit delay agar splash/indicator terlihat halus
-    await Future.delayed(const Duration(seconds: 1));
+    // Delay sedikit agar transisi mulus
+    await Future.delayed(const Duration(seconds: 2));
     
-    final isLoggedIn = await AuthService.isLoggedIn();
+    // Ambil data user lengkap (termasuk role & status)
+    final user = await AuthService.getCurrentUser();
     
-    if (mounted) {
-      if (isLoggedIn) {
-        // Jika sudah login, langsung ke HomePage
-        Navigator.pushReplacementNamed(context, '/home');
+    if (!mounted) return;
+
+    if (user != null) {
+      // LOGIKA NAVIGASI BERDASARKAN ROLE
+      if (user.role == 'vendor') {
+        if (user.status == 'approved') {
+          Navigator.pushReplacementNamed(context, '/home-vendor');
+        } else {
+          // Jika vendor belum di-approve, paksa logout atau arahkan ke login dengan pesan
+          await AuthService.logout();
+          _navigateToLoginWithMsg("Akun Vendor Anda masih menunggu persetujuan Admin.");
+        }
       } else {
-        // Jika belum, ke LoginPage (Universal)
-        Navigator.pushReplacementNamed(context, '/login');
+        // Jika Admin/PPIC/Gudang
+        Navigator.pushReplacementNamed(context, '/home-admin');
       }
+    } else {
+      // Jika tidak ada session, arahkan ke login
+      Navigator.pushReplacementNamed(context, '/login');
     }
+  }
+
+  void _navigateToLoginWithMsg(String msg) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
+    );
+    // Tampilkan pesan kenapa dia tidak bisa masuk
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 20),
-            Text('Memeriksa Sesi...', style: TextStyle(color: Colors.grey)),
+            // Branding Splash (Bisa diganti Logo PT Anda)
+            Icon(Icons.badge_outlined, size: 80, color: Colors.red.shade700),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 20),
+            const Text(
+              'Memeriksa Sesi...',
+              style: TextStyle(color: Colors.grey, letterSpacing: 1.2),
+            ),
           ],
         ),
       ),

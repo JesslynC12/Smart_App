@@ -13,8 +13,10 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final emailController = TextEditingController();
+  // Menggunakan identifier karena bisa berisi NIK atau Email
+  final identifierController = TextEditingController();
   final passwordController = TextEditingController();
+  
   bool isLoading = false;
   bool rememberMe = false;
   bool obscurePassword = true;
@@ -22,47 +24,57 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _loadSavedEmail();
+    _loadSavedIdentifier();
   }
 
-  Future<void> _loadSavedEmail() async {
+  // Memuat NIK/Email yang tersimpan
+  Future<void> _loadSavedIdentifier() async {
     final prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString('saved_email');
-    if (email != null) {
+    final savedUser = prefs.getString('saved_user_login');
+    if (savedUser != null) {
       setState(() {
-        emailController.text = email;
+        identifierController.text = savedUser;
         rememberMe = true;
       });
     }
   }
 
   Future<void> _login() async {
-    final email = emailController.text.trim();
+    final identifier = identifierController.text.trim();
     final password = passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      _showErrorSnackBar('Email & Password harus diisi');
+    // Validasi Input Kosong
+    if (identifier.isEmpty || password.isEmpty) {
+      _showErrorSnackBar('NIK/Email & Password harus diisi');
+      return;
+    }
+
+    // Validasi Panjang NIK (Jika input bukan email, asumsikan itu NIK)
+    if (!identifier.contains('@') && identifier.length != 8) {
+      _showErrorSnackBar('NIK harus berjumlah 8 karakter');
       return;
     }
 
     setState(() => isLoading = true);
 
     try {
-      final user = await AuthService.login(email, password);
+      // Memanggil AuthService yang sudah mendukung pencarian NIK/Email
+      final user = await AuthService.login(identifier, password);
 
       if (user != null) {
-        // Simpan email jika "Remember Me"
         final prefs = await SharedPreferences.getInstance();
         if (rememberMe) {
-          await prefs.setString('saved_email', email);
+          await prefs.setString('saved_user_login', identifier);
         } else {
-          await prefs.remove('saved_email');
+          await prefs.remove('saved_user_login');
         }
 
         if (mounted) _navigateBasedOnRole(user);
       }
     } catch (e) {
-      if (mounted) _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
+      if (mounted) {
+        _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -105,30 +117,41 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             children: [
               const SizedBox(height: 40),
-              // Logo/Icon Header
+              // Header Icon
               Container(
                 width: 80, height: 80,
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade100,
+                  color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(Icons.lock_person_rounded, size: 40, color: Colors.blue.shade600),
+                child: Icon(Icons.badge_outlined, size: 40, color: Colors.red.shade700),
               ),
               const SizedBox(height: 24),
               Text(
                 'Selamat Datang',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                style: TextStyle(
+                  fontSize: 28, 
+                  fontWeight: FontWeight.bold, 
+                  color: Colors.red.shade700
+                ),
               ),
-              const Text('Silakan login untuk melanjutkan'),
+              const SizedBox(height: 8),
+              const Text(
+                'Silakan login dengan NIK atau Email',
+                style: TextStyle(color: Colors.grey),
+              ),
               const SizedBox(height: 40),
 
-              // Email
+              // Input NIK atau Email
               TextField(
-                controller: emailController,
+                controller: identifierController,
                 decoration: InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  labelText: 'NIK / Email',
+                  hintText: 'Masukkan 8 digit NIK atau Email',
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -144,7 +167,9 @@ class _LoginPageState extends State<LoginPage> {
                     icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility),
                     onPressed: () => setState(() => obscurePassword = !obscurePassword),
                   ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)
+                  ),
                 ),
               ),
 
@@ -153,7 +178,7 @@ class _LoginPageState extends State<LoginPage> {
                   Checkbox(
                     value: rememberMe,
                     onChanged: (val) => setState(() => rememberMe = val ?? false),
-                    activeColor: Colors.blue.shade600,
+                    activeColor: Colors.red.shade700,
                   ),
                   const Text('Ingat saya'),
                 ],
@@ -166,24 +191,40 @@ class _LoginPageState extends State<LoginPage> {
                 child: ElevatedButton(
                   onPressed: isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade600,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    backgroundColor: Colors.red.shade700,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)
+                    ),
+                    elevation: 0,
                   ),
                   child: isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Login', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                    ? const SizedBox(
+                        width: 24, 
+                        height: 24, 
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                      )
+                    : const Text(
+                        'Login', 
+                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)
+                      ),
                 ),
               ),
               const SizedBox(height: 24),
 
-              // Khusus Link Register Vendor
+              // Register Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text("Vendor baru? "),
                   TextButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterVendorPage())),
-                    child: Text('Daftar Perusahaan', style: TextStyle(color: Colors.blue.shade600, fontWeight: FontWeight.bold)),
+                    onPressed: () => Navigator.push(
+                      context, 
+                      MaterialPageRoute(builder: (_) => const RegisterVendorPage())
+                    ),
+                    child: Text(
+                      'Daftar Perusahaan', 
+                      style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold)
+                    ),
                   ),
                 ],
               ),

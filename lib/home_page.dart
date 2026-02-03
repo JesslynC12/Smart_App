@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'auth_service.dart'; // Pastikan file ini berisi class User dan AuthService
+import 'auth_service.dart';
 import 'login.dart';
 
 class HomePage extends StatefulWidget {
@@ -10,7 +10,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Pastikan class 'User' sudah didefinisikan di auth_service.dart
   User? currentUser;
   bool isLoading = true;
 
@@ -21,6 +20,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadCurrentUser() async {
+    setState(() => isLoading = true);
     try {
       final user = await AuthService.getCurrentUser();
       if (mounted) {
@@ -41,16 +41,14 @@ class _HomePageState extends State<HomePage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi'),
-        content: const Text('Apakah Anda yakin ingin logout?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('Konfirmasi Logout'),
+        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Keluar', style: TextStyle(color: Colors.red)),
+            child: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -61,7 +59,6 @@ class _HomePageState extends State<HomePage> {
     try {
       await AuthService.logout();
       if (mounted) {
-        // Navigasi ke LoginPage dan hapus semua history page sebelumnya
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginPage()),
           (route) => false,
@@ -74,47 +71,49 @@ class _HomePageState extends State<HomePage> {
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Definisi warna utama aplikasi
+    final primaryColor = Colors.red.shade700;
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blue.shade800,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: _logout,
-          ),
-        ],
-      ),
+  // Menghapus 'const' karena isinya dinamis
+  title: Text(
+    // Logika penyesuaian nama dashboard
+    '${currentUser?.role != null ? currentUser!.role![0].toUpperCase() + currentUser!.role!.substring(1) : "Smart Admin"} Dashboard', 
+    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
+  ),
+  backgroundColor: primaryColor,
+  foregroundColor: Colors.white,
+  elevation: 0,
+  actions: [
+    IconButton(icon: const Icon(Icons.logout_rounded), onPressed: _logout),
+  ],
+),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: primaryColor))
           : RefreshIndicator(
               onRefresh: _loadCurrentUser,
+              color: primaryColor,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
                   children: [
-                    _buildHeaderSection(),
+                    _buildHeaderSection(primaryColor),
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildMenuGrid(),
+                          _buildMenuGrid(primaryColor),
                           const SizedBox(height: 25),
-                          _buildProfileCard(),
+                          _buildProfileCard(primaryColor),
                         ],
                       ),
                     ),
@@ -125,67 +124,60 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeaderSection() {
-    // Ambil huruf pertama dengan aman
-    String initials = "U";
-    if (currentUser?.username != null && currentUser!.username!.isNotEmpty) {
-      initials = currentUser!.username![0].toUpperCase();
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.only(bottom: 30, left: 20, right: 20, top: 10),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade800,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+  Widget _buildHeaderSection(Color color) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.only(bottom: 30, left: 20, right: 20, top: 10),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(30),
+        bottomRight: Radius.circular(30),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Selamat Datang,',
+          style: TextStyle(color: Colors.white70, fontSize: 12),
         ),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 35,
-            backgroundColor: Colors.white,
-            child: Text(
-              initials,
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+        const SizedBox(height: 4),
+        Text(
+          currentUser?.nik ?? 'Memuat Data...',
+          style: const TextStyle(
+            color: Colors.white, 
+            fontSize: 24, // Diperbesar karena inisial dihapus
+            fontWeight: FontWeight.bold
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            currentUser?.role?.toUpperCase() ?? 'STAFF',
+            style: const TextStyle(
+              color: Colors.white, 
+              fontSize: 10, 
+              fontWeight: FontWeight.bold, 
+              letterSpacing: 1.2
             ),
           ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Selamat Datang,', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                Text(
-                  currentUser?.username ?? 'Admin',
-                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade900,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    currentUser?.role?.toUpperCase() ?? '-',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
-  Widget _buildMenuGrid() {
+  Widget _buildMenuGrid(Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Main Menu", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text("Manajemen Sistem", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 15),
         GridView(
           shrinkWrap: true,
@@ -197,83 +189,74 @@ class _HomePageState extends State<HomePage> {
             childAspectRatio: 1.4,
           ),
           children: [
-            _menuItem(Icons.inventory, "Stok Barang", Colors.orange),
-            _menuItem(Icons.assignment, "Purchase Order", Colors.green),
-            _menuItem(Icons.people, "Data Vendor", Colors.purple),
-            _menuItem(Icons.analytics, "Laporan", Colors.blue),
+            _menuItem(Icons.people_alt_outlined, "Approval Vendor", Colors.orange, color),
+            _menuItem(Icons.inventory_2_outlined, "Master Produk", Colors.blue, color),
+            _menuItem(Icons.assignment_turned_in_outlined, "Validasi PO", Colors.green, color),
+            _menuItem(Icons.settings_suggest_outlined, "Konfigurasi", Colors.grey, color),
           ],
         ),
       ],
     );
   }
 
-  Widget _menuItem(IconData icon, String title, Color color) {
+  Widget _menuItem(IconData icon, String title, Color iconColor, Color themeColor) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))
-        ],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: Colors.grey.shade100),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {},
-          borderRadius: BorderRadius.circular(15),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            ],
-          ),
+      child: InkWell(
+        onTap: () {},
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: iconColor, size: 32),
+            const SizedBox(height: 10),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildProfileCard() {
+  Widget _buildProfileCard(Color themeColor) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.badge_outlined, size: 20, color: Colors.blue),
-              SizedBox(width: 10),
-              Text('Detail Akun', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const Divider(height: 30),
-          _infoRow(Icons.email_outlined, 'Email', currentUser?.email ?? '-'),
-          _infoRow(Icons.alternate_email, 'Username', currentUser?.username ?? '-'),
-          _infoRow(Icons.security, 'Role Akses', currentUser?.role ?? '-'),
+          _infoRow(Icons.badge_outlined, 'NIK / ID Pegawai', currentUser?.nik ?? '-', themeColor),
+          _infoRow(Icons.email_outlined, 'Email Internal', currentUser?.email ?? '-', themeColor),
+          _infoRow(Icons.security_outlined, 'Role Akses', currentUser?.role ?? '-', themeColor),
+          if (currentUser?.privileges.isNotEmpty ?? false)
+            _infoRow(Icons.lock_open_rounded, 'Hak Akses Tambahan', currentUser!.privileges.join(', '), themeColor),
         ],
       ),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow(IconData icon, String label, String value, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey),
+          Icon(icon, size: 20, color: color),
           const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
         ],
       ),
