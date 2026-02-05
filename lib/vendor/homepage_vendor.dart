@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'auth_service.dart';
-import 'login.dart';
+import '../auth/auth_service.dart';
+import '../login.dart';
 
 class HomepageVendor extends StatefulWidget {
   const HomepageVendor({super.key});

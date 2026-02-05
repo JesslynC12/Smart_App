@@ -1,12 +1,14 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+
 class User {
   final String id;
   final String email;
-  final String nik; // Diubah dari username menjadi nik
+  final String nik;
   final String? role;
-  final String? status; 
+  final String? status;
   final List<String> privileges;
+
 
   User({
     required this.id,
@@ -17,35 +19,48 @@ class User {
     this.privileges = const [],
   });
 
+
   factory User.fromJson(Map<String, dynamic> json) {
+    // Parsing privileges dari nested list
     List<String> privs = [];
-    if (json['profile_privileges'] != null) {
+    if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
       for (var item in json['profile_privileges']) {
         if (item['privileges'] != null) {
-          privs.add(item['privileges']['name']);
+          privs.add(item['privileges']['name'].toString());
         }
       }
     }
 
+
+    // Parsing status dari join vendor_details (dikembalikan sebagai List oleh Supabase)
+    String? statusValue;
+    if (json['vendor_details'] != null &&
+        (json['vendor_details'] as List).isNotEmpty) {
+      statusValue = json['vendor_details'][0]['status'];
+    }
+
+
     return User(
       id: json['id'] ?? '',
       email: json['email'] ?? '',
-      nik: json['nik'] ?? '', // Mengambil data kolom nik
+      nik: json['nik'] ?? '',
       role: json['role'],
-      // Ambil status dari join vendor_details
-      status: json['vendor_details'] != null ? json['vendor_details']['status'] : null,
+      status: statusValue,
       privileges: privs,
     );
   }
 }
 
+
 class AuthService {
   static final _supabase = Supabase.instance.client;
+
 
   // --- LOGIN UNIVERSAL (Mendukung NIK 8 Digit atau Email) ---
   static Future<User?> login(String identifier, String password) async {
     try {
       String emailForAuth = identifier.trim();
+
 
       // Jika input bukan email (tidak ada '@'), cari email berdasarkan NIK di tabel profiles
       if (!identifier.contains('@')) {
@@ -55,17 +70,20 @@ class AuthService {
             .eq('nik', identifier.trim())
             .maybeSingle();
 
+
         if (findUser == null) {
           throw Exception('NIK tidak terdaftar');
         }
         emailForAuth = findUser['email'];
       }
 
+
       // Melakukan autentikasi ke Supabase Auth
       final response = await _supabase.auth.signInWithPassword(
         email: emailForAuth,
         password: password,
       );
+
 
       if (response.user != null) {
         return await getCurrentUser();
@@ -77,6 +95,7 @@ class AuthService {
       rethrow;
     }
   }
+
 
   // --- REGISTRASI VENDOR ---
   static Future<void> registerVendor({
@@ -91,8 +110,10 @@ class AuthService {
     try {
       final response = await _supabase.auth.signUp(email: email, password: password);
 
+
       if (response.user != null) {
         final userId = response.user!.id;
+
 
         // 1. Simpan ke profiles
         await _supabase.from('profiles').insert({
@@ -101,6 +122,7 @@ class AuthService {
           'nik': nik,
           'role': 'vendor',
         });
+
 
         // 2. Simpan ke vendor_details
         await _supabase.from('vendor_details').insert({
@@ -117,6 +139,7 @@ class AuthService {
     }
   }
 
+
   // --- REGISTRASI ADMIN ---
   static Future<void> registerAdmin({
     required String email,
@@ -126,6 +149,7 @@ class AuthService {
   }) async {
     try {
       final response = await _supabase.auth.signUp(email: email, password: password);
+
 
       if (response.user != null) {
         await _supabase.from('profiles').insert({
@@ -140,10 +164,13 @@ class AuthService {
     }
   }
 
+
   // --- FUNGSI HELPER ---
   static Future<bool> isLoggedIn() async => _supabase.auth.currentSession != null;
 
+
   static Future<void> logout() async => await _supabase.auth.signOut();
+
 
   static Future<User?> getCurrentUser() async {
     try {
@@ -162,3 +189,4 @@ class AuthService {
     }
   }
 }
+

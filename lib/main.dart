@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/admin/home_page.dart';
+import 'package:project_app/auth/auth_service.dart';
+import 'package:project_app/login.dart';
+import 'package:project_app/vendor/homepage_vendor.dart';
+import 'package:project_app/vendor/register_vendor.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'auth_service.dart';
-import 'login.dart'; // Pastikan nama file sesuai (login.dart atau login_page.dart)
-import 'home_page.dart'; // Dashboard Admin
-import 'homepage_vendor.dart'; // Dashboard Vendor
-import 'register_vendor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
