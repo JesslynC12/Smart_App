@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
-import '../auth/auth_service.dart';
+// Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
+import '../auth/auth_service.dart' as model;
+import '../auth/auth_service.dart'; // Import untuk akses static method AuthService
 import '../login.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
+
 class _HomePageState extends State<HomePage> {
-  User? currentUser;
+  // Gunakan model.User sesuai definisi class User buatan kita
+  model.User? currentUser;
   bool isLoading = true;
+
 
   @override
   void initState() {
@@ -19,15 +26,25 @@ class _HomePageState extends State<HomePage> {
     _loadCurrentUser();
   }
 
+
   Future<void> _loadCurrentUser() async {
     setState(() => isLoading = true);
     try {
+      // Mengambil data user terbaru
       final user = await AuthService.getCurrentUser();
+
+
       if (mounted) {
-        setState(() {
-          currentUser = user;
-          isLoading = false;
-        });
+        if (user == null) {
+          // JIKA USER NULL (Sesi Habis/Token Invalid), Lempar ke Login
+          _handleSessionExpired();
+        } else {
+          // JIKA SUKSES
+          setState(() {
+            currentUser = user;
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -37,6 +54,16 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
+  void _handleSessionExpired() {
+    _showSnackBar('Sesi berakhir, silakan login kembali.', Colors.orange);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -45,7 +72,10 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Konfirmasi Logout'),
         content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal')
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -54,7 +84,9 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
+
     if (confirm != true) return;
+
 
     try {
       await AuthService.logout();
@@ -69,29 +101,40 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating
+      ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
     final primaryColor = Colors.red.shade700;
+   
+    // Logika menampilkan Nama Role di Appbar agar lebih rapi
+    String roleDisplay = "Admin";
+    if (currentUser?.role != null && currentUser!.role!.isNotEmpty) {
+      roleDisplay = currentUser!.role![0].toUpperCase() + currentUser!.role!.substring(1);
+    }
+
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        // --- LOGIKA NAMA DASHBOARD TETAP DI SINI ---
         title: Text(
-          '${currentUser?.role != null ? currentUser!.role![0].toUpperCase() + currentUser!.role!.substring(1) : "Smart Admin"} Dashboard', 
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
+          '$roleDisplay Dashboard',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      // Drawer untuk menu samping
       drawer: _buildDrawer(primaryColor),
       body: isLoading
           ? Center(child: CircularProgressIndicator(color: primaryColor))
@@ -110,7 +153,25 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text("Informasi Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 15),
+                         
+                          // Kartu Profil Utama
                           _buildProfileCard(primaryColor),
+                         
+                          // Menampilkan Privileges (Hak Akses) jika ada
+                          if (currentUser?.privileges.isNotEmpty ?? false) ...[
+                             const SizedBox(height: 20),
+                             const Text("Hak Akses", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                             const SizedBox(height: 10),
+                             Wrap(
+                               spacing: 8,
+                               runSpacing: 8,
+                               children: currentUser!.privileges.map((priv) => Chip(
+                                 label: Text(priv, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                                 backgroundColor: Colors.grey.shade700,
+                                 visualDensity: VisualDensity.compact,
+                               )).toList(),
+                             )
+                          ]
                         ],
                       ),
                     ),
@@ -121,11 +182,11 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+
   Widget _buildDrawer(Color themeColor) {
     return Drawer(
       child: Column(
         children: [
-          // Header Kategori Profil
           UserAccountsDrawerHeader(
             decoration: BoxDecoration(color: themeColor),
             currentAccountPicture: const CircleAvatar(
@@ -136,10 +197,9 @@ class _HomePageState extends State<HomePage> {
               currentUser?.nik ?? 'Loading...',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            accountEmail: Text(currentUser?.email ?? 'Smart Admin User'),
+            accountEmail: Text(currentUser?.email ?? '-'),
           ),
-          
-          // Header Kategori Menu
+         
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Align(
@@ -151,27 +211,30 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // Menu Drop-down menggunakan ExpansionTile
+
           ExpansionTile(
             leading: const Icon(Icons.settings_suggest_outlined),
             title: const Text("Entry", style: TextStyle(fontWeight: FontWeight.w600)),
-            initiallyExpanded: true, // Biar langsung terbuka saat drawer dibuka
+            initiallyExpanded: true,
             children: [
               _menuItem(Icons.assignment_ind_outlined, "Presensi", Colors.blue),
               _menuItem(Icons.local_shipping_outlined, "Loading Barang", Colors.orange),
-              _menuItem(Icons.manage_accounts_outlined, "Manajemen User", Colors.purple,),
+             
+              // LOGIKA: Sembunyikan 'Manajemen User' jika role adalah 'vendor'
+              if (currentUser?.role != 'vendor')
+                _menuItem(Icons.manage_accounts_outlined, "Manajemen User", Colors.purple),
+             
               _menuItem(Icons.inventory_2_outlined, "Master Produk", Colors.teal),
             ],
           ),
-          
-
-          const Spacer(), // Dorong menu logout ke bawah
+         
+          const Spacer(),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout_rounded, color: Colors.red),
             title: const Text("Keluar", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             onTap: () {
-              Navigator.pop(context); // Tutup drawer dulu
+              Navigator.pop(context);
               _logout();
             },
           ),
@@ -181,18 +244,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Widget helper untuk item di dalam ExpansionTile
+
   Widget _menuItem(IconData icon, String title, Color color) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 32),
       leading: Icon(icon, color: color, size: 22),
       title: Text(title, style: const TextStyle(fontSize: 14)),
       onTap: () {
-        Navigator.pop(context); // Tutup drawer
+        Navigator.pop(context);
         _showSnackBar('Membuka $title...', color);
       },
     );
   }
+
 
   Widget _buildHeaderSection(Color color) {
     return Container(
@@ -211,25 +275,56 @@ class _HomePageState extends State<HomePage> {
           const Text('Selamat Datang,', style: TextStyle(color: Colors.white70, fontSize: 12)),
           const SizedBox(height: 4),
           Text(
-            currentUser?.nik ?? 'Memuat Data...',
+            currentUser?.nik ?? 'User',
             style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              currentUser?.role?.toUpperCase() ?? 'STAFF',
-              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-            ),
+          Row(
+            children: [
+              // Badge Role
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  currentUser?.role?.toUpperCase() ?? 'STAFF',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                ),
+              ),
+              const SizedBox(width: 8),
+             
+              // Badge Status Aktif/Non-Aktif
+              if (currentUser != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    // Warna Hijau jika true, Merah jika false
+                    color: currentUser!.isActive ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        currentUser!.isActive ? Icons.check_circle : Icons.cancel,
+                        size: 12, color: Colors.white
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        currentUser!.isActive ? 'ACTIVE' : 'INACTIVE',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ],
       ),
     );
   }
+
 
   Widget _buildProfileCard(Color themeColor) {
     return Container(
@@ -245,12 +340,15 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         children: [
           _infoRow(Icons.badge_outlined, 'NIK / ID Pegawai', currentUser?.nik ?? '-', themeColor),
-          _infoRow(Icons.email_outlined, 'Email Internal', currentUser?.email ?? '-', themeColor),
+          _infoRow(Icons.email_outlined, 'Email', currentUser?.email ?? '-', themeColor),
           _infoRow(Icons.security_outlined, 'Role Akses', currentUser?.role ?? '-', themeColor),
+         
+     
         ],
       ),
     );
   }
+
 
   Widget _infoRow(IconData icon, String label, String value, Color color) {
     return Padding(
@@ -273,3 +371,4 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
