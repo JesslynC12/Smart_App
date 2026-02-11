@@ -177,11 +177,10 @@ class _HomePageState extends State<HomePage> {
             ),
     );
   }
-Widget _buildDrawer(Color themeColor) {
+  Widget _buildDrawer(Color themeColor) {
   return Drawer(
     child: Column(
       children: [
-        // Bagian Header tetap di atas
         UserAccountsDrawerHeader(
           decoration: BoxDecoration(color: themeColor),
           currentAccountPicture: const CircleAvatar(
@@ -195,7 +194,6 @@ Widget _buildDrawer(Color themeColor) {
           accountEmail: Text(currentUser?.email ?? '-'),
         ),
         
-        // Bungkus menu dengan Expanded + ListView agar bisa di-scroll
         Expanded(
           child: ListView(
             padding: EdgeInsets.zero,
@@ -207,44 +205,80 @@ Widget _buildDrawer(Color themeColor) {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
                 ),
               ),
+              
+              // --- SECTION 1: ENTRY & OPERASIONAL ---
               ExpansionTile(
-                leading: const Icon(Icons.settings_suggest_outlined),
+                leading: const Icon(Icons.dvr_rounded), // Ikon terminal/sistem
                 title: const Text("Entry & Operasional", style: TextStyle(fontWeight: FontWeight.w600)),
                 initiallyExpanded: true,
                 children: [
                   if (_hasAccess('CheckIn')) 
-                    _menuItem(Icons.assignment_ind_outlined, "Presensi / Check-In", Colors.blue, onTap: () {
+                    _menuItem(Icons.how_to_reg_rounded, "Presensi / Check-In", Colors.blue, onTap: () {
                        Navigator.pop(context);
                        _showSnackBar("Membuka Presensi...", Colors.blue);
                     }),
                   if (_hasAccess('Loading'))
-                    _menuItem(Icons.local_shipping_outlined, "Loading Barang", Colors.orange),
-                  if (currentUser?.role == 'admin')
-                    _menuItem(Icons.manage_accounts_outlined, "Manajemen User", Colors.purple, onTap: () {
-                      Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage()));
-                    }),
-                  if (_hasAccess('Master'))
-                    _menuItem(Icons.inventory_2_outlined, "Master Produk", Colors.teal),
-                  if (_hasAccess('Dashboard'))
-                    _menuItem(Icons.dashboard, "Dashboard Utama", Colors.indigo),
+                    _menuItem(Icons.unarchive_rounded, "Loading Barang", Colors.orange),
+                  if (_hasAccess('Loading'))
+                    _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange),
                   if (_hasAccess('Kelayakan Unit'))
-                    _menuItem(Icons.inventory_2_outlined, "Kelayakan Unit", Colors.teal, onTap: () {
+                    _menuItem(Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VehicleControlForm()));
                     }),
                   if (_hasAccess('Form Pengiriman'))
-                    _menuItem(Icons.track_changes_outlined, "Buat Pengiriman", Colors.purple, onTap: () {
+                    _menuItem(Icons.local_shipping_rounded, "Buat Pengiriman", Colors.purple, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
                     }),
+                  if (_hasAccess('Complain'))
+                    _menuItem(Icons.report_problem_rounded, "Complain", Colors.redAccent, onTap: () {
+                      // Sesuaikan navigasi complain jika ada page berbeda
+                      Navigator.pop(context); 
+                    }),
+                ],
+              ),
+
+              // --- SECTION 2: DISPLAY & MONITORING ---
+              ExpansionTile(
+                leading: const Icon(Icons.analytics_rounded),
+                title: const Text("Display", style: TextStyle(fontWeight: FontWeight.w600)),
+                children: [
+                  if (currentUser?.role == 'admin') ...[
+                    _menuItem(Icons.list_alt_rounded, "List Planning", Colors.indigo),
+                    _menuItem(Icons.confirmation_number_rounded, "Booking Antrian", Colors.amber.shade800),
+                    _menuItem(Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
+                    _menuItem(Icons.event_note_rounded, "Daily Occupancy", Colors.cyan),
+                    _menuItem(Icons.monitor_rounded, "Dashboard Internal (Daily)", Colors.green),
+                    _menuItem(Icons.date_range_rounded, "Dashboard Internal (Range)", Colors.green.shade700),
+                    _menuItem(Icons.assessment_rounded, "Dashboard Eksternal (Daily)", Colors.deepOrange),
+                    _menuItem(Icons.history_toggle_off_rounded, "Dashboard Eksternal (Range)", Colors.deepOrange.shade700),
+                    _menuItem(Icons.star_rate_rounded, "Penilaian Vendor", Colors.orange),
+                    _menuItem(Icons.feedback_rounded, "Complain", Colors.red),
+                  ]
+                ],
+              ),
+
+              // --- SECTION 3: MASTER DATA ---
+              ExpansionTile(
+                leading: const Icon(Icons.storage_rounded),
+                title: const Text("Master Data", style: TextStyle(fontWeight: FontWeight.w600)),
+                children: [
+                  if (currentUser?.role == 'admin') ...[
+                    _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo),
+                    _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue),
+                    _menuItem(Icons.category_rounded, "Manajemen Material", Colors.brown),
+                    _menuItem(Icons.warehouse_rounded, "Manajemen Warehouse", Colors.blueGrey),
+                    _menuItem(Icons.assignment_turned_in_rounded, "Manajemen Checker", Colors.teal),
+                    _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple),
+                    _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent),
+                  ]
                 ],
               ),
             ],
           ),
         ),
 
-        // Bagian Keluar tetap di paling bawah
         const Divider(height: 1),
         ListTile(
           leading: const Icon(Icons.logout_rounded, color: Colors.red),
@@ -259,6 +293,7 @@ Widget _buildDrawer(Color themeColor) {
     ),
   );
 }
+
 
   Widget _menuItem(IconData icon, String title, Color color, {VoidCallback? onTap}) {
     return ListTile(
