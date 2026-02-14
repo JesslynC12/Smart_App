@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/formpengiriman_page.dart';
 import 'package:project_app/admin/kelayakanunit_page.dart';
+import 'package:project_app/admin/master%20data/customer_master.dart';
+import 'package:project_app/admin/master%20data/material_master.dart';
+import 'package:project_app/admin/master%20data/warehouse_master.dart';
 // Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
 import '../auth/auth_service.dart' as model;
 import '../auth/auth_service.dart'; 
 import '../login.dart';
 // Pastikan path ini sesuai dengan lokasi file UserManagementPage Anda
 import 'package:project_app/admin/manage_user.dart'; 
+import 'manage_user.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -213,7 +217,7 @@ class _HomePageState extends State<HomePage> {
                 initiallyExpanded: true,
                 children: [
                   if (_hasAccess('CheckIn')) 
-                    _menuItem(Icons.how_to_reg_rounded, "Presensi / Check-In", Colors.blue, onTap: () {
+                    _menuItem(Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
                        Navigator.pop(context);
                        _showSnackBar("Membuka Presensi...", Colors.blue);
                     }),
@@ -265,10 +269,22 @@ class _HomePageState extends State<HomePage> {
                 title: const Text("Master Data", style: TextStyle(fontWeight: FontWeight.w600)),
                 children: [
                   if (currentUser?.role == 'admin') ...[
-                    _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo),
-                    _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue),
-                    _menuItem(Icons.category_rounded, "Manajemen Material", Colors.brown),
-                    _menuItem(Icons.warehouse_rounded, "Manajemen Warehouse", Colors.blueGrey),
+                    _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage()));
+                }),
+                    _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const CustomerPaginatedPage()));
+                }),
+                    _menuItem(Icons.category_rounded, "Manajemen Material", Colors.brown,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const MaterialPaginatedPage()));
+                }),
+                    _menuItem(Icons.warehouse_rounded, "Manajemen Warehouse", Colors.blueGrey,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const WarehousePaginatedPage()));
+                }),
                     _menuItem(Icons.assignment_turned_in_rounded, "Manajemen Checker", Colors.teal),
                     _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple),
                     _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent),
