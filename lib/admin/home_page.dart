@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/formpengiriman_page.dart';
 import 'package:project_app/admin/kelayakanunit_page.dart';
+import 'package:project_app/admin/master%20data/checker_master.dart';
 import 'package:project_app/admin/master%20data/customer_master.dart';
 import 'package:project_app/admin/master%20data/material_master.dart';
 import 'package:project_app/admin/master%20data/warehouse_master.dart';
@@ -9,8 +10,8 @@ import '../auth/auth_service.dart' as model;
 import '../auth/auth_service.dart'; 
 import '../login.dart';
 // Pastikan path ini sesuai dengan lokasi file UserManagementPage Anda
-import 'package:project_app/admin/manage_user.dart'; 
-import 'manage_user.dart';
+import 'package:project_app/admin/master%20data/manage_user.dart'; 
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -231,7 +232,7 @@ class _HomePageState extends State<HomePage> {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VehicleControlForm()));
                     }),
                   if (_hasAccess('Form Pengiriman'))
-                    _menuItem(Icons.local_shipping_rounded, "Buat Pengiriman", Colors.purple, onTap: () {
+                    _menuItem(Icons.local_shipping_rounded, "Permintaan Pengiriman", Colors.purple, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
                     }),
@@ -271,7 +272,7 @@ class _HomePageState extends State<HomePage> {
                   if (currentUser?.role == 'admin') ...[
                     _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage()));
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => UserManagementPage()));
                 }),
                     _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue,onTap: () {
                        Navigator.pop(context);
@@ -285,7 +286,10 @@ class _HomePageState extends State<HomePage> {
                        Navigator.pop(context);
                        Navigator.push(context, MaterialPageRoute(builder: (context) => const WarehousePaginatedPage()));
                 }),
-                    _menuItem(Icons.assignment_turned_in_rounded, "Manajemen Checker", Colors.teal),
+                    _menuItem(Icons.assignment_turned_in_rounded, "Manajemen Checker", Colors.teal,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckerPaginatedPage()));
+                }),
                     _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple),
                     _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent),
                   ]

@@ -145,6 +145,7 @@ class _LoginPageState extends State<LoginPage> {
               // Input NIK atau Email
               TextField(
                 controller: identifierController,
+                textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
                   labelText: 'NIK / Email',
                   hintText: 'Masukkan 8 digit NIK atau Email',
@@ -160,6 +161,8 @@ class _LoginPageState extends State<LoginPage> {
               TextField(
                 controller: passwordController,
                 obscureText: obscurePassword,
+                textInputAction: TextInputAction.done, // Menampilkan tombol 'Done' atau 'Masuk'
+  onSubmitted: (_) => _login(),
                 decoration: InputDecoration(
                   labelText: 'Password',
                   prefixIcon: const Icon(Icons.lock_outline),

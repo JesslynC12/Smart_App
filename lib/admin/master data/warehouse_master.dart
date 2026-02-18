@@ -319,6 +319,10 @@ class WarehouseDataSource extends DataTableSource {
   DataRow? getRow(int index) {
     if (index >= data.length) return null;
     final wh = data[index];
+
+  final String status = (wh['status'] ?? 'inactive').toString().toLowerCase();
+  final bool isActive = status == 'active';
+
     return DataRow(cells: [
       DataCell(Text(wh['wh_code']?.toString() ?? '-')),
       DataCell(Text(wh['warehouse_name'] ?? '-')),
@@ -327,7 +331,19 @@ class WarehouseDataSource extends DataTableSource {
       DataCell(Text("${wh['max_utilize'] ?? 0}")),
       // DATA TIPE DIMUNCULKAN DI SINI
       DataCell(Text(wh['tipe'] ?? '-')),
-      DataCell(Text(wh['status'] ?? '-')),
+      DataCell(Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.shade100 : Colors.red.shade100,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        wh['status']?.toString() ?? '-',
+        style: TextStyle(
+          color: isActive ? Colors.green.shade900 : Colors.red.shade900,
+        ),
+      ),
+    )),
       DataCell(Row(
         children: [
           IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => onEdit(wh)),
