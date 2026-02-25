@@ -261,6 +261,7 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
                     decoration: InputDecoration(
                       labelText: "Cari Nama Warehouse...",
                       prefixIcon: const Icon(Icons.search),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                       suffix: IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {

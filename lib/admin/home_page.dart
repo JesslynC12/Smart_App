@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/formpengiriman_page.dart';
-import 'package:project_app/admin/kelayakanunit_page.dart';
+import 'package:project_app/admin/formComplain_page.dart';
+import 'package:project_app/admin/formOccupancy_page.dart';
+import 'package:project_app/admin/formPengiriman_page.dart';
+import 'package:project_app/admin/formKelayakanunit_page.dart';
 import 'package:project_app/admin/master%20data/checker_master.dart';
 import 'package:project_app/admin/master%20data/customer_master.dart';
 import 'package:project_app/admin/master%20data/material_master.dart';
@@ -9,7 +11,6 @@ import 'package:project_app/admin/master%20data/warehouse_master.dart';
 import '../auth/auth_service.dart' as model;
 import '../auth/auth_service.dart'; 
 import '../login.dart';
-// Pastikan path ini sesuai dengan lokasi file UserManagementPage Anda
 import 'package:project_app/admin/master%20data/manage_user.dart'; 
 
 
@@ -225,7 +226,10 @@ class _HomePageState extends State<HomePage> {
                   if (_hasAccess('Loading'))
                     _menuItem(Icons.unarchive_rounded, "Loading Barang", Colors.orange),
                   if (_hasAccess('Loading'))
-                    _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange),
+                    _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange, onTap: () {
+                      Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => WarehouseOccupancyForm()));
+                    }),
                   if (_hasAccess('Kelayakan Unit'))
                     _menuItem(Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
                       Navigator.pop(context); 
@@ -238,8 +242,9 @@ class _HomePageState extends State<HomePage> {
                     }),
                   if (_hasAccess('Complain'))
                     _menuItem(Icons.report_problem_rounded, "Complain", Colors.redAccent, onTap: () {
-                      // Sesuaikan navigasi complain jika ada page berbeda
                       Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComplainPage()));
+                    
                     }),
                 ],
               ),

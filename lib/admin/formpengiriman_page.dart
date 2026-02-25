@@ -26,7 +26,7 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
 
   DateTime _tanggalForm = DateTime.now();
   DateTime? _tanggalRDD;
-  String? _selectedWarehouse;
+
   String? selectedCustomerId;
 
   // --- Data Lists ---
@@ -34,6 +34,10 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
   List<Map<String, dynamic>> customers = [];
   List<Map<String, dynamic>> materialList = [];
   Map<String, dynamic>? _tempSelectedMaterial;
+  // Di dalam class _ShippingRequestPageState
+
+List<Map<String, dynamic>> warehouseList = []; // List baru
+int? _selectedWarehouseId; // Simpan ID sebagai value
   bool isLoading = true;
 
   @override
@@ -74,15 +78,22 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
           .select('material_id, material_name')
           .order('material_name', ascending: true);
 
+          final warehouseResponse = await supabase
+        .from('warehouse')
+        .select('warehouse_id, warehouse_name')
+        .order('warehouse_name', ascending: true);
+
       if (mounted) {
         setState(() {
           customers = List<Map<String, dynamic>>.from(customerResponse);
           materialList = List<Map<String, dynamic>>.from(materialResponse);
+          warehouseList = List<Map<String, dynamic>>.from(warehouseResponse); // Simpan hasil
           isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() => isLoading = false);
+      _showSnackBar("Gagal mengambil data: $e", Colors.red);
     }
   }
 
@@ -402,20 +413,35 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
   }
 
   Widget _buildDropdownWarehouse() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedWarehouse,
-          items: ["GBJ Chiyo", "Warehouse Utama", "Transit"].map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
-          onChanged: (v) => setState(() => _selectedWarehouse = v),
-          decoration: InputDecoration(isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<int>( // Gunakan int untuk ID
+        value: _selectedWarehouseId,
+        hint: const Text("Pilih Warehouse", style: TextStyle(fontSize: 13)),
+        items: warehouseList.map((wh) {
+          return DropdownMenuItem<int>(
+            value: wh['warehouse_id'] as int,
+            child: Text(wh['warehouse_name'].toString(), style: const TextStyle(fontSize: 13)),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedWarehouseId = value;
+          });
+        },
+        validator: (value) => value == null ? "Wajib diisi" : null,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   Widget _buildSectionHeader(IconData icon, String title) {
     return Row(
@@ -452,7 +478,7 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
       _showSnackBar("Isi minimal satu item di tabel!", Colors.orange);
       return;
     }
-    if (_formKey.currentState!.validate() && selectedCustomerId != null && _selectedWarehouse != null) {
+    if (_formKey.currentState!.validate() && selectedCustomerId != null && _selectedWarehouseId != null) {
       _showSnackBar("Berhasil Submit!", Colors.green);
     } else {
       _showSnackBar("Lengkapi data header!", Colors.red);

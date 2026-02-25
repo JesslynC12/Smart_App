@@ -30,35 +30,37 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
 
   // --- REFRESH / FETCH DATA ---
   Future<void> _fetchData() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  if (!mounted) return;
+  setState(() => _isLoading = true);
 
-    try {
-      var query = supabase.from('customer').select();
-      if (_searchQuery.isNotEmpty) {
-        final isNumber = int.tryParse(_searchQuery) != null;
+  try {
+    // Tambahkan range jika datanya sangat banyak, 
+    // atau pastikan kebijakan API Supabase Anda mengizinkan fetch besar.
+    var query = supabase.from('customer').select();
 
-  if (isNumber) {
-  query = query.eq('customer_id', int.parse(_searchQuery));
-} else {
-  query = query.ilike('customer_name', '%$_searchQuery%');
-}
-
-}
-        
-      final data = await query.order('customer_id', ascending: true);
-
-      if (mounted) {
-        setState(() {
-          _customers = List<Map<String, dynamic>>.from(data);
-          _isLoading = false;
-        });
+    if (_searchQuery.isNotEmpty) {
+      final isNumber = int.tryParse(_searchQuery) != null;
+      if (isNumber) {
+        query = query.eq('customer_id', int.parse(_searchQuery));
+      } else {
+        query = query.ilike('customer_name', '%$_searchQuery%');
       }
-    } catch (e) {
-      debugPrint("Error Fetch: $e");
-      if (mounted) setState(() => _isLoading = false);
     }
+    
+    // Gunakan order dan pastikan tidak ada limit yang tertahan
+    final data = await query.order('customer_id', ascending: true);
+
+    if (mounted) {
+      setState(() {
+        _customers = List<Map<String, dynamic>>.from(data);
+        _isLoading = false;
+      });
+    }
+  } catch (e) {
+    debugPrint("Error Fetch: $e");
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   // --- DELETE DATA ---
   Future<void> _deleteCustomer(int id) async {
@@ -269,7 +271,7 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       thumbVisibility: WidgetStateProperty.all(true),
     )),
      child: PaginatedDataTable(
-                      rowsPerPage: 10,
+                      rowsPerPage: 50,
                       columns: const [
   DataColumn(label: Text('No Cust', style: TextStyle(fontWeight: FontWeight.bold))),
   DataColumn(label: Text('Nama Customer', style: TextStyle(fontWeight: FontWeight.bold))),
