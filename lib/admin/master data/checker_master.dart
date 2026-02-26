@@ -266,7 +266,6 @@ void initState() {
                   SizedBox(
                     width: double.infinity,
                     child: PaginatedDataTable(
-                      header: const Text("Daftar Checker"),
                       rowsPerPage: 10,
                       columns: const [
                         DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),

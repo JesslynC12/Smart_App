@@ -5,15 +5,19 @@ class User {
   final String id;
   final String email;
   final String nik;
+  final String? name;    // Tambahan: Nama Lengkap
+  final String? lokasi;  // Tambahan: Lokasi (Rungkut/Tambak Langon)
   final String? role;
-  final String? status; // Status Vendor
-  final bool isActive;  // Fitur Akun Aktif/Non-aktif
+  final String? status; 
+  final bool isActive;  
   final List<String> privileges;
 
   User({
     required this.id,
     required this.email,
     required this.nik,
+    this.name,          // New
+    this.lokasi,        // New
     this.role,
     this.status,
     this.isActive = true,
@@ -21,21 +25,19 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
-    // Parsing privileges dari nested list
+    // Parsing privileges
     List<String> privs = [];
     if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
       for (var item in json['profile_privileges']) {
         if (item['privileges'] != null) {
-          // Mengambil nama privilege
           privs.add(item['privileges']['name'].toString());
         }
       }
     }
 
-    // Parsing status vendor dari list (join table vendor_details)
+    // Parsing status vendor
     String? statusValue;
-    if (json['vendor_details'] != null &&
-        (json['vendor_details'] as List).isNotEmpty) {
+    if (json['vendor_details'] != null && (json['vendor_details'] as List).isNotEmpty) {
       statusValue = json['vendor_details'][0]['status'];
     }
 
@@ -43,9 +45,11 @@ class User {
       id: json['id'] ?? '',
       email: json['email'] ?? '',
       nik: json['nik'] ?? '',
+      name: json['name'],      // Mapping data name
+      lokasi: json['lokasi'],  // Mapping data lokasi
       role: json['role'],
       status: statusValue,
-      isActive: json['is_active'] ?? true, // Default ke true jika null
+      isActive: json['is_active'] ?? true,
       privileges: privs,
     );
   }
@@ -55,19 +59,13 @@ class User {
 class AuthService {
   static final _supabase = Supabase.instance.client;
 
-  // ---------------------------------------------------------------------------
-  // 1. LOGIN SYSTEM (Support Email & NIK)
-  // ---------------------------------------------------------------------------
+  // 1. LOGIN SYSTEM
   static Future<User?> login(String identifier, String password) async {
     try {
       String emailForAuth = identifier.trim();
 
-      // Jika input bukan email (tidak ada '@'), cari email berdasarkan NIK
       if (!identifier.contains('@')) {
-        // Validasi NIK harus 8 digit
-        if (identifier.length != 8) {
-           throw Exception('Format NIK harus 8 digit');
-        }
+        if (identifier.length != 8) throw Exception('Format NIK harus 8 digit');
 
         final findUser = await _supabase
             .from('profiles')
@@ -75,13 +73,10 @@ class AuthService {
             .eq('nik', identifier.trim())
             .maybeSingle();
 
-        if (findUser == null) {
-          throw Exception('NIK tidak terdaftar');
-        }
+        if (findUser == null) throw Exception('NIK tidak terdaftar');
         emailForAuth = findUser['email'];
       }
 
-      // Melakukan autentikasi ke Supabase Auth
       final response = await _supabase.auth.signInWithPassword(
         email: emailForAuth,
         password: password,
@@ -90,12 +85,10 @@ class AuthService {
       if (response.user != null) {
         final user = await getCurrentUser();
         
-        // CEK STATUS AKTIF: Jika false, paksa logout dan throw error
         if (user != null && !user.isActive) {
           await logout();
           throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
         }
-
         return user;
       }
       return null;
@@ -106,25 +99,23 @@ class AuthService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 2. USER MANAGEMENT (Digunakan oleh UserManagementPage)
-  // ---------------------------------------------------------------------------
-  
-  // Ambil daftar Master Privileges untuk Checkbox
+  // 2. USER MANAGEMENT
   static Future<List<Map<String, dynamic>>> getAvailablePrivileges() async {
     return await _supabase
         .from('privileges')
-        .select('id, name') // Pastikan kolom label ada di DB Anda
+        .select('id, name')
         .order('id');
   }
 
-  // Registrasi User Internal (Admin/PPIC/Logistik) + Simpan Hak Akses
+  // --- REGISTRASI USER INTERNAL (DIUBAH) ---
   static Future<void> registerInternalUser({
     required String email,
     required String password,
     required String nik,
+    required String name,      // Tambahan Baru
+    required String lokasi,    // Tambahan Baru
     required String role,
-    required List<int> privilegeIds, // List ID Hak Akses yang dicentang
+    required List<int> privilegeIds,
   }) async {
     if (nik.length != 8) throw Exception('NIK harus 8 karakter.');
 
@@ -135,16 +126,18 @@ class AuthService {
       if (response.user != null) {
         final userId = response.user!.id;
 
-        // B. Simpan ke Tabel Profiles
+        // B. Simpan ke Tabel Profiles dengan field Name & Lokasi
         await _supabase.from('profiles').insert({
           'id': userId,
           'email': email,
           'nik': nik,
+          'name': name,       // Masuk ke kolom name
+          'lokasi': lokasi,   // Masuk ke kolom lokasi
           'role': role,
           'is_active': true,
         });
 
-        // C. Simpan ke Tabel Profile_Privileges (Looping Insert)
+        // C. Simpan ke Tabel Profile_Privileges
         if (privilegeIds.isNotEmpty) {
           final List<Map<String, dynamic>> privilegesData = privilegeIds.map((pId) {
             return {
@@ -161,9 +154,7 @@ class AuthService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 3. VENDOR REGISTRATION (Public Register)
-  // ---------------------------------------------------------------------------
+  // 3. VENDOR REGISTRATION (Tetap Sama)
   static Future<void> registerVendor({
     required String email,
     required String password,
@@ -175,7 +166,6 @@ class AuthService {
   }) async {
     if (nik.length != 8) throw Exception('NIK harus tepat 8 karakter.');
 
-    // Cek duplikasi NIK sederhana sebelum request auth
     final checkNik = await _supabase.from('profiles').select('id').eq('nik', nik).maybeSingle();
     if (checkNik != null) throw Exception('NIK sudah terdaftar.');
 
@@ -184,44 +174,32 @@ class AuthService {
 
       if (response.user != null) {
         final userId = response.user!.id;
+        await _supabase.from('profiles').insert({
+          'id': userId,
+          'email': email,
+          'nik': nik,
+          'role': 'vendor',
+          'is_active': true,
+        });
 
-        try {
-          // 1. Simpan ke profiles
-          await _supabase.from('profiles').insert({
-            'id': userId,
-            'email': email,
-            'nik': nik,
-            'role': 'vendor',
-            'is_active': true,
-          });
-
-          // 2. Simpan ke vendor_details
-          await _supabase.from('vendor_details').insert({
-            'profile_id': userId,
-            'nama_perusahaan': companyName,
-            'alamat': address,
-            'city': city,
-            'phone': phone,
-            'status': 'pending',
-          });
-        } catch (dbError) {
-          // Jika insert DB gagal, lempar error agar UI tahu
-          throw Exception('Gagal menyimpan profil vendor: $dbError');
-        }
+        await _supabase.from('vendor_details').insert({
+          'profile_id': userId,
+          'nama_perusahaan': companyName,
+          'alamat': address,
+          'city': city,
+          'phone': phone,
+          'status': 'pending',
+        });
       }
     } catch (e) {
       throw Exception('Gagal registrasi vendor: $e');
     }
   }
 
-  // ---------------------------------------------------------------------------
   // 4. HELPER FUNCTIONS
-  // ---------------------------------------------------------------------------
   static Future<bool> isLoggedIn() async => _supabase.auth.currentSession != null;
-
   static Future<void> logout() async => await _supabase.auth.signOut();
 
-  // Ambil Data User yang sedang login (Beserta Relasi Privileges & Vendor)
   static Future<User?> getCurrentUser() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -239,25 +217,23 @@ class AuthService {
     }
   }
 
-  // --- UPDATE USER (ROLE & PRIVILEGES) ---
   static Future<void> updateUserAccess({
     required String userId,
     required String newRole,
     required List<int> newPrivilegeIds,
+    String? newName,    // Opsi jika ingin update nama juga
+    String? newLokasi,  // Opsi jika ingin update lokasi juga
   }) async {
     try {
-      // 1. Update Role di tabel profiles
-      await _supabase.from('profiles').update({
-        'role': newRole,
-      }).eq('id', userId);
+      // Buat map update secara dinamis
+      final Map<String, dynamic> updateData = {'role': newRole};
+      if (newName != null) updateData['name'] = newName;
+      if (newLokasi != null) updateData['lokasi'] = newLokasi;
 
-      // 2. Update Hak Akses (Konsep: Hapus Semua yg Lama -> Insert yg Baru)
-      // Ini cara paling aman untuk sinkronisasi many-to-many
-      
-      // A. Hapus akses lama
+      await _supabase.from('profiles').update(updateData).eq('id', userId);
+
       await _supabase.from('profile_privileges').delete().eq('profile_id', userId);
 
-      // B. Insert akses baru (jika ada yg dipilih)
       if (newPrivilegeIds.isNotEmpty) {
         final List<Map<String, dynamic>> privilegesData = newPrivilegeIds.map((pId) {
           return {

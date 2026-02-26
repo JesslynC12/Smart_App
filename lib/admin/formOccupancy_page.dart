@@ -80,38 +80,53 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
   }
 
   // SIMPAN DATA KE SUPABASE
+  // SIMPAN DATA KE SUPABASE
   Future<void> _saveData() async {
-    // Validasi form (cek apakah ada yang kosong)
+    // 1. Validasi form
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // Mapping data dari baris-baris form ke format tabel Supabase
-      final payload = _rows.map((row) {
+      final supabase = Supabase.instance.client;
+
+      // 2. Insert ke tabel MASTER (occupancy)
+      // .select().single() digunakan agar kita mendapatkan return data id yang baru dibuat
+      final masterResponse = await supabase
+          .from('occupancy')
+          .insert({
+            'tanggal': _selectedDate.toIso8601String().split('T')[0], // Format YYYY-MM-DD
+            'created_by': 'Admin', // Ganti sesuai user session jika ada
+          })
+          .select()
+          .single();
+
+      final int newOccupancyId = masterResponse['occupancy_id'];
+
+      // 3. Mapping data untuk tabel DETAIL (occupancy_details)
+      final List<Map<String, dynamic>> detailsPayload = _rows.map((row) {
         return {
           'warehouse_id': row['warehouse_id'],
-          'occupancy_date': _selectedDate.toIso8601String(),
-          'kapasitas_input': int.parse(row['capacity_controller'].text),
+          'kapasitas_tersedia': int.parse(row['capacity_controller'].text),
+          'occupancy_id': newOccupancyId, // Gunakan ID dari langkah 2
         };
       }).toList();
 
-      // Eksekusi Insert (Bulk Insert)
-      await Supabase.instance.client
-          .from('occupancy_log')
-          .insert(payload);
+      // 4. Eksekusi Insert ke DETAIL (Bulk Insert)
+      await supabase.from('occupancy_details').insert(detailsPayload);
 
       _showSnackBar("Data berhasil disimpan ke database!", Colors.green);
       
-      // Reset Form ke kondisi awal
+      // 5. Reset Form
       _resetForm();
     } catch (e) {
       _showSnackBar("Gagal menyimpan data: $e", Colors.red);
+      print("Error detail: $e");
     } finally {
       setState(() => _isLoading = false);
     }
   }
-
+  
   void _resetForm() {
     setState(() {
       for (var row in _rows) {
