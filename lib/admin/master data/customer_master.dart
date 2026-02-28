@@ -148,7 +148,9 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(isEdit ? 'Edit Customer' : 'Tambah Customer'),
-        content: SingleChildScrollView(
+        content: SizedBox( // <-- Tambahkan SizedBox di sini
+          width: 300,
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -164,6 +166,7 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
               }),
             ],
           ),
+        ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
@@ -230,7 +233,7 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(50),
+              padding: const EdgeInsets.all(30),
               child: Column(
                 children: [
                   // --- SEARCH BAR DENGAN ICON SILANG (CLEAR) ---

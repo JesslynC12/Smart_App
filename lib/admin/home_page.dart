@@ -63,14 +63,20 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- HELPER UNTUK CEK HAK AKSES ---
-  bool _hasAccess(String privilegeName) {
-    // 1. Jika Admin, anggap punya semua akses (Opsional, untuk kemudahan)
-    if (currentUser?.role == 'admin') return true; 
+  // bool _hasAccess(String privilegeName) {
+  //   // 1. Jika Admin, anggap punya semua akses (Opsional, untuk kemudahan)
+  //   if (currentUser?.role == 'admin') return true; 
 
-    // 2. Cek apakah privilegeName ada di list privileges user
-    // Pastikan string ini SAMA PERSIS dengan kolom 'name' di Database Supabase
-    return currentUser?.privileges.contains(privilegeName) ?? false;
-  }
+  //   // 2. Cek apakah privilegeName ada di list privileges user
+  //   // Pastikan string ini SAMA PERSIS dengan kolom 'name' di Database Supabase
+  //   return currentUser?.privileges.contains(privilegeName) ?? false;
+  // }
+
+  bool _hasAccess(String privilegeName) {
+  // Pengecekan ketat: Hanya cek daftar privileges yang dimiliki user
+  // Tidak peduli apakah dia Admin, Staff, atau Manager.
+  return currentUser?.privileges.contains(privilegeName) ?? false;
+}
 
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(

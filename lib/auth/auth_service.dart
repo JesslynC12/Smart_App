@@ -1,31 +1,34 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// ===================== USER MODEL =====================
+// ===================== USER MODEL (Tetap) =====================
 class User {
   final String id;
   final String email;
   final String nik;
-  final String? name;    // Tambahan: Nama Lengkap
-  final String? lokasi;  // Tambahan: Lokasi (Rungkut/Tambak Langon)
+  final String? name;
+  final String? lokasi;
   final String? role;
-  final String? status; 
-  final bool isActive;  
+  final String? status;
+  final bool isActive;
   final List<String> privileges;
 
   User({
     required this.id,
     required this.email,
     required this.nik,
-    this.name,          // New
-    this.lokasi,        // New
+    this.name,
+    this.lokasi,
     this.role,
     this.status,
     this.isActive = true,
     this.privileges = const [],
   });
 
+bool hasPermission(String permissionName) {
+    return privileges.contains(permissionName);
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
-    // Parsing privileges
     List<String> privs = [];
     if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
       for (var item in json['profile_privileges']) {
@@ -35,7 +38,6 @@ class User {
       }
     }
 
-    // Parsing status vendor
     String? statusValue;
     if (json['vendor_details'] != null && (json['vendor_details'] as List).isNotEmpty) {
       statusValue = json['vendor_details'][0]['status'];
@@ -45,8 +47,8 @@ class User {
       id: json['id'] ?? '',
       email: json['email'] ?? '',
       nik: json['nik'] ?? '',
-      name: json['name'],      // Mapping data name
-      lokasi: json['lokasi'],  // Mapping data lokasi
+      name: json['name'],
+      lokasi: json['lokasi'],
       role: json['role'],
       status: statusValue,
       isActive: json['is_active'] ?? true,
@@ -55,11 +57,11 @@ class User {
   }
 }
 
-// ===================== AUTH SERVICE =====================
+// ===================== AUTH SERVICE (Disesuaikan dengan Edge Functions) =====================
 class AuthService {
   static final _supabase = Supabase.instance.client;
 
-  // 1. LOGIN SYSTEM
+  // 1. LOGIN SYSTEM (Tetap)
   static Future<User?> login(String identifier, String password) async {
     try {
       String emailForAuth = identifier.trim();
@@ -84,7 +86,6 @@ class AuthService {
 
       if (response.user != null) {
         final user = await getCurrentUser();
-        
         if (user != null && !user.isActive) {
           await logout();
           throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
@@ -99,62 +100,85 @@ class AuthService {
     }
   }
 
-  // 2. USER MANAGEMENT
-  static Future<List<Map<String, dynamic>>> getAvailablePrivileges() async {
-    return await _supabase
-        .from('privileges')
-        .select('id, name')
-        .order('id');
-  }
-
-  // --- REGISTRASI USER INTERNAL (DIUBAH) ---
+  // 2. USER MANAGEMENT (Menggunakan Edge Function)
+  // --- CREATE USER INTERNAL ---
   static Future<void> registerInternalUser({
     required String email,
     required String password,
     required String nik,
-    required String name,      // Tambahan Baru
-    required String lokasi,    // Tambahan Baru
+    required String name,
+    required String lokasi,
     required String role,
     required List<int> privilegeIds,
   }) async {
-    if (nik.length != 8) throw Exception('NIK harus 8 karakter.');
+    //if (nik.length != 8) throw Exception('NIK harus 8 karakter.');
+try {
+    final response = await _supabase.functions.invoke(
+      'create-internal-user',
+      body: {
+        'email': email,
+        'password': password,
+        'nik': nik,
+        'name': name,
+        'lokasi': lokasi,
+        'role': role,
+        'privilegeIds': privilegeIds,
+      },
+      // Menambahkan header secara manual untuk memastikan autentikasi lolos
+      headers: {
+        'Authorization': 'Bearer ${_supabase.auth.currentSession?.accessToken}',
+        'Content-Type': 'application/json',
+      },
+    );
 
-    try {
-      // A. Buat Akun Auth
-      final response = await _supabase.auth.signUp(email: email, password: password);
+    if (response.status != 200) {
+      throw Exception(response.data['error'] ?? 'Gagal mendaftarkan user');
+    }
+  } catch (e) {
+    throw Exception('Terjadi kesalahan: $e');
+  }
+}
 
-      if (response.user != null) {
-        final userId = response.user!.id;
+  // --- UPDATE USER ACCESS ---
+  static Future<void> updateUserAccess({
+    required String userId,
+    required String newRole,
+    required List<int> newPrivilegeIds,
+    required String newNik,     // NIK kini wajib dikirim agar sinkron
+    String? newName,
+    String? newLokasi,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'update-internal-user',
+      body: {
+        'userId': userId,
+        'role': newRole,
+        'nik': newNik,
+        'name': newName,
+        'lokasi': newLokasi,
+        'privilegeIds': newPrivilegeIds,
+      },
+    );
 
-        // B. Simpan ke Tabel Profiles dengan field Name & Lokasi
-        await _supabase.from('profiles').insert({
-          'id': userId,
-          'email': email,
-          'nik': nik,
-          'name': name,       // Masuk ke kolom name
-          'lokasi': lokasi,   // Masuk ke kolom lokasi
-          'role': role,
-          'is_active': true,
-        });
+    if (response.status != 200) {
+      throw Exception(response.data['error'] ?? 'Gagal update user');
+    }
+  }
+  
 
-        // C. Simpan ke Tabel Profile_Privileges
-        if (privilegeIds.isNotEmpty) {
-          final List<Map<String, dynamic>> privilegesData = privilegeIds.map((pId) {
-            return {
-              'profile_id': userId,
-              'privilege_id': pId,
-            };
-          }).toList();
+  // --- DELETE USER ---
+  static Future<void> deleteUserPermanently(String userId) async {
+    final response = await _supabase.functions.invoke(
+      'delete-user',
+      body: {'userId': userId},
+    );
 
-          await _supabase.from('profile_privileges').insert(privilegesData);
-        }
-      }
-    } catch (e) {
-      throw Exception('Gagal mendaftarkan user: $e');
+    if (response.status != 200) {
+      throw Exception(response.data['error'] ?? 'Gagal menghapus user');
     }
   }
 
-  // 3. VENDOR REGISTRATION (Tetap Sama)
+  // 3. VENDOR REGISTRATION (Masih menggunakan signUp karena biasanya dilakukan oleh user sendiri)
   static Future<void> registerVendor({
     required String email,
     required String password,
@@ -171,7 +195,6 @@ class AuthService {
 
     try {
       final response = await _supabase.auth.signUp(email: email, password: password);
-
       if (response.user != null) {
         final userId = response.user!.id;
         await _supabase.from('profiles').insert({
@@ -196,7 +219,7 @@ class AuthService {
     }
   }
 
-  // 4. HELPER FUNCTIONS
+  // 4. HELPERS
   static Future<bool> isLoggedIn() async => _supabase.auth.currentSession != null;
   static Future<void> logout() async => await _supabase.auth.signOut();
 
@@ -217,35 +240,8 @@ class AuthService {
     }
   }
 
-  static Future<void> updateUserAccess({
-    required String userId,
-    required String newRole,
-    required List<int> newPrivilegeIds,
-    String? newName,    // Opsi jika ingin update nama juga
-    String? newLokasi,  // Opsi jika ingin update lokasi juga
-  }) async {
-    try {
-      // Buat map update secara dinamis
-      final Map<String, dynamic> updateData = {'role': newRole};
-      if (newName != null) updateData['name'] = newName;
-      if (newLokasi != null) updateData['lokasi'] = newLokasi;
-
-      await _supabase.from('profiles').update(updateData).eq('id', userId);
-
-      await _supabase.from('profile_privileges').delete().eq('profile_id', userId);
-
-      if (newPrivilegeIds.isNotEmpty) {
-        final List<Map<String, dynamic>> privilegesData = newPrivilegeIds.map((pId) {
-          return {
-            'profile_id': userId,
-            'privilege_id': pId,
-          };
-        }).toList();
-
-        await _supabase.from('profile_privileges').insert(privilegesData);
-      }
-    } catch (e) {
-      throw Exception('Gagal update user: $e');
-    }
+  static Future<List<Map<String, dynamic>>> getAvailablePrivileges() async {
+    return await _supabase.from('privileges').select('id, name').order('id');
   }
+  
 }

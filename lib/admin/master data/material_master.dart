@@ -154,7 +154,9 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
         builder: (context, setDialogState) {
           return AlertDialog(
             title: Text(isEdit ? 'Edit Material' : 'Tambah Material'),
-            content: SingleChildScrollView(
+            content: SizedBox( // <-- Tambahkan SizedBox di sini
+          width: 300,
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -181,6 +183,7 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
                   }),
                 ],
               ),
+            ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
@@ -273,7 +276,7 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(50),
+              padding: const EdgeInsets.all(30),
               child: Column(
                 children: [
                   ValueListenableBuilder<TextEditingValue>(

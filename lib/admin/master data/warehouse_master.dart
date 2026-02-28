@@ -136,7 +136,9 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
         builder: (context, setDialogState) {
           return AlertDialog(
             title: Text(isEdit ? 'Edit Warehouse' : 'Tambah Warehouse'),
-            content: SingleChildScrollView(
+            content: SizedBox( // <-- Tambahkan SizedBox di sini
+          width: 300,
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -169,6 +171,7 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
                   ),
                 ],
               ),
+            ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
@@ -253,7 +256,7 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(50),
+              padding: const EdgeInsets.all(30),
               child: Column(
                 children: [
                   TextField(

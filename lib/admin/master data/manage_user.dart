@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/auth_service.dart';
@@ -23,7 +25,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
   bool _isLoading = true;
   String _searchQuery = "";
 
-  // Edit Mode State
   bool isEditing = false;
   String? editingUserId;
 
@@ -53,6 +54,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
+      // Mengambil profil internal (non-vendor)
       var query = supabase
           .from('profiles')
           .select('*, profile_privileges(privileges(name, id))')
@@ -74,7 +76,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal mengambil data: $e")));
+      }
     }
   }
 
@@ -91,29 +96,38 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
   Future<void> _saveUser() async {
-    // Password hanya wajib jika bukan sedang edit (user baru)
-    if (_nikController.text.isEmpty || _emailController.text.isEmpty || 
+    if (_nikController.text.length != 8) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("NIK harus berjumlah 8 karakter!"))
+    );
+    return;
+  }
+    if (_nikController.text.isEmpty || 
+        _emailController.text.isEmpty || 
         (!isEditing && _passwordController.text.isEmpty) || 
         _nameController.text.isEmpty || 
-        selectedRole == null || selectedLokasi == null) {
+        selectedRole == null || 
+        selectedLokasi == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Harap lengkapi semua data!")));
       return;
     }
 
+    // Menampilkan Loading
     showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
 
     try {
       if (isEditing) {
-        // UPDATE DATA (Menggunakan method di AuthService)
+        // UPDATE via Edge Function (Sinkron dengan AuthService terbaru)
         await AuthService.updateUserAccess(
           userId: editingUserId!,
           newRole: selectedRole!,
           newPrivilegeIds: selectedPrivilegeIds.toList(),
           newName: _nameController.text.trim(),
+          newNik: _nikController.text.trim(), // Wajib dikirim untuk sinkronisasi
           newLokasi: selectedLokasi!,
         );
       } else {
-        // REGISTER NEW USER
+        // REGISTER via Edge Function (Mencegah Admin ter-logout)
         await AuthService.registerInternalUser(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -135,8 +149,30 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _fetchData();
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(e.toString())));
+      if (mounted) Navigator.pop(context); // Tutup loading
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: Colors.red, 
+        content: Text(e.toString().replaceAll("Exception: ", ""))
+      ));
+    }
+  }
+
+  // Fungsi Hapus yang Disesuaikan
+  Future<void> _handleDelete(String id) async {
+    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
+    
+    try {
+      await AuthService.deleteUserPermanently(id);
+      if (mounted) {
+        Navigator.pop(context); // Tutup loading
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User berhasil dihapus permanent")));
+        _fetchData();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(e.toString())));
+      }
     }
   }
 
@@ -145,7 +181,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final source = UserDataSource(
       _users, 
       context, 
-      onDelete: (id) => supabase.from('profiles').delete().eq('id', id).then((_) => _fetchData()),
+      onDelete: (id) => _handleDelete(id),
       onEdit: (user) => _showAddUserDialog(user: user),
     );
 
@@ -159,7 +195,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator()) 
         : SingleChildScrollView(
-            padding: const EdgeInsets.all(50),
+            padding: const EdgeInsets.all(30), // Disesuaikan agar tidak terlalu lebar di web/desktop
             child: Column(
               children: [
                 TextField(
@@ -167,6 +203,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   decoration: InputDecoration(
                     labelText: "Cari NIK, Nama, atau Email...",
                     prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        _searchQuery = "";
+                        _fetchData();
+                      },
+                    ),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onSubmitted: (val) { _searchQuery = val; _fetchData(); },
@@ -175,6 +219,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 SizedBox(
                   width: double.infinity,
                   child: PaginatedDataTable(
+                    rowsPerPage: 10,
                     columns: const [
                       DataColumn(label: Text('NIK')),
                       DataColumn(label: Text('Nama')),
@@ -203,10 +248,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
       selectedRole = user['role'];
       selectedLokasi = user['lokasi'];
       
-      // Ambil ID privilege yang sudah ada
       final List rawPrivs = user['profile_privileges'] ?? [];
       for (var p in rawPrivs) {
-        selectedPrivilegeIds.add(p['privileges']['id']);
+        if(p['privileges'] != null) {
+          selectedPrivilegeIds.add(p['privileges']['id']);
+        }
       }
     }
 
@@ -223,12 +269,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 children: [
                   _buildTextField("Nama", Icons.person, _nameController),
                   const SizedBox(height: 12),
-                  _buildTextField("NIK", Icons.badge, _nikController),
+                  _buildTextField("NIK", Icons.badge, _nikController, maxLength: 8),
                   const SizedBox(height: 12),
-                  // Email di-disable saat edit karena biasanya unik/auth key
                   _buildTextField("Email", Icons.email, _emailController, enabled: !isEditing),
                   const SizedBox(height: 12),
-                  // Password disembunyikan saat edit (bisa lewat reset password tersendiri)
                   if (!isEditing) _buildTextField("Password", Icons.lock, _passwordController, isPassword: true),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -248,8 +292,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   const Align(alignment: Alignment.centerLeft, child: Text("Pilih Hak Akses:", style: TextStyle(fontWeight: FontWeight.bold))),
                   const SizedBox(height: 8),
                   Container(
+                    height: 200, // Menghindari dialog terlalu panjang
                     decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                    child: Column(
+                    child: ListView(
+                      shrinkWrap: true,
                       children: _masterPrivileges.map((priv) {
                         return CheckboxListTile(
                           title: Text(priv['name']),
@@ -270,18 +316,24 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
-            ElevatedButton(onPressed: _saveUser, child: const Text("Simpan")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+              onPressed: _saveUser, 
+              child: const Text("Simpan")
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField(String label, IconData icon, TextEditingController controller, {bool isPassword = false, bool enabled = true}) {
+  Widget _buildTextField(String label, IconData icon, TextEditingController controller, {bool isPassword = false, bool enabled = true, int? maxLength}) {
     return TextFormField(
       controller: controller,
       obscureText: isPassword,
       enabled: enabled,
+      maxLength: maxLength,
+            buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null, // Sembunyikan counter angka di bawah field
       decoration: InputDecoration(
         labelText: label, 
         prefixIcon: Icon(icon), 
@@ -289,6 +341,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         isDense: true,
         filled: !enabled,
         fillColor: enabled ? null : Colors.grey.shade100,
+        counterText: "",
       ),
     );
   }
@@ -307,7 +360,10 @@ class UserDataSource extends DataTableSource {
     if (index >= data.length) return null;
     final user = data[index];
     final List rawPrivs = user['profile_privileges'] ?? [];
-    final String privString = rawPrivs.map((e) => e['privileges']['name'].toString()).join(', ');
+    final String privString = rawPrivs
+        .where((e) => e['privileges'] != null)
+        .map((e) => e['privileges']['name'].toString())
+        .join(', ');
 
     return DataRow(cells: [
       DataCell(Text(user['nik'] ?? '-')),
@@ -328,13 +384,14 @@ class UserDataSource extends DataTableSource {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text("Hapus?"),
-        content: const Text("Data yang dihapus tidak dapat dikembalikan."),
+        title: const Text("Hapus User?"),
+        content: const Text("User akan dihapus dari sistem Auth dan Database secara permanen."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
           ElevatedButton(
-            onPressed: () { onDelete(id); Navigator.pop(c); },
-            child: const Text("Hapus"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () { Navigator.pop(c); onDelete(id); },
+            child: const Text("Hapus", style: TextStyle(color: Colors.white)),
           )
         ],
       ),
