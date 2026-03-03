@@ -231,17 +231,17 @@ class _HomePageState extends State<HomePage> {
                     }),
                   if (_hasAccess('Loading'))
                     _menuItem(Icons.unarchive_rounded, "Loading Barang", Colors.orange),
-                  if (_hasAccess('Loading'))
+                  if (_hasAccess('Occupancy'))
                     _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => WarehouseOccupancyForm()));
                     }),
-                  if (_hasAccess('Kelayakan Unit'))
+                  if (_hasAccess('KelayakanUnit'))
                     _menuItem(Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VehicleControlForm()));
                     }),
-                  if (_hasAccess('Form Pengiriman'))
+                  if (_hasAccess('PermintaanPengiriman'))
                     _menuItem(Icons.local_shipping_rounded, "Permintaan Pengiriman", Colors.purple, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
@@ -280,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                 leading: const Icon(Icons.storage_rounded),
                 title: const Text("Master Data", style: TextStyle(fontWeight: FontWeight.w600)),
                 children: [
-                  if (currentUser?.role == 'admin') ...[
+                  if (_hasAccess('Master'))  ...[
                     _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo,onTap: () {
                        Navigator.pop(context);
                        Navigator.push(context, MaterialPageRoute(builder: (context) => UserManagementPage()));
