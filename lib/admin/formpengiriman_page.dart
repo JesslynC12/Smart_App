@@ -28,6 +28,8 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
   DateTime? _tanggalRDD;
 
   String? selectedCustomerId;
+  String? userLokasi;
+String? userDisplayName;
 
   // --- Data Lists ---
   List<Map<String, dynamic>> selectedMaterials = [];
@@ -68,6 +70,17 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
 
   Future<void> _fetchInitialData() async {
     try {
+      final currentUser = supabase.auth.currentUser;
+    if (currentUser != null) {
+      final profileResponse = await supabase
+          .from('profiles')
+          .select('lokasi, name') // pastikan nama kolom sesuai di DB
+          .eq('id', currentUser.id)
+          .single();
+      
+      userLokasi = profileResponse['lokasi'];
+      userDisplayName = profileResponse['name'];
+    }
       final customerResponse = await supabase
           .from('customer')
           .select('customer_id, customer_name')
@@ -149,7 +162,7 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
               const SizedBox(width: 8),
               Expanded(child: _buildInputLabel("Tanggal RDD *", _tanggalRDDController, isDate: true, onTap: () => _pickDate(false))),
               const SizedBox(width: 8),
-              Expanded(child: _buildInputLabel("SO Number *", _soNumberController, hint: "SO-XXXXX")),
+              Expanded(child: _buildInputLabel("SO Number *", _soNumberController, hint: "SO-XXXXX",)),
             ],
           ),
           const SizedBox(height: 20),
@@ -195,13 +208,13 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
       },
       children: [
         TableRow(
-          decoration: BoxDecoration(color: Colors.grey[100]),
+          decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(4)),
           children: const [
-            _PaddingCell(Text("No DO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            _PaddingCell(Text("No Mat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            _PaddingCell(Text("Deskripsi Material", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            _PaddingCell(Text("Qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            _PaddingCell(Text("Action")),
+            _PaddingCell(Text("No DO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+            _PaddingCell(Text("No Mat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+            _PaddingCell(Text("Deskripsi Material", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+            _PaddingCell(Text("Qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+            _PaddingCell(Text("Action",style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
           ],
         ),
         ...selectedMaterials.asMap().entries.map((entry) {
@@ -231,7 +244,7 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Expanded(flex: 2, child: _buildFieldSimple("No DO Item", _tempDoController)),
+          Expanded(flex: 2, child: _buildFieldSimple("No DO", _tempDoController)),
           const SizedBox(width: 8),
           Expanded(flex: 3, child: _buildMaterialPicker()),
           const SizedBox(width: 8),
@@ -303,7 +316,7 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
       children: [
         Row(
           children: [
-            const Text("Customer Tujuan *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+            const Text("Customer Tujuan *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             if (isLocked)
               const Padding(
                 padding: EdgeInsets.only(left: 8.0),
@@ -416,7 +429,7 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+      const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
       const SizedBox(height: 8),
       DropdownButtonFormField<int>( // Gunakan int untuk ID
         value: _selectedWarehouseId,
@@ -473,18 +486,110 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     }
   }
 
-  void _submitForm() {
+  Future<void> _submitForm() async {
+    // 1. Validasi Awal
     if (selectedMaterials.isEmpty) {
       _showSnackBar("Isi minimal satu item di tabel!", Colors.orange);
       return;
     }
-    if (_formKey.currentState!.validate() && selectedCustomerId != null && _selectedWarehouseId != null) {
-      _showSnackBar("Berhasil Submit!", Colors.green);
-    } else {
+
+    if (!_formKey.currentState!.validate() || 
+        selectedCustomerId == null || 
+        _selectedWarehouseId == null) {
       _showSnackBar("Lengkapi data header!", Colors.red);
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      // --- LANGKAH 1: Insert ke SHIPPING_REQUEST ---
+      final shippingResponse = await supabase
+          .from('shipping_request')
+          .insert({
+            'shipping_date': _tanggalForm.toIso8601String(),
+            'rdd': _tanggalRDD?.toIso8601String(),
+            'so': _soNumberController.text,
+            'warehouse_id': _selectedWarehouseId,
+            'status': 'waiting approval', // Sesuai ENUM
+            'created_by': userDisplayName ?? 'Unknown', // Diambil dari profiles.name
+      'lokasi': userLokasi ?? 'Unknown',
+          })
+          .select()
+          .single();
+
+      final int shippingId = shippingResponse['shipping_id'];
+
+      // --- LANGKAH 2: Kelompokkan Material berdasarkan No DO ---
+      // Karena 1 Shipping Request bisa punya banyak No DO (dari input row)
+      final Map<String, List<Map<String, dynamic>>> groupedByDo = {};
+      for (var item in selectedMaterials) {
+        String doNum = item['do_number'];
+        if (!groupedByDo.containsKey(doNum)) {
+          groupedByDo[doNum] = [];
+        }
+        groupedByDo[doNum]!.add(item);
+      }
+
+      // --- LANGKAH 3: Loop untuk Insert ke DELIVERY_ORDER & DO_DETAILS ---
+      for (var entry in groupedByDo.entries) {
+        String doNumber = entry.key;
+        List<Map<String, dynamic>> items = entry.value;
+
+        // A. Insert ke delivery_order
+        final doResponse = await supabase
+            .from('delivery_order')
+            .insert({
+              'do_number': doNumber,
+              'customer_id': int.parse(selectedCustomerId!),
+              'shipping_id': shippingId,
+            })
+            .select()
+            .single();
+
+        final int doId = doResponse['do_id'];
+
+        // B. Persiapkan data untuk do_details
+        final List<Map<String, dynamic>> detailsToInsert = items.map((item) {
+          return {
+            'do_id': doId,
+            'material_id': int.parse(item['material_id'].toString()),
+            'qty': int.parse(item['qty'].toString()),
+          };
+        }).toList();
+
+        // C. Bulk Insert ke do_details
+        await supabase.from('do_details').insert(detailsToInsert);
+      }
+
+      // --- BERHASIL ---
+      _showSnackBar("Shipping Request berhasil disimpan!", Colors.green);
+      _resetForm(); // Bersihkan form setelah sukses
+
+    } catch (e) {
+      _showSnackBar("Gagal menyimpan data: $e", Colors.red);
+      print("Error detail: $e");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
+  // Tambahkan fungsi untuk reset form setelah sukses
+  void _resetForm() {
+    setState(() {
+      _soNumberController.clear();
+      _doHeaderController.clear();
+      _tanggalRDDController.clear();
+      _tempDoController.clear(); 
+      _tempQtyController.clear();
+      _tanggalRDD = null;
+      selectedMaterials.clear();
+      selectedCustomerId = null;
+      _selectedWarehouseId = null;
+      _tempSelectedMaterial = null;
+    });
+    _formKey.currentState?.reset();
+  }
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
