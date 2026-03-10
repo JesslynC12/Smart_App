@@ -4,8 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 
 class ShippingRequestPage extends StatefulWidget {
-  const ShippingRequestPage({super.key});
-
+  final Map<String, dynamic>? editData; // Tambahkan ini
+  const ShippingRequestPage({super.key, this.editData});
+  
   @override
   State<ShippingRequestPage> createState() => _ShippingRequestPageState();
 }
@@ -15,7 +16,7 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
   final supabase = Supabase.instance.client;
 
   // --- Header Controllers ---
-  final TextEditingController _tanggalFormController = TextEditingController();
+  final TextEditingController _stuffingDateController = TextEditingController();
   final TextEditingController _tanggalRDDController = TextEditingController();
   final TextEditingController _soNumberController = TextEditingController();
   final TextEditingController _doHeaderController = TextEditingController();
@@ -24,11 +25,11 @@ class _ShippingRequestPageState extends State<ShippingRequestPage> {
   final TextEditingController _tempDoController = TextEditingController();
   final TextEditingController _tempQtyController = TextEditingController();
 
-  DateTime _tanggalForm = DateTime.now();
+  DateTime? _stuffingDate;
   DateTime? _tanggalRDD;
 
   String? selectedCustomerId;
-  String? userLokasi;
+  // String? userLokasi;
 String? userDisplayName;
 
   // --- Data Lists ---
@@ -38,15 +39,19 @@ String? userDisplayName;
   Map<String, dynamic>? _tempSelectedMaterial;
   // Di dalam class _ShippingRequestPageState
 
-List<Map<String, dynamic>> warehouseList = []; // List baru
-int? _selectedWarehouseId; // Simpan ID sebagai value
+// List<Map<String, dynamic>> warehouseList = []; // List baru
+// int? _selectedWarehouseId; // Simpan ID sebagai value
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _tanggalFormController.text = DateFormat('dd/MM/yyyy').format(_tanggalForm);
-    
+   
+   if (widget.editData != null) {
+    _loadDataForEdit();
+  } else {
+    _stuffingDateController.text = ""; // Biarkan kosong jika input baru
+  }
     // Sinkronisasi otomatis dari Header ke Input Row
     _doHeaderController.addListener(() {
       if (_tempDoController.text.isEmpty || _tempDoController.text == _doHeaderController.text) {
@@ -57,9 +62,33 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     _fetchInitialData();
   }
 
+void _loadDataForEdit() {
+  final data = widget.editData!;
+  _soNumberController.text = data['so'] ?? '';
+  _tanggalRDD = DateTime.tryParse(data['rdd'] ?? '');
+  _stuffingDate = DateTime.tryParse(data['stuffing_date'] ?? '');
+  
+  if (_tanggalRDD != null) _tanggalRDDController.text = DateFormat('dd/MM/yyyy').format(_tanggalRDD!);
+  if (_stuffingDate != null) _stuffingDateController.text = DateFormat('dd/MM/yyyy').format(_stuffingDate!);
+
+  final List dos = data['delivery_order'] ?? [];
+  for (var doItem in dos) {
+    for (var det in (doItem['do_details'] as List)) {
+      selectedMaterials.add({
+        "do_number": doItem['do_number'],
+        "customer_id": doItem['customer_id'].toString(),
+        "customer_name": doItem['customer']?['customer_name'] ?? "",
+        "material_id": det['material_id'].toString(),
+        "material_name": det['material']?['material_name'] ?? "",
+        "qty": det['qty'].toString(),
+      });
+    }
+  }
+}
+
   @override
   void dispose() {
-    _tanggalFormController.dispose();
+    _stuffingDateController.dispose();
     _tanggalRDDController.dispose();
     _soNumberController.dispose();
     _doHeaderController.dispose();
@@ -74,11 +103,11 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     if (currentUser != null) {
       final profileResponse = await supabase
           .from('profiles')
-          .select('lokasi, name') // pastikan nama kolom sesuai di DB
+          .select('name') // pastikan nama kolom sesuai di DB
           .eq('id', currentUser.id)
           .single();
       
-      userLokasi = profileResponse['lokasi'];
+      // userLokasi = profileResponse['lokasi'];
       userDisplayName = profileResponse['name'];
     }
       final customerResponse = await supabase
@@ -91,16 +120,16 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
           .select('material_id, material_name')
           .order('material_name', ascending: true);
 
-          final warehouseResponse = await supabase
-        .from('warehouse')
-        .select('warehouse_id, warehouse_name')
-        .order('warehouse_name', ascending: true);
+        //   final warehouseResponse = await supabase
+        // .from('warehouse')
+        // .select('warehouse_id, warehouse_name')
+        // .order('warehouse_name', ascending: true);
 
       if (mounted) {
         setState(() {
           customers = List<Map<String, dynamic>>.from(customerResponse);
           materialList = List<Map<String, dynamic>>.from(materialResponse);
-          warehouseList = List<Map<String, dynamic>>.from(warehouseResponse); // Simpan hasil
+          // warehouseList = List<Map<String, dynamic>>.from(warehouseResponse); // Simpan hasil
           isLoading = false;
         });
       }
@@ -121,7 +150,7 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Buat Permintaan Pengiriman', 
+        title: const Text('Input DO', 
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.red.shade700,
         foregroundColor: Colors.white,
@@ -158,21 +187,16 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
         children: [
           Row(
             children: [
-              Expanded(child: _buildInputLabel("Tanggal Form", _tanggalFormController, isDate: true, onTap: () => _pickDate(true))),
-              const SizedBox(width: 8),
+              
               Expanded(child: _buildInputLabel("Tanggal RDD *", _tanggalRDDController, isDate: true, onTap: () => _pickDate(false))),
               const SizedBox(width: 8),
-              Expanded(child: _buildInputLabel("SO Number *", _soNumberController, hint: "SO-XXXXX",)),
+              Expanded(child: _buildInputLabel("Stuffing Date*", _stuffingDateController, isDate: true, onTap: () => _pickDate(true))),
+              const SizedBox(width: 8),
+              Expanded(child: _buildInputLabel("SO Number *", _soNumberController, hint: "XXXXX",)),
             ],
           ),
           const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(child: _buildDropdownWarehouse()),
-              const SizedBox(width: 12),
-              Expanded(flex: 2, child: _buildCustomerSearchable()),
-            ],
-          ),
+          
         ],
       ),
     );
@@ -203,18 +227,20 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     return Table(
       border: TableBorder.all(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
       columnWidths: const {
-        0: FlexColumnWidth(2), 1: FlexColumnWidth(2), 2: FlexColumnWidth(4), 
-        3: FlexColumnWidth(1.5), 4: FixedColumnWidth(45),
+        0: FlexColumnWidth(1.5), 1: FlexColumnWidth(1.5), 2: FlexColumnWidth(4), 3: FlexColumnWidth(1.5), 4: FlexColumnWidth(4),
+        5: FlexColumnWidth(1), 6: FixedColumnWidth(45),
       },
       children: [
         TableRow(
-          decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(color: Color(0xFFD32F2F), borderRadius: BorderRadius.circular(4)),
           children: const [
-            _PaddingCell(Text("No DO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-            _PaddingCell(Text("No Mat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-            _PaddingCell(Text("Deskripsi Material", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-            _PaddingCell(Text("Qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-            _PaddingCell(Text("Action",style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+            _PaddingCell(Text("No DO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white))),
+            _PaddingCell(Text("No Customer", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
+            _PaddingCell(Text("Customer Tujuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
+            _PaddingCell(Text("No Mat", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
+            _PaddingCell(Text("Deskripsi Material", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
+            _PaddingCell(Text("Qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
+            _PaddingCell(Text("Action",style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
           ],
         ),
         ...selectedMaterials.asMap().entries.map((entry) {
@@ -223,6 +249,8 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
           return TableRow(
             children: [
               _PaddingCell(Text(item['do_number'] ?? "", style: const TextStyle(fontSize: 12))),
+              _PaddingCell(Text(item['customer_id'] ?? "", style: const TextStyle(fontSize: 12))),
+              _PaddingCell(Text(item['customer_name'] ?? "", style: const TextStyle(fontSize: 12))),
               _PaddingCell(Text(item['material_id'] ?? "", style: const TextStyle(fontSize: 12))),
               _PaddingCell(Text(item['material_name'] ?? "", style: const TextStyle(fontSize: 12))),
               _PaddingCell(Text(item['qty'].toString(), style: const TextStyle(fontSize: 12))),
@@ -238,121 +266,128 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
   }
 
   Widget _buildInputRow() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(8)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(flex: 2, child: _buildFieldSimple("No DO", _tempDoController)),
-          const SizedBox(width: 8),
-          Expanded(flex: 3, child: _buildMaterialPicker()),
-          const SizedBox(width: 8),
-          Expanded(flex: 1, child: _buildFieldSimple("Qty", _tempQtyController, isNumber: true)),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _addItemToTable,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[600],
-              padding: const EdgeInsets.symmetric(vertical: 18),
-            ),
-            child: const Icon(Icons.add, color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _addItemToTable() {
-    if (_tempSelectedMaterial == null || 
-        _tempDoController.text.isEmpty || 
-        _tempQtyController.text.isEmpty || 
-        selectedCustomerId == null) {
-      _showSnackBar("Lengkapi Customer, No DO, Material, dan Qty!", Colors.orange);
-      return;
-    }
-
-    final String currentDo = _tempDoController.text.trim();
-    final String currentMatId = _tempSelectedMaterial!['material_id'].toString();
-
-    // Validasi: 1 DO tidak bisa memiliki 2 tujuan berbeda
-    bool isDoUsedForOtherCustomer = selectedMaterials.any((item) => 
-        item['do_number'] == currentDo && item['customer_id'] != selectedCustomerId);
-
-    if (isDoUsedForOtherCustomer) {
-      _showSnackBar("No DO $currentDo sudah terdaftar untuk customer lain!", Colors.red);
-      return;
-    }
-
-    // Validasi: 1 DO tidak bisa memiliki 2 material yang sama
-    bool isMaterialDuplicateInSameDo = selectedMaterials.any((item) => 
-        item['do_number'] == currentDo && item['material_id'] == currentMatId);
-
-    if (isMaterialDuplicateInSameDo) {
-      _showSnackBar("Material ini sudah ada dalam No DO $currentDo!", Colors.red);
-      return;
-    }
-
-    setState(() {
-      selectedMaterials.add({
-        "do_number": currentDo,
-        "customer_id": selectedCustomerId,
-        "material_id": currentMatId,
-        "material_name": _tempSelectedMaterial!['material_name'] ?? "",
-        "qty": _tempQtyController.text,
-      });
-
-      _tempQtyController.clear();
-      _tempSelectedMaterial = null; 
-    });
-  }
-
-  Widget _buildCustomerSearchable() {
-    // Kunci dropdown jika tabel tidak kosong
-    bool isLocked = selectedMaterials.isNotEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(8)),
+    child: Column(
       children: [
+        // Baris Atas: Customer & No DO
         Row(
           children: [
-            const Text("Customer Tujuan *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-            if (isLocked)
-              const Padding(
-                padding: EdgeInsets.only(left: 8.0),
-                child: Icon(Icons.lock_outline, size: 12, color: Colors.grey),
-              ),
+            Expanded(flex: 2, child: _buildFieldSimple("No DO", _tempDoController)),
+            const SizedBox(width: 8),
+            Expanded(flex: 3, child: _buildCustomerPickerForInputRow()),
+            const SizedBox(width: 8),
           ],
         ),
-        const SizedBox(height: 8),
-        DropdownSearch<Map<String, dynamic>>(
-          enabled: !isLocked, // MATIKAN DROPDOWN JIKA TABEL BERISI
-          items: (filter, loadProps) => customers,
-          itemAsString: (item) => "${item['customer_id']?.toString() ?? ""} - ${item['customer_name'] ?? ""}",
-          compareFn: (i, s) => i['customer_id'].toString() == s['customer_id'].toString(),
-          onChanged: (value) => setState(() => selectedCustomerId = value?['customer_id']?.toString()),
-          selectedItem: selectedCustomerId == null 
-              ? null 
-              : customers.cast<Map<String, dynamic>?>().firstWhere((c) => c?['customer_id'].toString() == selectedCustomerId, orElse: () => null),
-          decoratorProps: DropDownDecoratorProps(
-            decoration: InputDecoration(
-              isDense: true, 
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              hintText: "Pilih Customer",
-              fillColor: isLocked ? Colors.grey[100] : Colors.white,
-              filled: true,
+        const SizedBox(height: 12),
+        // Baris Bawah: Material, Qty, dan Tombol Tambah
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(flex: 3, child: _buildMaterialPicker()),
+            const SizedBox(width: 8),
+            Expanded(flex: 1, child: _buildFieldSimple("Qty", _tempQtyController, isNumber: true)),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _addItemToTable,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[600],
+                padding: const EdgeInsets.symmetric(vertical: 18),
+              ),
+              child: const Icon(Icons.add, color: Colors.white),
             ),
-          ),
-          popupProps: const PopupProps.menu(showSearchBox: true),
+          ],
         ),
-        if (isLocked)
-          const Padding(
-            padding: EdgeInsets.only(top: 4.0),
-            child: Text("Hapus semua item tabel untuk mengganti customer", style: TextStyle(fontSize: 9, color: Colors.orange, fontStyle: FontStyle.italic)),
-          ),
       ],
-    );
+    ),
+  );
+}
+Widget _buildCustomerPickerForInputRow() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text("Customer Tujuan *", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 4),
+      DropdownSearch<Map<String, dynamic>>(
+        items: (f, l) => customers,
+        itemAsString: (i) => "${i['customer_name']}",
+        // TAMBAHKAN KODE INI:
+        compareFn: (item, selectedItem) => 
+            item['customer_id'].toString() == selectedItem['customer_id'].toString(),
+        
+        onChanged: (v) => setState(() => selectedCustomerId = v?['customer_id']?.toString()),
+        selectedItem: selectedCustomerId == null 
+            ? null 
+            : customers.cast<Map<String, dynamic>?>().firstWhere(
+                (c) => c?['customer_id'].toString() == selectedCustomerId, 
+                orElse: () => null,
+              ),
+        decoratorProps: DropDownDecoratorProps(
+          decoration: InputDecoration(
+            isDense: true, 
+            filled: true, 
+            fillColor: Colors.white,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            hintText: "Pilih Customer",
+          ),
+        ),
+        popupProps: const PopupProps.menu(showSearchBox: true),
+      ),
+    ],
+  );
+}
+
+void _addItemToTable() {
+  // Validasi input dasar
+  if (_tempSelectedMaterial == null || 
+      _tempDoController.text.isEmpty || 
+      _tempQtyController.text.isEmpty || 
+      selectedCustomerId == null) { // selectedCustomerId sekarang diisi di input row
+    _showSnackBar("Lengkapi Customer, No DO, Material, dan Qty!", Colors.orange);
+    return;
   }
+
+  final String currentDo = _tempDoController.text.trim();
+  final String currentMatId = _tempSelectedMaterial!['material_id'].toString();
+  final String currentCustId = selectedCustomerId!;
+  final String currentCustName = customers.firstWhere((c) => c['customer_id'].toString() == currentCustId)['customer_name'];
+
+  // VALIDASI: Jika No DO sama sudah ada di tabel, tujuannya (Customer) HARUS sama
+  bool isDoExistWithDifferentCust = selectedMaterials.any((item) => 
+      item['do_number'] == currentDo && item['customer_id'] != currentCustId);
+
+  if (isDoExistWithDifferentCust) {
+    _showSnackBar("1 DO tidak bisa memiliki 2 tujuan", Colors.red);
+    return;
+  }
+
+  // VALIDASI: Cegah duplikat Material di No DO yang sama
+  bool isMaterialDuplicate = selectedMaterials.any((item) => 
+      item['do_number'] == currentDo && item['material_id'] == currentMatId);
+
+  if (isMaterialDuplicate) {
+    _showSnackBar("Material ini sudah ada dalam No DO $currentDo!", Colors.red);
+    return;
+  }
+
+  setState(() {
+    selectedMaterials.add({
+      "do_number": currentDo,
+      "customer_id": currentCustId,
+      "customer_name": currentCustName, // Simpan nama untuk ditampilkan di tabel
+      "material_id": currentMatId,
+      "material_name": _tempSelectedMaterial!['material_name'] ?? "",
+      "qty": _tempQtyController.text,
+    });
+
+    // Reset hanya input material & qty, No DO dan Customer dibiarkan 
+    // agar user mudah input material kedua untuk DO yang sama.
+    _tempQtyController.clear();
+    _tempSelectedMaterial = null; 
+  });
+}
 
   Widget _buildMaterialPicker() {
     return Column(
@@ -425,36 +460,36 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     );
   }
 
-  Widget _buildDropdownWarehouse() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-      const SizedBox(height: 8),
-      DropdownButtonFormField<int>( // Gunakan int untuk ID
-        value: _selectedWarehouseId,
-        hint: const Text("Pilih Warehouse", style: TextStyle(fontSize: 13)),
-        items: warehouseList.map((wh) {
-          return DropdownMenuItem<int>(
-            value: wh['warehouse_id'] as int,
-            child: Text(wh['warehouse_name'].toString(), style: const TextStyle(fontSize: 13)),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            _selectedWarehouseId = value;
-          });
-        },
-        validator: (value) => value == null ? "Wajib diisi" : null,
-        decoration: InputDecoration(
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
-    ],
-  );
-}
+//   Widget _buildDropdownWarehouse() {
+//   return Column(
+//     crossAxisAlignment: CrossAxisAlignment.start,
+//     children: [
+//       const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+//       const SizedBox(height: 8),
+//       DropdownButtonFormField<int>( // Gunakan int untuk ID
+//         value: _selectedWarehouseId,
+//         hint: const Text("Pilih Warehouse", style: TextStyle(fontSize: 13)),
+//         items: warehouseList.map((wh) {
+//           return DropdownMenuItem<int>(
+//             value: wh['warehouse_id'] as int,
+//             child: Text(wh['warehouse_name'].toString(), style: const TextStyle(fontSize: 13)),
+//           );
+//         }).toList(),
+//         onChanged: (value) {
+//           setState(() {
+//             _selectedWarehouseId = value;
+//           });
+//         },
+//         validator: (value) => value == null ? "Wajib diisi" : null,
+//         decoration: InputDecoration(
+//           isDense: true,
+//           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+//           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+//         ),
+//       ),
+//     ],
+//   );
+// }
 
   Widget _buildSectionHeader(IconData icon, String title) {
     return Row(
@@ -465,26 +500,28 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
       ],
     );
   }
+void _pickDate(bool isStuffingDate) async {
+  final DateTime? picked = await showDatePicker(
+    context: context,
+    // Jika state null, gunakan DateTime.now() sebagai posisi awal kalender
+    initialDate: isStuffingDate ? (_stuffingDate ?? DateTime.now()) : (_tanggalRDD ?? DateTime.now()),
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2101),
+  );
 
-  void _pickDate(bool isTanggalForm) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: isTanggalForm ? _tanggalForm : (_tanggalRDD ?? DateTime.now()),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isTanggalForm) {
-          _tanggalForm = picked;
-          _tanggalFormController.text = DateFormat('dd/MM/yyyy').format(picked);
-        } else {
-          _tanggalRDD = picked;
-          _tanggalRDDController.text = DateFormat('dd/MM/yyyy').format(picked);
-        }
-      });
-    }
+  if (picked != null) {
+    setState(() {
+      String formattedDate = DateFormat('dd/MM/yyyy').format(picked);
+      if (isStuffingDate) {
+        _stuffingDate = picked;
+        _stuffingDateController.text = formattedDate; // Munculkan di field
+      } else {
+        _tanggalRDD = picked;
+        _tanggalRDDController.text = formattedDate; // Munculkan di field
+      }
+    });
   }
+}
 
   Future<void> _submitForm() async {
     // 1. Validasi Awal
@@ -494,8 +531,7 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
     }
 
     if (!_formKey.currentState!.validate() || 
-        selectedCustomerId == null || 
-        _selectedWarehouseId == null) {
+        selectedCustomerId == null ) {
       _showSnackBar("Lengkapi data header!", Colors.red);
       return;
     }
@@ -507,13 +543,12 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
       final shippingResponse = await supabase
           .from('shipping_request')
           .insert({
-            'shipping_date': _tanggalForm.toIso8601String(),
+            'stuffing_date': _stuffingDate?.toIso8601String(),
             'rdd': _tanggalRDD?.toIso8601String(),
             'so': _soNumberController.text,
-            'warehouse_id': _selectedWarehouseId,
             'status': 'waiting approval', // Sesuai ENUM
             'created_by': userDisplayName ?? 'Unknown', // Diambil dari profiles.name
-      'lokasi': userLokasi ?? 'Unknown',
+      // 'lokasi': userLokasi ?? 'Unknown',
           })
           .select()
           .single();
@@ -536,12 +571,13 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
         String doNumber = entry.key;
         List<Map<String, dynamic>> items = entry.value;
 
+final String customerIdForThisDo = items.first['customer_id'];
         // A. Insert ke delivery_order
         final doResponse = await supabase
             .from('delivery_order')
             .insert({
               'do_number': doNumber,
-              'customer_id': int.parse(selectedCustomerId!),
+              'customer_id': int.parse(customerIdForThisDo),
               'shipping_id': shippingId,
             })
             .select()
@@ -580,12 +616,13 @@ int? _selectedWarehouseId; // Simpan ID sebagai value
       _soNumberController.clear();
       _doHeaderController.clear();
       _tanggalRDDController.clear();
+      _stuffingDateController.clear();
       _tempDoController.clear(); 
       _tempQtyController.clear();
       _tanggalRDD = null;
+      _stuffingDate = null;
       selectedMaterials.clear();
       selectedCustomerId = null;
-      _selectedWarehouseId = null;
       _tempSelectedMaterial = null;
     });
     _formKey.currentState?.reset();

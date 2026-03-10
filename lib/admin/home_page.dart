@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/formComplain_page.dart';
-import 'package:project_app/admin/formOccupancy_page.dart';
-import 'package:project_app/admin/formPengiriman_page.dart';
-import 'package:project_app/admin/formKelayakanunit_page.dart';
+import 'package:project_app/admin/display/listDO_page.dart' show ListDOPage;
+import 'package:project_app/admin/input%20form/formComplain_page.dart';
+import 'package:project_app/admin/input%20form/formOccupancy_page.dart';
+import 'package:project_app/admin/input%20form/formDO_page.dart';
+import 'package:project_app/admin/input%20form/formKelayakanunit_page.dart';
 import 'package:project_app/admin/master%20data/checker_master.dart';
 import 'package:project_app/admin/master%20data/customer_master.dart';
 import 'package:project_app/admin/master%20data/material_master.dart';
@@ -241,8 +242,8 @@ class _HomePageState extends State<HomePage> {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VehicleControlForm()));
                     }),
-                  if (_hasAccess('PermintaanPengiriman'))
-                    _menuItem(Icons.local_shipping_rounded, "Permintaan Pengiriman", Colors.purple, onTap: () {
+                  if (_hasAccess('InputDO'))
+                    _menuItem(Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
                     }),
@@ -260,7 +261,12 @@ class _HomePageState extends State<HomePage> {
                 leading: const Icon(Icons.analytics_rounded),
                 title: const Text("Display", style: TextStyle(fontWeight: FontWeight.w600)),
                 children: [
-                  if (currentUser?.role == 'admin') ...[
+                     if (_hasAccess('ListDO'))
+                    _menuItem(Icons.list_alt, "List DO", Colors.redAccent, onTap: () {
+                      Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ListDOPage()));
+                      }),
+
                     _menuItem(Icons.list_alt_rounded, "List Planning", Colors.indigo),
                     _menuItem(Icons.confirmation_number_rounded, "Booking Antrian", Colors.amber.shade800),
                     _menuItem(Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
@@ -270,8 +276,12 @@ class _HomePageState extends State<HomePage> {
                     _menuItem(Icons.assessment_rounded, "Dashboard Eksternal (Daily)", Colors.deepOrange),
                     _menuItem(Icons.history_toggle_off_rounded, "Dashboard Eksternal (Range)", Colors.deepOrange.shade700),
                     _menuItem(Icons.star_rate_rounded, "Penilaian Vendor", Colors.orange),
-                    _menuItem(Icons.feedback_rounded, "Complain", Colors.red),
-                  ]
+                   
+                     if (_hasAccess('ListComplain'))
+                    _menuItem(Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
+                      Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComplainPage()));
+                      }),
                 ],
               ),
 
