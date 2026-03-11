@@ -27,64 +27,140 @@ class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
     _fetchData();
   }
 
+  // Future<void> _fetchData() async {
+  //   try {
+  //     final response = await supabase.from('shipping_request').select('''
+  //           *,
+  //           shipping_request_details!inner(*), 
+  //           delivery_order(
+  //             do_number, 
+  //             customer(customer_name),
+  //             do_details(qty, material_id, material(material_name))
+  //           )
+  //         ''').order('shipping_id', ascending: false);
+
+  //     setState(() {
+  //       _dataList = List<Map<String, dynamic>>.from(response);
+  //       _isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     if (mounted) {
+  //       setState(() => _isLoading = false);
+  //       _showSnackBar("Gagal ambil data: $e", Colors.red);
+  //     }
+  //   }
+  // }
+
   Future<void> _fetchData() async {
-    try {
-      final response = await supabase.from('shipping_request').select('''
+  try {
+    final response = await supabase
+        .from('shipping_request')
+        .select('''
             *,
             shipping_request_details!inner(*), 
+            vendor_delivery_request!left(id), 
             delivery_order(
               do_number, 
               customer(customer_name),
               do_details(qty, material_id, material(material_name))
             )
-          ''').order('shipping_id', ascending: false);
+          ''')
+        // SYARAT 1: Belum ada di daftar vendor (otomatis hilang jika sudah di-insert)
+        .isFilter('vendor_delivery_request', null)
+        // SYARAT 2: Status bukan 'cancel' (otomatis hilang jika di-cancel)
+        .not('status', 'eq', 'cancel') 
+        .order('shipping_id', ascending: false);
 
-      setState(() {
-        _dataList = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showSnackBar("Gagal ambil data: $e", Colors.red);
-      }
+    setState(() {
+      _dataList = List<Map<String, dynamic>>.from(response);
+      _isLoading = false;
+    });
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _showSnackBar("Gagal ambil data: $e", Colors.red);
     }
   }
+}
+
+  // Future<void> _simpanDanPindahkan(int sid) async {
+  //   if (_selectedSLoc == null || _selectedDedicated == null) {
+  //     _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
+  //     return;
+  //   }
+
+  //   try {
+  //     setState(() => _isLoading = true);
+
+  //     // 1. Update Detail (Simpan input user)
+  //     await supabase.from('shipping_request_details').update({
+  //       'storage_location': _selectedSLoc,
+  //       'is_dedicated': _selectedDedicated,
+  //     }).eq('shipping_id', sid);
+
+  //     // 2. Tandai agar masuk ke List Vendor (Kita asumsikan dengan kolom status atau flag baru)
+  //     // Misal kita update status di shipping_request menjadi 'to_vendor'
+  //     await supabase.from('shipping_request').update({
+  //       'status': 'waiting vendor delivery request', 
+  //     }).eq('shipping_id', sid);
+
+  //     _showSnackBar("Berhasil! Data dipindahkan ke List Vendor", Colors.green);
+      
+  //     // Reset state & Refresh list (item akan otomatis hilang dari query !inner jika status berubah)
+  //     _expandedId = null;
+  //     _selectedSLoc = null;
+  //     _selectedDedicated = null;
+  //     await _fetchData();
+      
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //     _showSnackBar("Gagal menyimpan: $e", Colors.red);
+  //   }
+  // }
 
   Future<void> _simpanDanPindahkan(int sid) async {
-    if (_selectedSLoc == null || _selectedDedicated == null) {
-      _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
-      return;
-    }
+  if (_selectedSLoc == null || _selectedDedicated == null) {
+    _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
+    return;
+  }
 
-    try {
-      setState(() => _isLoading = true);
+  try {
+    setState(() => _isLoading = true);
 
-      // 1. Update Detail (Simpan input user)
-      await supabase.from('shipping_request_details').update({
-        'storage_location': _selectedSLoc,
-        'is_dedicated': _selectedDedicated,
-      }).eq('shipping_id', sid);
+    // 1. Update Detail Logistik (Gudang)
+    await supabase.from('shipping_request_details').update({
+      'storage_location': _selectedSLoc,
+      'is_dedicated': _selectedDedicated,
+    }).eq('shipping_id', sid);
 
-      // 2. Tandai agar masuk ke List Vendor (Kita asumsikan dengan kolom status atau flag baru)
-      // Misal kita update status di shipping_request menjadi 'to_vendor'
-      await supabase.from('shipping_request').update({
-        'status': 'waiting vendor delivery request', 
-      }).eq('shipping_id', sid);
+    // 2. Update status di shipping_request menjadi waiting vendor
+    await supabase.from('shipping_request').update({
+      'status': 'waiting vendor delivery request',
+    }).eq('shipping_id', sid);
 
-      _showSnackBar("Berhasil! Data dipindahkan ke List Vendor", Colors.green);
-      
-      // Reset state & Refresh list (item akan otomatis hilang dari query !inner jika status berubah)
+    // 3. INSERT ke tabel vendor_delivery_request
+    // Ini pemicu utama data HILANG dari list karena filter !left vendor_delivery_request
+    await supabase.from('vendor_delivery_request').insert({
+      'shipping_id': sid,
+      'status': 'waiting approval', // Default status sesuai tabel Anda
+      'id_profile': supabase.auth.currentUser?.id, // Mencatat admin yang memproses
+    });
+
+    _showSnackBar("Berhasil! Data diteruskan ke Vendor", Colors.green);
+
+    // Reset UI state & Refresh (Data sid ini akan hilang dari list)
+    setState(() {
       _expandedId = null;
       _selectedSLoc = null;
       _selectedDedicated = null;
-      await _fetchData();
-      
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar("Gagal menyimpan: $e", Colors.red);
-    }
+    });
+    await _fetchData();
+
+  } catch (e) {
+    setState(() => _isLoading = false);
+    _showSnackBar("Gagal memindahkan data: $e", Colors.red);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -352,13 +428,15 @@ Future<void> _cancelRequest(int sid) async {
       'cancelled_at': DateTime.now().toIso8601String(), // Mengirimkan waktu saat ini
     }).eq('shipping_id', sid);
 
+await _fetchData();
+
     _showSnackBar("Permintaan Berhasil Dibatalkan", Colors.grey.shade800);
     
     // Reset state & refresh list
     setState(() {
        _expandedId = null;
     });
-    await _fetchData();
+    
     
   } catch (e) {
     setState(() => _isLoading = false);

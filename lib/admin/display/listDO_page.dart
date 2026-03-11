@@ -50,24 +50,62 @@ class _ListDOPageState extends State<ListDOPage> {
   }
 }
 
-Future<void> _prosesKePermintaan() async {
-  try {
-    List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {'shipping_id': id}).toList();
+// Future<void> _prosesKePermintaan() async {
+//   try {
+//     List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {'shipping_id': id}).toList();
 
+//     await supabase.from('shipping_request_details').insert(dataToInsert);
+
+//     _showSnackBar("Berhasil dipindahkan ke Permintaan Pengiriman", Colors.green);
+//     setState(() {
+//       _selectedIds.clear(); 
+//     });
+    
+//     await _fetchShippingRequests(); // Menjalankan fetch ulang agar item hilang (karena filter .isFilter('shipping_request_details', null))
+//   } catch (e) {
+//     setState(() => _isLoading = false); // Matikan loading jika gagal
+//     _showSnackBar("Gagal proses: $e", Colors.red);
+//     print("Error Detail: $e");
+//   }
+
+// }
+
+Future<void> _prosesKePermintaan() async {
+  if (_selectedIds.isEmpty) return;
+
+  try {
+    setState(() => _isLoading = true);
+
+    // 1. Siapkan data untuk bulk insert ke tabel shipping_request_details
+    List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {
+      'shipping_id': id,
+    }).toList();
+
+    // 2. Eksekusi Insert ke tabel detail
     await supabase.from('shipping_request_details').insert(dataToInsert);
 
-    _showSnackBar("Berhasil dipindahkan ke Permintaan Pengiriman", Colors.green);
+    // 3. Update Status di tabel shipping_request menjadi 'waiting GBJ'
+    // Kita melakukan update untuk semua ID yang ada di dalam set _selectedIds
+    await supabase
+        .from('shipping_request')
+        .update({'status': 'waiting GBJ'})
+        .inFilter('shipping_id', _selectedIds.toList());
+
+    _showSnackBar("Berhasil! ${dataToInsert.length} data dipindahkan ke Permintaan Pengiriman", Colors.green);
+    
+    // 4. Bersihkan pilihan dan refresh data
     setState(() {
       _selectedIds.clear(); 
     });
     
-    await _fetchShippingRequests(); // Menjalankan fetch ulang agar item hilang (karena filter .isFilter('shipping_request_details', null))
+    // Fetch ulang agar data yang sudah diproses hilang dari list ini
+    await _fetchShippingRequests(); 
+    
   } catch (e) {
-    setState(() => _isLoading = false); // Matikan loading jika gagal
+    setState(() => _isLoading = false);
     _showSnackBar("Gagal proses: $e", Colors.red);
     print("Error Detail: $e");
   }
-
 }
 
   void _runFilter(String query) {
