@@ -24,35 +24,51 @@ class _ListDOPageState extends State<ListDOPage> {
     super.initState();
     _fetchShippingRequests();
   }
-
   Future<void> _fetchShippingRequests() async {
-    try {
-      final response = await supabase.from('shipping_request').select('''
-            *,
-            delivery_order (
-              do_number,
-              customer_id,
-              customer (customer_name),
-              do_details (
-                qty,
-                material_id,
-                material (material_name)
-              )
-            )
-          ''').order('shipping_id', ascending: false);
+  try {
+    final response = await supabase
+        .from('shipping_request')
+        .select('''
+          *,
+          delivery_order (
+            do_number,
+            customer (customer_name),
+            do_details (qty, material_id, material (material_name))
+          ),
+          shipping_request_details!left(id)
+        ''')
+        .isFilter('shipping_request_details', null) // TAMPILKAN HANYA YANG BELUM DIPROSES
+        .order('shipping_id', ascending: false);
 
-      if (mounted) {
-        setState(() {
-          _allRequests = List<Map<String, dynamic>>.from(response);
-          _filteredRequests = _allRequests;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      _showSnackBar("Gagal mengambil data: $e", Colors.red);
-    }
+    setState(() {
+      _allRequests = List<Map<String, dynamic>>.from(response);
+      _filteredRequests = _allRequests;
+      _isLoading = false;
+    });
+  } catch (e) {
+    _showSnackBar("Gagal ambil data: $e", Colors.red);
   }
+}
+
+Future<void> _prosesKePermintaan() async {
+  try {
+    List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {'shipping_id': id}).toList();
+
+    await supabase.from('shipping_request_details').insert(dataToInsert);
+
+    _showSnackBar("Berhasil dipindahkan ke Permintaan Pengiriman", Colors.green);
+    setState(() {
+      _selectedIds.clear(); 
+    });
+    
+    await _fetchShippingRequests(); // Menjalankan fetch ulang agar item hilang (karena filter .isFilter('shipping_request_details', null))
+  } catch (e) {
+    setState(() => _isLoading = false); // Matikan loading jika gagal
+    _showSnackBar("Gagal proses: $e", Colors.red);
+    print("Error Detail: $e");
+  }
+
+}
 
   void _runFilter(String query) {
     setState(() {
@@ -109,7 +125,7 @@ class _ListDOPageState extends State<ListDOPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Manajemen DO", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("List DO", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.red.shade700,
         foregroundColor: Colors.white,
       ),
@@ -254,9 +270,9 @@ class _ListDOPageState extends State<ListDOPage> {
       color: Colors.grey.shade200,
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),
-        onPressed: () => _showSnackBar("${_selectedIds.length} Data siap diproses", Colors.green),
-        icon: const Icon(Icons.check_circle),
-        label: Text("Proses ${_selectedIds.length} Item"),
+       onPressed: () => _prosesKePermintaan(), 
+      icon: const Icon(Icons.check_circle),
+      label: Text("Proses ${_selectedIds.length} Item"),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/listDO_page.dart' show ListDOPage;
+import 'package:project_app/admin/display/listDOdetailsGBJ_page.dart';
 import 'package:project_app/admin/input%20form/formComplain_page.dart';
 import 'package:project_app/admin/input%20form/formOccupancy_page.dart';
 import 'package:project_app/admin/input%20form/formDO_page.dart';
@@ -265,6 +266,11 @@ class _HomePageState extends State<HomePage> {
                     _menuItem(Icons.list_alt, "List DO", Colors.redAccent, onTap: () {
                       Navigator.pop(context); 
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const ListDOPage()));
+                      }),
+                      if (_hasAccess('DOdetailsGBJ'))
+                    _menuItem(Icons.list_rounded, "Do Details GBJ", Colors.redAccent, onTap: () {
+                      Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DetailsDOGbjPage()));
                       }),
 
                     _menuItem(Icons.list_alt_rounded, "List Planning", Colors.indigo),
