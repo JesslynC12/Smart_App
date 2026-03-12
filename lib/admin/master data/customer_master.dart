@@ -233,7 +233,7 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
                   // --- SEARCH BAR DENGAN ICON SILANG (CLEAR) ---
@@ -274,7 +274,8 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       thumbVisibility: WidgetStateProperty.all(true),
     )),
      child: PaginatedDataTable(
-                      rowsPerPage: 50,
+                     columnSpacing: 12, 
+                        rowsPerPage: 10,
                       columns: const [
   DataColumn(label: Text('No Cust', style: TextStyle(fontWeight: FontWeight.bold))),
   DataColumn(label: Text('Nama Customer', style: TextStyle(fontWeight: FontWeight.bold))),

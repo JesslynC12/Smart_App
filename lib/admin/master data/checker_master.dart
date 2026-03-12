@@ -235,7 +235,7 @@ void initState() {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
                   TextField(

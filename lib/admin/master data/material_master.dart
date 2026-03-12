@@ -276,7 +276,7 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
                   ValueListenableBuilder<TextEditingValue>(
@@ -314,8 +314,10 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
                         thumbVisibility: WidgetStateProperty.all(true),
                       )),
                       child: PaginatedDataTable(
+                        columnSpacing: 12, 
                         rowsPerPage: 10,
                         columns: const [
+
                           DataColumn(label: Text('No Mat', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Material Deskripsi', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Box/Pallet', style: TextStyle(fontWeight: FontWeight.bold))),

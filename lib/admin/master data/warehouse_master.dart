@@ -256,7 +256,7 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
                   TextField(
@@ -284,6 +284,7 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
                   SizedBox(
                     width: double.infinity,
                     child: PaginatedDataTable(
+                      columnSpacing: 12,
                       rowsPerPage: 10,
                       columns: const [
                         DataColumn(label: Text('WH Code', style: TextStyle(fontWeight: FontWeight.bold))),

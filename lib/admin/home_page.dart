@@ -8,6 +8,7 @@ import 'package:project_app/admin/input%20form/formKelayakanunit_page.dart';
 import 'package:project_app/admin/master%20data/checker_master.dart';
 import 'package:project_app/admin/master%20data/customer_master.dart';
 import 'package:project_app/admin/master%20data/material_master.dart';
+import 'package:project_app/admin/master%20data/vendor_transportasi_master.dart';
 import 'package:project_app/admin/master%20data/warehouse_master.dart';
 // Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
 import '../auth/auth_service.dart' as model;
@@ -167,21 +168,21 @@ class _HomePageState extends State<HomePage> {
                           _buildProfileCard(primaryColor),
                           
                           // Menampilkan Chip Privileges (Hak Akses)
-                          if (currentUser?.privileges.isNotEmpty ?? false) ...[
-                             const SizedBox(height: 20),
-                             const Text("Hak Akses Fitur", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                             const SizedBox(height: 10),
-                             Wrap(
-                               spacing: 8,
-                               runSpacing: 8,
-                               children: currentUser!.privileges.map((priv) => Chip(
-                                 avatar: const Icon(Icons.check_circle, size: 16, color: Colors.white),
-                                 label: Text(priv, style: const TextStyle(fontSize: 11, color: Colors.white)),
-                                 backgroundColor: Colors.grey.shade700,
-                                 visualDensity: VisualDensity.compact,
-                               )).toList(),
-                             )
-                          ]
+                          // if (currentUser?.privileges.isNotEmpty ?? false) ...[
+                          //    const SizedBox(height: 20),
+                          //    const Text("Hak Akses Fitur", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          //    const SizedBox(height: 10),
+                          //    Wrap(
+                          //      spacing: 8,
+                          //      runSpacing: 8,
+                          //      children: currentUser!.privileges.map((priv) => Chip(
+                          //        avatar: const Icon(Icons.check_circle, size: 16, color: Colors.white),
+                          //        label: Text(priv, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                          //        backgroundColor: Colors.grey.shade700,
+                          //        visualDensity: VisualDensity.compact,
+                          //      )).toList(),
+                          //    )
+                          // ]
                         ],
                       ),
                     ),
@@ -317,7 +318,10 @@ class _HomePageState extends State<HomePage> {
                        Navigator.pop(context);
                        Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckerPaginatedPage()));
                 }),
-                    _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple),
+                    _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorTransportasiPage()));
+                }),
                     _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent),
                   ]
                 ],

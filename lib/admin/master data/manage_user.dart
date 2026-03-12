@@ -34,6 +34,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
   final Set<int> selectedPrivilegeIds = {};
   final List<String> roles = ['admin', 'supervisor', 'ppic', 'logistik', 'gudang', 'satpam'];
 
+
+// Letakkan di dalam _UserManagementPageState
+final Map<String, List<String>> roleTemplates = {
+  'admin': ['Loading', 'CheckIn','InputDO, ListDO, Complain, ListComplain'],
+  'logistik': ['CheckIn', 'Loading', 'ListDO, DOdetailsGBJ, ListPermintaanPengiriman'],
+  'supervisor': ['Master', 'Loading', 'CheckIn','InputDO, ListDO, Complain, ListComplain'],
+  'gudang': ['Loading', 'Stock'],
+  // Tambahkan role lainnya...
+};
+
   @override
   void initState() {
     super.initState();
@@ -195,7 +205,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator()) 
         : SingleChildScrollView(
-            padding: const EdgeInsets.all(30), // Disesuaikan agar tidak terlalu lebar di web/desktop
+            padding: const EdgeInsets.all(50), // Disesuaikan agar tidak terlalu lebar di web/desktop
             child: Column(
               children: [
                 TextField(
@@ -220,13 +230,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   width: double.infinity,
                   child: PaginatedDataTable(
                     rowsPerPage: 10,
+                    columnSpacing: 28,
                     columns: const [
-                      DataColumn(label: Text('NIK')),
-                      DataColumn(label: Text('Nama')),
-                      DataColumn(label: Text('Lokasi')),
-                      DataColumn(label: Text('Role')),
-                      DataColumn(label: Text('Hak Akses')),
-                      DataColumn(label: Text('Aksi')),
+                      DataColumn(label: Text('NIK', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Nama', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Lokasi', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Role', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Hak Akses', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Aksi', style: TextStyle(fontWeight: FontWeight.bold))),
                     ],
                     source: source,
                   ),
@@ -257,38 +268,63 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
 
     showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEditing ? "Edit User" : "Tambah User Baru"),
-          content: SizedBox(
-            width: 450,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTextField("Nama", Icons.person, _nameController),
-                  const SizedBox(height: 12),
-                  _buildTextField("NIK", Icons.badge, _nikController, maxLength: 8),
-                  const SizedBox(height: 12),
-                  _buildTextField("Email", Icons.email, _emailController, enabled: !isEditing),
-                  const SizedBox(height: 12),
-                  if (!isEditing) _buildTextField("Password", Icons.lock, _passwordController, isPassword: true),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedLokasi,
-                    items: lokasiOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                    onChanged: (val) => setDialogState(() => selectedLokasi = val),
-                    decoration: const InputDecoration(labelText: "Lokasi", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedRole,
-                    items: roles.map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase()))).toList(),
-                    onChanged: (val) => setDialogState(() => selectedRole = val),
-                    decoration: const InputDecoration(labelText: "Pilih Role", border: OutlineInputBorder(), prefixIcon: Icon(Icons.admin_panel_settings)),
-                  ),
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(isEditing ? "Edit User" : "Tambah User Baru"),
+        // Mengatur lebar dialog secara proporsional terhadap layar
+        content: SizedBox(
+          width: MediaQuery.of(context).size.width * 0.6, // Lebar 60% dari layar
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Baris 1: Nama dan NIK berdampingan
+                Row(
+                  children: [
+                    Expanded(child: _buildTextField("Nama Lengkap", Icons.person, _nameController)),
+                    const SizedBox(width: 15),
+                    Expanded(child: _buildTextField("NIK (8 Digit)", Icons.badge, _nikController, maxLength: 8)),
+                  ],
+                ),
+                const SizedBox(height: 15),
+
+                // Baris 2: Email dan Password berdampingan
+                Row(
+                  children: [
+                    Expanded(child: _buildTextField("Email Address", Icons.email, _emailController, enabled: !isEditing)),
+                    if (!isEditing) ...[
+                      const SizedBox(width: 15),
+                      Expanded(child: _buildTextField("Password", Icons.lock, _passwordController, isPassword: true)),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 15),
+
+                // Baris 3: Lokasi dan Role berdampingan
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedLokasi,
+                        items: lokasiOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (val) => setDialogState(() => selectedLokasi = val),
+                        decoration: const InputDecoration(labelText: "Lokasi Kerja", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedRole,
+                        items: roles.map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase()))).toList(),
+                        onChanged: (val) => setDialogState(() => selectedRole = val),
+                        decoration: const InputDecoration(labelText: "Pilih Role", border: OutlineInputBorder(), prefixIcon: Icon(Icons.admin_panel_settings)),
+                      ),
+                    ),
+                  ],
+                ),
                   const SizedBox(height: 16),
+                  
                   const Align(alignment: Alignment.centerLeft, child: Text("Pilih Hak Akses:", style: TextStyle(fontWeight: FontWeight.bold))),
                   const SizedBox(height: 8),
                   Container(
@@ -326,6 +362,21 @@ class _UserManagementPageState extends State<UserManagementPage> {
       ),
     );
   }
+
+  void _applyRoleTemplate(String role, Function setDialogState) {
+  if (roleTemplates.containsKey(role)) {
+    final templateNames = roleTemplates[role]!;
+    
+    setDialogState(() {
+      // Kita cari ID dari _masterPrivileges berdasarkan nama di template
+      for (var priv in _masterPrivileges) {
+        if (templateNames.contains(priv['name'])) {
+          selectedPrivilegeIds.add(priv['id']);
+        }
+      }
+    });
+  }
+}
 
   Widget _buildTextField(String label, IconData icon, TextEditingController controller, {bool isPassword = false, bool enabled = true, int? maxLength}) {
     return TextFormField(
@@ -370,7 +421,17 @@ class UserDataSource extends DataTableSource {
       DataCell(Text(user['name'] ?? '-')),
       DataCell(Text(user['lokasi'] ?? '-')),
       DataCell(Text(user['role']?.toString().toUpperCase() ?? '-')),
-      DataCell(Text(privString.isEmpty ? '-' : privString)),
+      DataCell(
+      Container(
+        width: 600, // Tentukan lebar maksimal kolom Hak Akses di sini
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          privString.isEmpty ? '-' : privString,
+          softWrap: true, // Membuat teks turun ke bawah
+          style: const TextStyle(fontSize: 12),
+        ),
+      ),
+    ),
       DataCell(Row(
         children: [
           IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => onEdit(user)),
@@ -397,6 +458,7 @@ class UserDataSource extends DataTableSource {
       ),
     );
   }
+
 
   @override bool get isRowCountApproximate => false;
   @override int get rowCount => data.length;

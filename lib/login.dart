@@ -143,77 +143,185 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 40),
 
               // Input NIK atau Email
-              TextField(
-                controller: identifierController,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: 'NIK / Email',
-                  hintText: 'Masukkan 8 digit NIK atau Email',
-                  prefixIcon: const Icon(Icons.person_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
+  //             TextField(
+  //               controller: identifierController,
+  //               textInputAction: TextInputAction.next,
+  //               decoration: InputDecoration(
+  //                 labelText: 'NIK / Email',
+  //                 hintText: 'Masukkan 8 digit NIK atau Email',
+  //                 prefixIcon: const Icon(Icons.person_outline),
+  //                 border: OutlineInputBorder(
+  //                   borderRadius: BorderRadius.circular(12)
+  //                 ),
+  //               ),
+  //             ),
+  //             const SizedBox(height: 20),
 
-              // Password
-              TextField(
-                controller: passwordController,
-                obscureText: obscurePassword,
-                textInputAction: TextInputAction.done, // Menampilkan tombol 'Done' atau 'Masuk'
-  onSubmitted: (_) => _login(),
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => obscurePassword = !obscurePassword),
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)
-                  ),
-                ),
-              ),
+  //             // Password
+  //             TextField(
+  //               controller: passwordController,
+  //               obscureText: obscurePassword,
+  //               textInputAction: TextInputAction.done, // Menampilkan tombol 'Done' atau 'Masuk'
+  // onSubmitted: (_) => _login(),
+  //               decoration: InputDecoration(
+  //                 labelText: 'Password',
+  //                 prefixIcon: const Icon(Icons.lock_outline),
+  //                 suffixIcon: IconButton(
+  //                   icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility),
+  //                   onPressed: () => setState(() => obscurePassword = !obscurePassword),
+  //                 ),
+  //                 border: OutlineInputBorder(
+  //                   borderRadius: BorderRadius.circular(12)
+  //                 ),
+  //               ),
+  //             ),
 
-              Row(
-                children: [
-                  Checkbox(
-                    value: rememberMe,
-                    onChanged: (val) => setState(() => rememberMe = val ?? false),
-                    activeColor: Colors.red.shade700,
-                  ),
-                  const Text('Ingat saya'),
-                ],
-              ),
-              const SizedBox(height: 32),
+  //             Row(
+  //               children: [
+  //                 Checkbox(
+  //                   value: rememberMe,
+  //                   onChanged: (val) => setState(() => rememberMe = val ?? false),
+  //                   activeColor: Colors.red.shade700,
+  //                 ),
+  //                 const Text('Ingat saya'),
+  //               ],
+  //             ),
+  //             const SizedBox(height: 32),
 
-              // Button Login
-              SizedBox(
-                width: double.infinity, height: 56,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)
+  //             // Button Login
+  //             SizedBox(
+  //               width: double.infinity, height: 56,
+  //               child: ElevatedButton(
+  //                 onPressed: isLoading ? null : _login,
+  //                 style: ElevatedButton.styleFrom(
+  //                   backgroundColor: Colors.red.shade700,
+  //                   shape: RoundedRectangleBorder(
+  //                     borderRadius: BorderRadius.circular(12)
+  //                   ),
+  //                   elevation: 0,
+  //                 ),
+  //                 child: isLoading 
+  //                   ? const SizedBox(
+  //                       width: 24, 
+  //                       height: 24, 
+  //                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+  //                     )
+  //                   : const Text(
+  //                       'Login', 
+  //                       style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)
+  //                     ),
+  //               ),
+  //             ),
+  //             const SizedBox(height: 24),
+Center(
+  child: ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 380),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+
+        // Input NIK / Email
+        TextField(
+          controller: identifierController,
+          textInputAction: TextInputAction.next,
+          decoration: InputDecoration(
+            labelText: 'NIK / Email',
+            hintText: 'Masukkan 8 digit NIK atau Email',
+            prefixIcon: const Icon(Icons.person_outline),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 14,
+              horizontal: 12,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Password
+        TextField(
+          controller: passwordController,
+          obscureText: obscurePassword,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _login(),
+          decoration: InputDecoration(
+            labelText: 'Password',
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscurePassword
+                    ? Icons.visibility_off
+                    : Icons.visibility,
+              ),
+              onPressed: () =>
+                  setState(() => obscurePassword = !obscurePassword),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 14,
+              horizontal: 12,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Checkbox Ingat Saya
+        Row(
+          children: [
+            Checkbox(
+              value: rememberMe,
+              onChanged: (val) =>
+                  setState(() => rememberMe = val ?? false),
+              activeColor: Colors.red,
+            ),
+            const Text('Ingat saya'),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        // Button Login
+        SizedBox(
+          height: 48,
+          child: ElevatedButton(
+            onPressed: isLoading ? null : _login,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
                     ),
-                    elevation: 0,
+                  )
+                : const Text(
+                    'Login',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: isLoading 
-                    ? const SizedBox(
-                        width: 24, 
-                        height: 24, 
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
-                      )
-                    : const Text(
-                        'Login', 
-                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)
-                      ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
+          ),
+        ),
+      ],
+    ),
+  ),
+),
               // Register Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
