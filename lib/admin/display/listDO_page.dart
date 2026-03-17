@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/input%20form/formDO_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -16,7 +15,9 @@ class _ListDOPageState extends State<ListDOPage> {
 
   List<Map<String, dynamic>> _allRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
-  final Set<int> _selectedIds = {}; 
+  
+  // Menggunakan Set<String> untuk menyimpan kunci unik "shippingId_doNumber"
+  final Set<String> _selectedKeys = {}; 
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -24,8 +25,117 @@ class _ListDOPageState extends State<ListDOPage> {
     super.initState();
     _fetchShippingRequests();
   }
-  Future<void> _fetchShippingRequests() async {
+
+  // Future<void> _fetchShippingRequests() async {
+  //   try {
+  //     setState(() => _isLoading = true);
+  //     final response = await supabase
+  //         .from('shipping_request')
+  //         .select('''
+  //           *,
+  //           delivery_order (
+  //             do_number,
+  //             customer (customer_name),
+  //             do_details (qty, material_id, material (material_name))
+  //           ),
+  //           shipping_request_details!left(id)
+  //         ''')
+  //         .isFilter('shipping_request_details', null)
+  //         .order('shipping_id', ascending: false);
+
+  //     List<Map<String, dynamic>> rawData = List<Map<String, dynamic>>.from(response);
+  //     List<Map<String, dynamic>> flattenedData = [];
+
+  //     // Logic Flattening: Pecah data agar 1 Baris = 1 DO
+  //     for (var request in rawData) {
+  //       final List dos = request['delivery_order'] ?? [];
+  //       for (var doItem in dos) {
+  //         String doNum = doItem['do_number'] ?? "no-do";
+  //         flattenedData.add({
+  //           ...request,
+  //           'single_do': doItem,
+  //           'unique_key': "${request['shipping_id']}_$doNum", // Key Unik
+  //         });
+  //       }
+  //     }
+
+  //     setState(() {
+  //       _allRequests = flattenedData;
+  //       _filteredRequests = _allRequests;
+  //       _isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //     _showSnackBar("Gagal ambil data: $e", Colors.red);
+  //   }
+  // }
+
+//   Future<void> _fetchShippingRequests() async {
+//   try {
+//     setState(() => _isLoading = true);
+//     final response = await supabase
+//         .from('shipping_request')
+//         .select('''
+//           *,
+//           delivery_order (
+//             do_number,
+//             customer (customer_name),
+//             do_details (qty, material_id, material (material_name))
+//           ),
+//           shipping_request_details(do_number) 
+//         '''); // Ambil list do_number yang sudah diproses
+
+//     List<Map<String, dynamic>> rawData = List<Map<String, dynamic>>.from(response);
+//     List<Map<String, dynamic>> flattenedData = [];
+
+//     for (var request in rawData) {
+//       final List dos = request['delivery_order'] ?? [];
+//       // Ambil daftar DO yang sudah diproses untuk ID ini
+//       //final List processedDetails = request['shipping_request_details'] ?? [];
+//       final dynamic rawDetails = request['shipping_request_details'];
+// List processedDetails = [];
+
+// if (rawDetails is List) {
+//   processedDetails = rawDetails;
+// } else if (rawDetails is Map) {
+//   processedDetails = [rawDetails]; // Bungkus jadi list jika dia Map
+// }
+//       final List<String> processedDoNumbers = processedDetails
+//           .map((d) => d['do_number'].toString())
+//           .toList();
+
+//       for (var doItem in dos) {
+//         String doNum = doItem['do_number'] ?? "no-do";
+        
+//         // FILTER DI SINI: Hanya masukkan DO yang BELUM ada di tabel detail
+//         if (!processedDoNumbers.contains(doNum)) {
+//           flattenedData.add({
+//             ...request,
+//             'single_do': doItem,
+//             'unique_key': "${request['shipping_id']}_$doNum",
+//           });
+//         }
+//       }
+//     }
+
+//     setState(() {
+//       _allRequests = flattenedData;
+//       _filteredRequests = _allRequests;
+//       _isLoading = false;
+//     });
+//   } catch (e) {
+//     setState(() => _isLoading = false);
+//     _showSnackBar("Gagal: $e", Colors.red);
+//   }
+// }
+
+
+Future<void> _fetchShippingRequests() async {
   try {
+    setState(() => _isLoading = true);
+    
+    // Query dengan filter status 'waiting approval'
+    // Dan filter agar hanya menampilkan yang belum ada di shipping_request_details
     final response = await supabase
         .from('shipping_request')
         .select('''
@@ -35,76 +145,138 @@ class _ListDOPageState extends State<ListDOPage> {
             customer (customer_name),
             do_details (qty, material_id, material (material_name))
           ),
-          shipping_request_details!left(id)
+          shipping_request_details!left(do_number)
         ''')
-        .isFilter('shipping_request_details', null) // TAMPILKAN HANYA YANG BELUM DIPROSES
-        .order('shipping_id', ascending: false);
+        .eq('status', 'waiting approval') // Hanya yang berstatus waiting approval
+        .isFilter('shipping_request_details', null) // Hanya yang belum diproses
+        .order('shipping_id', ascending: false); // Urutkan dari yang terbaru
+
+    List<Map<String, dynamic>> rawData = List<Map<String, dynamic>>.from(response);
+    List<Map<String, dynamic>> flattenedData = [];
+
+    for (var request in rawData) {
+      final List dos = request['delivery_order'] ?? [];
+      
+      // Mengatasi error _JsonMap vs List<dynamic>
+      final dynamic rawDetails = request['shipping_request_details'];
+      List processedDetails = [];
+      if (rawDetails is List) {
+        processedDetails = rawDetails;
+      } else if (rawDetails is Map) {
+        processedDetails = [rawDetails];
+      }
+
+      // Ambil daftar nomor DO yang sudah ada di tabel detail (jika ada)
+      final List<String> processedDoNumbers = processedDetails
+          .map((d) => d['do_number'].toString())
+          .toList();
+
+      for (var doItem in dos) {
+        String doNum = doItem['do_number'] ?? "no-do";
+        
+        // Filter di sisi client: Hanya masukkan DO yang belum diproses
+        if (!processedDoNumbers.contains(doNum)) {
+          flattenedData.add({
+            ...request,
+            'single_do': doItem,
+            'unique_key': "${request['shipping_id']}_$doNum",
+          });
+        }
+      }
+    }
 
     setState(() {
-      _allRequests = List<Map<String, dynamic>>.from(response);
+      _allRequests = flattenedData;
       _filteredRequests = _allRequests;
       _isLoading = false;
     });
   } catch (e) {
+    setState(() => _isLoading = false);
     _showSnackBar("Gagal ambil data: $e", Colors.red);
+    print("Error Detail: $e");
   }
 }
 
-// Future<void> _prosesKePermintaan() async {
-//   try {
-//     List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {'shipping_id': id}).toList();
+void _toggleSelectAll(bool? selected) {
+  setState(() {
+    if (selected == true) {
+      // Masukkan semua unique_key dari data yang sedang tampil (filtered)
+      for (var req in _filteredRequests) {
+        _selectedKeys.add(req['unique_key']);
+      }
+    } else {
+      // Kosongkan pilihan
+      _selectedKeys.clear();
+    }
+  });
+}
 
-//     await supabase.from('shipping_request_details').insert(dataToInsert);
+  // Future<void> _prosesKePermintaan() async {
+  //   if (_selectedKeys.isEmpty) return;
 
-//     _showSnackBar("Berhasil dipindahkan ke Permintaan Pengiriman", Colors.green);
-//     setState(() {
-//       _selectedIds.clear(); 
-//     });
-    
-//     await _fetchShippingRequests(); // Menjalankan fetch ulang agar item hilang (karena filter .isFilter('shipping_request_details', null))
-//   } catch (e) {
-//     setState(() => _isLoading = false); // Matikan loading jika gagal
-//     _showSnackBar("Gagal proses: $e", Colors.red);
-//     print("Error Detail: $e");
-//   }
+  //   try {
+  //     setState(() => _isLoading = true);
 
-// }
+  //     // 1. Ambil list shipping_id unik untuk update status SO
+  //     List<int> selectedShippingIds = _selectedKeys
+  //         .map((key) => int.parse(key.split('_')[0]))
+  //         .toSet()
+  //         .toList();
 
-Future<void> _prosesKePermintaan() async {
-  if (_selectedIds.isEmpty) return;
+  //     // 2. Siapkan data untuk insert (Satu baris per DO yang dipilih)
+  //     List<Map<String, dynamic>> dataToInsert = _selectedKeys.map((key) {
+  //       return {
+  //         'shipping_id': int.parse(key.split('_')[0]),
+  //         // 'do_number': key.split('_')[1], // Jika tabel details punya kolom do_number
+  //       };
+  //     }).toList();
+
+  //     // 3. Eksekusi Insert ke tabel detail
+  //     await supabase.from('shipping_request_details').insert(dataToInsert);
+
+  //     // 4. Update Status di tabel shipping_request
+  //     await supabase
+  //         .from('shipping_request')
+  //         .update({'status': 'waiting GBJ'})
+  //         .inFilter('shipping_id', selectedShippingIds);
+
+  //     _showSnackBar("Berhasil! ${_selectedKeys.length} DO diproses", Colors.green);
+      
+  //     setState(() => _selectedKeys.clear());
+  //     await _fetchShippingRequests(); 
+      
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //     _showSnackBar("Gagal proses: $e", Colors.red);
+  //   }
+  // }
+
+  Future<void> _prosesKePermintaan() async {
+  if (_selectedKeys.isEmpty) return;
 
   try {
     setState(() => _isLoading = true);
 
-    // 1. Siapkan data untuk bulk insert ke tabel shipping_request_details
-    List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {
-      'shipping_id': id,
+    // 1. Siapkan data insert yang menyertakan do_number
+    List<Map<String, dynamic>> dataToInsert = _selectedKeys.map((key) {
+      return {
+        'shipping_id': int.parse(key.split('_')[0]),
+        'do_number': key.split('_')[1], // Ambil nomor DO dari unique_key
+      };
     }).toList();
 
-    // 2. Eksekusi Insert ke tabel detail
+    // 2. Insert ke tabel detail
     await supabase.from('shipping_request_details').insert(dataToInsert);
 
-    // 3. Update Status di tabel shipping_request menjadi 'waiting GBJ'
-    // Kita melakukan update untuk semua ID yang ada di dalam set _selectedIds
-    await supabase
-        .from('shipping_request')
-        .update({'status': 'waiting GBJ'})
-        .inFilter('shipping_id', _selectedIds.toList());
+    // CATATAN: Jangan update status 'shipping_request' ke 'waiting GBJ' di sini 
+    // jika masih ada DO lain yang belum diproses dalam ID yang sama.
 
-    _showSnackBar("Berhasil! ${dataToInsert.length} data dipindahkan ke Permintaan Pengiriman", Colors.green);
-    
-    // 4. Bersihkan pilihan dan refresh data
-    setState(() {
-      _selectedIds.clear(); 
-    });
-    
-    // Fetch ulang agar data yang sudah diproses hilang dari list ini
+    _showSnackBar("Berhasil memproses ${_selectedKeys.length} DO", Colors.green);
+    setState(() => _selectedKeys.clear());
     await _fetchShippingRequests(); 
-    
   } catch (e) {
     setState(() => _isLoading = false);
     _showSnackBar("Gagal proses: $e", Colors.red);
-    print("Error Detail: $e");
   }
 }
 
@@ -113,57 +285,29 @@ Future<void> _prosesKePermintaan() async {
       if (query.isEmpty) {
         _filteredRequests = _allRequests;
       } else {
-        _filteredRequests = _allRequests.where((req) {
-          final String soNum = (req['so'] ?? "").toString().toLowerCase();
-          final List dos = req['delivery_order'] ?? [];
+        final q = query.toLowerCase();
+        _filteredRequests = _allRequests.where((item) {
+          final soNum = (item['so'] ?? "").toString().toLowerCase();
+          final doItem = item['single_do'] ?? {};
+          final doNum = (doItem['do_number'] ?? "").toString().toLowerCase();
+          final custName = (doItem['customer']?['customer_name'] ?? "").toString().toLowerCase();
           
-          bool matchInDO = dos.any((doItem) {
-            final String doNum = (doItem['do_number'] ?? "").toString().toLowerCase();
-            final String custName = (doItem['customer']?['customer_name'] ?? "").toString().toLowerCase();
-            
-            // Tambah filter berdasarkan nama material
-            final List details = doItem['do_details'] ?? [];
-            bool matchInMaterial = details.any((det) => 
-              (det['material']?['material_name'] ?? "").toString().toLowerCase().contains(query.toLowerCase())
-            );
+          final List details = doItem['do_details'] ?? [];
+          bool matchMaterial = details.any((det) => 
+            (det['material']?['material_name'] ?? "").toString().toLowerCase().contains(q)
+          );
 
-            return doNum.contains(query.toLowerCase()) || custName.contains(query.toLowerCase()) || matchInMaterial;
-          });
-          return soNum.contains(query.toLowerCase()) || matchInDO;
+          return soNum.contains(q) || doNum.contains(q) || custName.contains(q) || matchMaterial;
         }).toList();
       }
     });
-  }
-
-  Future<void> _deleteRequest(int shippingId, String label) async {
-    try {
-      setState(() => _isLoading = true);
-      await supabase.from('shipping_request').delete().eq('shipping_id', shippingId);
-      _showSnackBar("SO $label berhasil dihapus", Colors.green);
-      _fetchShippingRequests();
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar("Gagal menghapus: $e", Colors.red);
-    }
-  }
-
-  void _editRequest(Map<String, dynamic> req) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ShippingRequestPage(editData: req),
-      ),
-    );
-    if (result == true) {
-      _fetchShippingRequests();
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("List DO", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("List DO (Per DO)", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.red.shade700,
         foregroundColor: Colors.white,
       ),
@@ -177,7 +321,10 @@ Future<void> _prosesKePermintaan() async {
           ),
         ],
       ),
-      bottomNavigationBar: _selectedIds.isNotEmpty ? _buildActionBottomBar() : null,
+      //bottomNavigationBar: _selectedKeys.isNotEmpty ? _buildActionBottomBar() : null,
+    bottomNavigationBar: (_selectedKeys != null && _selectedKeys.isNotEmpty) 
+    ? _buildActionBottomBar() 
+    : null,
     );
   }
 
@@ -198,97 +345,120 @@ Future<void> _prosesKePermintaan() async {
   }
 
   Widget _buildTableArea() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor: WidgetStateProperty.all(Colors.red.shade50),
-          dataRowMaxHeight: 120, // Diperlebar agar muat list material
-          columns: const [
-            DataColumn(label: Text('Pilih',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('SO Number',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('No DO',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Customer',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('No Material',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Nama Material',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Qty',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('RDD',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Stuffing',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Status',style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Aksi',style: TextStyle(fontWeight: FontWeight.bold))),
-          ],
-          rows: _filteredRequests.map((req) {
-            final int id = req['shipping_id'];
-            final isSelected = _selectedIds.contains(id);
-            final List dos = req['delivery_order'] ?? [];
+    if (_filteredRequests.isEmpty) {
+      return const Center(child: Text("Tidak ada data ditemukan"));
+    }
 
-            // Flat list untuk material
-            List<Widget> doWidgets = [];
-            List<Widget> custWidgets = [];
-            List<Widget> matIdWidgets = [];
-            List<Widget> matNameWidgets = [];
-            List<Widget> qtyWidgets = [];
-
-            for (var d in dos) {
-              final List details = d['do_details'] ?? [];
-              for (var det in details) {
-                doWidgets.add(_buildTextItem(d['do_number'] ?? "-"));
-                custWidgets.add(_buildTextItem(d['customer']?['customer_name'] ?? "-"));
-                matIdWidgets.add(_buildTextItem(det['material_id']?.toString() ?? "-"));
-                matNameWidgets.add(_buildTextItem(det['material']?['material_name'] ?? "-"));
-                qtyWidgets.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true));
-              }
-            }
-
-            return DataRow(
-              selected: isSelected,
-              cells: [
-                DataCell(Checkbox(
-                  value: isSelected,
-                  onChanged: (val) {
-                    setState(() {
-                      if (val == true) _selectedIds.add(id);
-                      else _selectedIds.remove(id);
-                    });
-                  },
-                )),
-                DataCell(Text(req['so'] ?? "-", style: const TextStyle(fontWeight: FontWeight.bold))),
-                DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: doWidgets)),
-                DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: custWidgets)),
-                DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matIdWidgets)),
-                DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matNameWidgets)),
-                DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: qtyWidgets)),
-                DataCell(Text(_formatDate(req['rdd']))),
-                DataCell(Text(_formatDate(req['stuffing_date']))), // Munculkan Stuffing Date
-                DataCell(_buildStatusBadge(req['status'])),
-                DataCell(Row(
-                  children: [
-                    IconButton(icon: const Icon(Icons.edit, color: Colors.blue, size: 20), onPressed: () => _editRequest(req)),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                      onPressed: () => _confirmDelete(id, req['so'] ?? "Tanpa No SO"),
-                    ),
-                  ],
-                )),
-              ],
-            );
-          }).toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Container(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
+                headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                dataRowMaxHeight: 100, 
+                columnSpacing: 20,
+                columns: [
+                  //DataColumn(label: Text('Pilih')),
+                  DataColumn(
+    label: Row(
+      children: [
+        //const Text('Pilih'),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            side: const BorderSide(color: Colors.white, width: 1.5), // Agar terlihat di header merah
+            activeColor: Colors.white,
+            checkColor: Colors.red,
+            value: _filteredRequests.isNotEmpty && 
+                   _filteredRequests.every((req) => _selectedKeys.contains(req['unique_key'])),
+            onChanged: _toggleSelectAll,
+          ),
+          
         ),
-      ),
+        const Text('Pilih'),
+      ],
+    ),
+  ),
+                  
+                  const DataColumn(label: Text('No DO')),
+                  const DataColumn(label: Text('SO Number')),
+                  const DataColumn(label: Text('Customer')),
+                  const DataColumn(label: Text('Nama Material')),
+                  const DataColumn(label: Text('Qty')),
+                  const DataColumn(label: Text('RDD')),
+                  //const DataColumn(label: Text('Status')),
+                  const DataColumn(label: Text('Aksi')),
+                ],
+                rows: _filteredRequests.map((req) {
+                  final String uniqueKey = req['unique_key'];
+                  final bool isSelected = _selectedKeys.contains(uniqueKey);
+                  final Map<String, dynamic> doItem = req['single_do'] ?? {};
+                  final List details = doItem['do_details'] ?? [];
+
+                  // Material List UI
+                  List<Widget> matNameWidgets = [];
+                  List<Widget> qtyWidgets = [];
+                  for (var det in details) {
+                    matNameWidgets.add(_buildTextItem(det['material']?['material_name'] ?? "-", width: 180));
+                    qtyWidgets.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true));
+                  }
+
+                  return DataRow(
+                    selected: isSelected,
+                    color: WidgetStateProperty.resolveWith<Color?>((states) {
+                      if (states.contains(WidgetState.selected)) return Colors.red.withOpacity(0.05);
+                      return null;
+                    }),
+                    cells: [
+                      DataCell(Checkbox(
+                        activeColor: Colors.red.shade700,
+                        value: isSelected,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) _selectedKeys.add(uniqueKey);
+                            else _selectedKeys.remove(uniqueKey);
+                          });
+                        },
+                      )),
+                      DataCell(Text(doItem['do_number'] ?? "-", style: const TextStyle(fontWeight: FontWeight.bold))),
+                      DataCell(Text(req['so'] ?? "-")),
+                      DataCell(_buildTextItem(doItem['customer']?['customer_name'] ?? "-", width: 140)),
+                      DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matNameWidgets)),
+                      DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: qtyWidgets)),
+                      DataCell(Text(_formatDate(req['rdd']))),
+                      //DataCell(_buildStatusBadge(req['status'])),
+                      DataCell(Row(
+                        children: [
+                          IconButton(icon: const Icon(Icons.edit, color: Colors.blue, size: 18), onPressed: () {}),
+                          IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), onPressed: () {}),
+                        ],
+                      )),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildTextItem(String text, {bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+  Widget _buildTextItem(String text, {bool isBold = false, double? width}) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Text(
         text,
-        style: TextStyle(
-          fontSize: 11, 
-          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-          color: text.contains('DO') ? Colors.blue : Colors.black,
-        ),
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 12, fontWeight: isBold ? FontWeight.bold : FontWeight.normal),
       ),
     );
   }
@@ -296,8 +466,12 @@ Future<void> _prosesKePermintaan() async {
   Widget _buildStatusBadge(String? status) {
     Color color = status?.toLowerCase() == 'approved' ? Colors.green : Colors.orange;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: color)),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1), 
+        borderRadius: BorderRadius.circular(4), 
+        border: Border.all(color: color, width: 0.5)
+      ),
       child: Text(status?.toUpperCase() ?? 'PENDING', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
@@ -305,30 +479,19 @@ Future<void> _prosesKePermintaan() async {
   Widget _buildActionBottomBar() {
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.grey.shade200,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),
-       onPressed: () => _prosesKePermintaan(), 
-      icon: const Icon(Icons.check_circle),
-      label: Text("Proses ${_selectedIds.length} Item"),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, -2))]
       ),
-    );
-  }
-
-  void _confirmDelete(int id, String label) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Hapus Data?"),
-        content: Text("Yakin ingin menghapus SO $label? Data DO di dalamnya akan ikut terhapus."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () { Navigator.pop(context); _deleteRequest(id, label); },
-            child: const Text("Hapus Permanen"),
-          ),
-        ],
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green.shade700, 
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 45)
+        ),
+        onPressed: _prosesKePermintaan, 
+        icon: const Icon(Icons.check_circle),
+        label: Text("Proses ${_selectedKeys.length} Delivery Order"),
       ),
     );
   }

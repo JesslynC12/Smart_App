@@ -30,7 +30,8 @@ bool hasPermission(String permissionName) {
 
   factory User.fromJson(Map<String, dynamic> json) {
     List<String> privs = [];
-    if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
+    //if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
+      if (json['profile_privileges'] != null) {
       for (var item in json['profile_privileges']) {
         if (item['privileges'] != null) {
           privs.add(item['privileges']['name'].toString());
@@ -39,8 +40,8 @@ bool hasPermission(String permissionName) {
     }
 
     String? statusValue;
-    if (json['vendor_details'] != null && (json['vendor_details'] as List).isNotEmpty) {
-      statusValue = json['vendor_details'][0]['status'];
+    if (json['profiles_vendor'] != null && (json['profiles_vendor'] as List).isNotEmpty) {
+      statusValue = json['profiles_vendor'][0]['status'];
     }
 
     return User(
@@ -50,12 +51,14 @@ bool hasPermission(String permissionName) {
       name: json['name'],
       lokasi: json['lokasi'],
       role: json['role'],
-      status: statusValue,
+      //status: statusValue,
+      status: json['status'],
       isActive: json['is_active'] ?? true,
       privileges: privs,
     );
   }
 }
+
 
 // ===================== AUTH SERVICE (Disesuaikan dengan Edge Functions) =====================
 class AuthService {
@@ -90,6 +93,18 @@ class AuthService {
           await logout();
           throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
         }
+        // 2. Cek jika Vendor belum diverifikasi
+      if (user?.role == 'vendor' && user?.status == 'pending') {
+        await logout();
+        throw Exception('Akun vendor Anda sedang menunggu verifikasi admin.');
+      }
+      
+      // 3. Cek jika pendaftaran ditolak
+      if (user?.role == 'vendor' && user?.status == 'rejected') {
+        await logout();
+        throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
+      }
+    
         return user;
       }
       return null;
@@ -99,6 +114,7 @@ class AuthService {
       rethrow;
     }
   }
+
 
   // 2. USER MANAGEMENT (Menggunakan Edge Function)
   // --- CREATE USER INTERNAL ---
@@ -122,6 +138,7 @@ try {
         'name': name,
         'lokasi': lokasi,
         'role': role,
+        'status': 'active',
         'privilegeIds': privilegeIds,
       },
       // Menambahkan header secara manual untuk memastikan autentikasi lolos
@@ -202,10 +219,11 @@ try {
           'email': email,
           'nik': nik,
           'role': 'vendor',
+          'status': 'pending',
           'is_active': true,
         });
 
-        await _supabase.from('vendor_details').insert({
+        await _supabase.from('profiles_vendor').insert({
           'profile_id': userId,
           'nama_perusahaan': companyName,
           'alamat': address,
@@ -229,7 +247,7 @@ try {
       if (user != null) {
         final userData = await _supabase.from('profiles').select('''
               *,
-              vendor_details ( status ),
+              profiles_vendor ( status ),
               profile_privileges ( privileges ( name ) )
             ''').eq('id', user.id).single();
         return User.fromJson(userData);
@@ -244,4 +262,77 @@ try {
     return await _supabase.from('privileges').select('id, name').order('id');
   }
   
+  
+  // Tambahkan di dalam class AuthService
+// static Future<List<Map<String, dynamic>>> getVendorEnrollments() async {
+//   try {
+//     // Mengambil data profile yang rolenya vendor beserta detail perusahaannya
+//     final response = await _supabase
+//         .from('profiles')
+//         .select('*, profiles_vendor(*)')
+//         .eq('role', 'vendor')
+//         .order('created_at', ascending: false);
+    
+//     return List<Map<String, dynamic>>.from(response);
+//   } catch (e) {
+//     throw Exception('Gagal mengambil data enrollment: $e');
+//   }
+// }
+
+
+static Future<List<Map<String, dynamic>>> getVendorEnrollments() async {
+  try {
+    // Kita melakukan join (*) dari profiles dan profiles_vendor
+    final response = await _supabase
+        .from('profiles')
+        .select('*, profiles_vendor(*)')
+        .eq('role', 'vendor')
+        .order('created_at', ascending: false);
+    
+    return List<Map<String, dynamic>>.from(response);
+  } catch (e) {
+    throw Exception('Gagal mengambil data: $e');
+  }
 }
+
+static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
+  try {
+    final response = await _supabase
+        .from('profiles')
+        .select('*, profiles_vendor(*)')
+        .eq('role', 'vendor')
+        .eq('status', 'pending') // Filter: Hanya tampilkan yang pending
+        .order('created_at', ascending: false);
+    
+    return List<Map<String, dynamic>>.from(response);
+  } catch (e) {
+    throw Exception('Gagal mengambil data: $e');
+  }
+}
+
+
+// static Future<void> updateVendorStatus(String profileId, String status) async {
+//   try {
+//     await _supabase
+//         .from('profiles_vendor')
+//         .update({'status': status})
+//         .eq('profile_id', profileId);
+//   } catch (e) {
+//     throw Exception('Gagal memperbarui status: $e');
+//   }
+// }
+static Future<void> updateVendorStatus(String userId, String newStatus) async {
+  try {
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'status': newStatus})
+        .eq('id', userId);
+        if (newStatus == 'rejected') {
+       await _supabase.from('profiles').update({'is_active': false}).eq('id', userId);
+    }
+  } catch (e) {
+    throw Exception('Gagal memperbarui status: $e');
+  }
+}
+}
+

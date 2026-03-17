@@ -9,6 +9,7 @@ import 'package:project_app/admin/master%20data/checker_master.dart';
 import 'package:project_app/admin/master%20data/customer_master.dart';
 import 'package:project_app/admin/master%20data/material_master.dart';
 import 'package:project_app/admin/master%20data/vendor_transportasi_master.dart';
+import 'package:project_app/admin/master%20data/enrollment_vendor_page.dart';
 import 'package:project_app/admin/master%20data/warehouse_master.dart';
 // Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
 import '../auth/auth_service.dart' as model;
@@ -320,9 +321,12 @@ class _HomePageState extends State<HomePage> {
                 }),
                     _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorTransportasiPage()));
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorPaginatedPage()));
                 }),
-                    _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent),
+                    _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorEnrollmentPage()));
+                }),
                   ]
                 ],
               ),

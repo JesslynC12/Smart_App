@@ -82,7 +82,7 @@ class _LoginPageState extends State<LoginPage> {
 
   void _navigateBasedOnRole(User user) {
     if (user.role == 'vendor') {
-      if (user.status == 'approved') {
+      if (user.status == 'verified') {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomepageVendor()),
         );
