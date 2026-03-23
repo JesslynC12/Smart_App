@@ -149,17 +149,17 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       builder: (context) => AlertDialog(
         title: Text(isEdit ? 'Edit Customer' : 'Tambah Customer'),
         content: SizedBox( // <-- Tambahkan SizedBox di sini
-          width: 300,
+          width: 500,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTextField(idController, 'No Cust', f1, f2, !isEdit, isNumber: true),
-              _buildTextField(nameController, 'Nama Customer', f2, f3, true),
+              _buildTextField(idController, 'No Cust *', f1, f2, !isEdit, isNumber: true),
+              _buildTextField(nameController, 'Nama Customer *', f2, f3, true),
               _buildTextField(typeController, 'Customer Type', f3, f4, true),
               _buildTextField(delTypeController, 'Del Type', f4, f5, true),
               _buildTextField(cityController, 'City', f5, f6, true),
-              _buildTextField(areaController, 'Area', f6, f7, true),
+              _buildTextField(areaController, 'Area *', f6, f7, true),
               _buildTextField(reportController, 'Report Area', f7, f8, true),
               _buildTextField(podController, 'POD Area', f8, null, true, isLast: true, onSave: () {
                 _validateAndSave(isEdit, idController, nameController, typeController, delTypeController, cityController, areaController, reportController, podController);
@@ -171,6 +171,10 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.red.shade700, // Warna background tombol
+      foregroundColor: Colors.white,       // Warna teks/icon tombol
+    ),
             onPressed: () => _validateAndSave(isEdit, idController, nameController, typeController, delTypeController, cityController, areaController, reportController, podController),
             child: const Text("Simpan"),
           )
@@ -180,9 +184,9 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
   }
 
   void _validateAndSave(bool isEdit, TextEditingController id, TextEditingController name, TextEditingController type, TextEditingController del, TextEditingController city, TextEditingController area, TextEditingController report, TextEditingController pod) {
-    if (id.text.isEmpty || name.text.isEmpty) {
+    if (id.text.isEmpty || name.text.isEmpty || area.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No Cust dan Nama tidak boleh kosong!"), backgroundColor: Colors.orange),
+        const SnackBar(content: Text("No Cust, Nama, dan Area tidak boleh kosong!"), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -344,7 +348,11 @@ class CustomerDataSource extends DataTableSource {
         content: const Text("Data yang dihapus tidak dapat dikembalikan."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
-          TextButton(
+          ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.red.shade700, // Warna background tombol
+      foregroundColor: Colors.white,       // Warna teks/icon tombol
+    ),
             onPressed: () {
               onDelete(id);
               Navigator.pop(c);

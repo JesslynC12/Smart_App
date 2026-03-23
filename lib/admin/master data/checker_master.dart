@@ -124,11 +124,14 @@ void initState() {
       builder: (context, setDialogState) {
         return AlertDialog(
           title: Text(isEdit ? 'Edit Checker' : 'Tambah Checker'),
-          content: SingleChildScrollView(
+          content: SizedBox( // <--- Tambahkan ini
+          width: 400,      // <--- Set lebar ke 400
+          child: SingleChildScrollView(
             child: Column(
+              
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildTextField(nameController, 'Nama Checker'),
+                _buildTextField(nameController, 'Nama Checker *'),
                 
                 // INPUT TEXT BIASA UNTUK SHIFT
                 Padding(
@@ -136,7 +139,7 @@ void initState() {
                   child: TextField(
                     controller: shiftController,
                     decoration: const InputDecoration(
-                      labelText: 'Shift (Contoh: A, B, atau C)',
+                      labelText: 'Shift (Contoh: A, B, atau C) *',
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       helperText: "Ketik kode shift secara manual",
@@ -163,9 +166,15 @@ void initState() {
               ],
             ),
           ),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
             ElevatedButton(
+            
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade700,
+    foregroundColor: Colors.white,
+  ),
               onPressed: () {
                 if (nameController.text.isEmpty || shiftController.text.isEmpty) {
                   _showMsg("Nama dan Shift wajib diisi!", Colors.orange);
@@ -332,7 +341,12 @@ class CheckerDataSource extends DataTableSource {
         content: const Text("Data checker ini akan dihapus permanen."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
-          TextButton(onPressed: () { onDelete(id); Navigator.pop(c); }, child: const Text("Hapus")),
+          ElevatedButton(
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade700,
+    foregroundColor: Colors.white,
+  ),
+          onPressed: () { onDelete(id); Navigator.pop(c); }, child: const Text("Hapus")),
         ],
       ),
     );

@@ -37,12 +37,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
 // Letakkan di dalam _UserManagementPageState
 final Map<String, List<String>> roleTemplates = {
-  'admin': ['Loading', 'CheckIn','InputDO, ListDO, Complain, ListComplain'],
-  'logistik': ['CheckIn', 'Loading', 'ListDO, DOdetailsGBJ, ListPermintaanPengiriman'],
-  'supervisor': ['Master', 'Loading', 'CheckIn','InputDO, ListDO, Complain, ListComplain'],
-  'gudang': ['Loading', 'Stock'],
+  'ADMIN': ['Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
+  'LOGISTIK': ['CheckIn', 'Loading', 'ListDO', 'DOdetailsGBJ', 'ListPermintaanPengiriman'],
+  'SUPERVISOR': ['Master', 'Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
+  'GUDANG': ['Loading', 'Occupancy', 'ListDO', 'DOdetailsGBJ'],
   // Tambahkan role lainnya...
 };
+
 
   @override
   void initState() {
@@ -282,9 +283,9 @@ final Map<String, List<String>> roleTemplates = {
                 // Baris 1: Nama dan NIK berdampingan
                 Row(
                   children: [
-                    Expanded(child: _buildTextField("Nama Lengkap", Icons.person, _nameController)),
+                    Expanded(child: _buildTextField("Nama Lengkap *", Icons.person, _nameController)),
                     const SizedBox(width: 15),
-                    Expanded(child: _buildTextField("NIK (8 Digit)", Icons.badge, _nikController, maxLength: 8)),
+                    Expanded(child: _buildTextField("NIK (8 Digit) *", Icons.badge, _nikController, maxLength: 8)),
                   ],
                 ),
                 const SizedBox(height: 15),
@@ -292,10 +293,10 @@ final Map<String, List<String>> roleTemplates = {
                 // Baris 2: Email dan Password berdampingan
                 Row(
                   children: [
-                    Expanded(child: _buildTextField("Email Address", Icons.email, _emailController, enabled: !isEditing)),
+                    Expanded(child: _buildTextField("Email Address *", Icons.email, _emailController, enabled: !isEditing)),
                     if (!isEditing) ...[
                       const SizedBox(width: 15),
-                      Expanded(child: _buildTextField("Password", Icons.lock, _passwordController, isPassword: true)),
+                      Expanded(child: _buildTextField("Password *", Icons.lock, _passwordController, isPassword: true)),
                     ],
                   ],
                 ),
@@ -309,7 +310,7 @@ final Map<String, List<String>> roleTemplates = {
                         value: selectedLokasi,
                         items: lokasiOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                         onChanged: (val) => setDialogState(() => selectedLokasi = val),
-                        decoration: const InputDecoration(labelText: "Lokasi Kerja", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
+                        decoration: const InputDecoration(labelText: "Lokasi *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
                       ),
                     ),
                     const SizedBox(width: 15),
@@ -317,33 +318,89 @@ final Map<String, List<String>> roleTemplates = {
                       child: DropdownButtonFormField<String>(
                         value: selectedRole,
                         items: roles.map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase()))).toList(),
-                        onChanged: (val) => setDialogState(() => selectedRole = val),
-                        decoration: const InputDecoration(labelText: "Pilih Role", border: OutlineInputBorder(), prefixIcon: Icon(Icons.admin_panel_settings)),
-                      ),
+                       onChanged: (val) {
+    if (val != null) {
+      // Panggil template otomatis saat role dipilih
+      _applyRoleTemplate(val, setDialogState);
+      // Simpan role yang dipilih ke variable utama
+      setDialogState(() => selectedRole = val);
+    }
+  },
+  decoration: const InputDecoration(
+    labelText: "Pilih Role *", 
+    border: OutlineInputBorder(), 
+    prefixIcon: Icon(Icons.admin_panel_settings)
+  ),
+),
                     ),
                   ],
                 ),
                   const SizedBox(height: 16),
                   
-                  const Align(alignment: Alignment.centerLeft, child: Text("Pilih Hak Akses:", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Align(alignment: Alignment.centerLeft, child: Text("Pilih Hak Akses: *", style: TextStyle(fontWeight: FontWeight.bold))),
                   const SizedBox(height: 8),
                   Container(
-                    height: 200, // Menghindari dialog terlalu panjang
+                    height: 250, // Menghindari dialog terlalu panjang
                     decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: _masterPrivileges.map((priv) {
-                        return CheckboxListTile(
-                          title: Text(priv['name']),
-                          value: selectedPrivilegeIds.contains(priv['id']),
-                          onChanged: (val) {
-                            setDialogState(() {
-                              if (val == true) selectedPrivilegeIds.add(priv['id']);
-                              else selectedPrivilegeIds.remove(priv['id']);
-                            });
-                          },
-                        );
-                      }).toList(),
+                    // child: ListView(
+                    //   shrinkWrap: true,
+                    //   children: _masterPrivileges.map((priv) {
+                    //     return CheckboxListTile(
+                    //       title: Text(priv['name']),
+                    //       value: selectedPrivilegeIds.contains(priv['id']),
+                    //       onChanged: (val) {
+                    //         setDialogState(() {
+                    //           if (val == true) selectedPrivilegeIds.add(priv['id']);
+                    //           else selectedPrivilegeIds.remove(priv['id']);
+                    //         });
+                    //       },
+                    //     );
+                    //   }).toList(),
+                    child: Column( // Ubah jadi Column agar Select All selalu di atas
+    children: [
+      // --- CHECKBOX SELECT ALL ---
+      CheckboxListTile(
+        title: const Text("PILIH SEMUA", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+        activeColor: Colors.red,
+        value: selectedPrivilegeIds.length == _masterPrivileges.length && _masterPrivileges.isNotEmpty,
+        onChanged: (val) {
+          setDialogState(() {
+            if (val == true) {
+              // Tambahkan semua ID dari master ke set
+              for (var priv in _masterPrivileges) {
+                selectedPrivilegeIds.add(priv['id']);
+              }
+            } else {
+              // Kosongkan semua
+              selectedPrivilegeIds.clear();
+            }
+          });
+        },
+      ),
+      const Divider(height: 1), // Garis pemisah
+      
+      // List Privilege yang sudah ada
+      Expanded(
+        child: ListView(
+          shrinkWrap: true,
+          children: _masterPrivileges.map((priv) {
+            return CheckboxListTile(
+              title: Text(priv['name']),
+              value: selectedPrivilegeIds.contains(priv['id']),
+              onChanged: (val) {
+                setDialogState(() {
+                  if (val == true) {
+                    selectedPrivilegeIds.add(priv['id']);
+                  } else {
+                    selectedPrivilegeIds.remove(priv['id']);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -363,13 +420,33 @@ final Map<String, List<String>> roleTemplates = {
     );
   }
 
-  void _applyRoleTemplate(String role, Function setDialogState) {
+//   void _applyRoleTemplate(String role, Function setDialogState) {
+//   if (roleTemplates.containsKey(role)) {
+//     final templateNames = roleTemplates[role]!;
+    
+//     setDialogState(() {
+//       // Kita cari ID dari _masterPrivileges berdasarkan nama di template
+//       for (var priv in _masterPrivileges) {
+//         if (templateNames.contains(priv['name'])) {
+//           selectedPrivilegeIds.add(priv['id']);
+//         }
+//       }
+//     });
+//   }
+// }
+
+void _applyRoleTemplate(String role, Function setDialogState) {
+  // 1. Cek apakah role ada di template
   if (roleTemplates.containsKey(role)) {
-    final templateNames = roleTemplates[role]!;
+    final List<String> templateNames = roleTemplates[role]!;
     
     setDialogState(() {
-      // Kita cari ID dari _masterPrivileges berdasarkan nama di template
+      // 2. Kosongkan pilihan hak akses sebelumnya (opsional, tergantung kebutuhan)
+      selectedPrivilegeIds.clear();
+
+      // 3. Cocokkan nama di template dengan data dari _masterPrivileges
       for (var priv in _masterPrivileges) {
+        // Jika nama privilege di database ada dalam daftar template
         if (templateNames.contains(priv['name'])) {
           selectedPrivilegeIds.add(priv['id']);
         }

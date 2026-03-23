@@ -137,19 +137,19 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
           return AlertDialog(
             title: Text(isEdit ? 'Edit Warehouse' : 'Tambah Warehouse'),
             content: SizedBox( // <-- Tambahkan SizedBox di sini
-          width: 300,
+          width: 500,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildNumberField(codeController, 'Warehouse Code', f1, f2),
-                  _buildTextField(nameController, 'Warehouse Name', f2, f3),
+                  _buildNumberField(codeController, 'Warehouse Code *', f1, f2),
+                  _buildTextField(nameController, 'Warehouse Name *', f2, f3),
                   
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: DropdownButtonFormField<String>(
                       value: selectedLokasi,
-                      decoration: const InputDecoration(labelText: 'Lokasi', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: 'Lokasi *', border: OutlineInputBorder()),
                       items: ['Rungkut', 'Tambak Langon'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
                       onChanged: (val) => setDialogState(() => selectedLokasi = val!),
                     ),
@@ -176,6 +176,10 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade700,
+    foregroundColor: Colors.white,
+  ),
                 onPressed: () => _validateAndSave(isEdit, warehouse?['warehouse_id'], codeController, nameController, selectedLokasi, kapasitasController, maxUtilizeController, tipeController, selectedStatus),
                 child: const Text("Simpan"),
               )
@@ -187,8 +191,8 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
   }
 
   void _validateAndSave(bool isEdit, int? id, TextEditingController code, TextEditingController name, String lokasi, TextEditingController cap, TextEditingController max, TextEditingController type, String status) {
-    if (code.text.isEmpty || name.text.isEmpty || cap.text.isEmpty) {
-      _showMsg("WH Code, Nama Warehouse, dan Kapasitas wajib diisi!", Colors.orange);
+    if (code.text.isEmpty || name.text.isEmpty) {
+      _showMsg("WH Code, Nama Warehouse, dan Lokasi wajib diisi!", Colors.orange);
       return;
     }
     _processSave(isEdit, id, code.text, name.text, lokasi, cap.text, max.text, type.text, status);
@@ -228,7 +232,7 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
           labelText: label, 
           border: const OutlineInputBorder(), 
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          helperText: "Input angka saja",
+          // helperText: "Input angka saja",
           helperStyle: const TextStyle(fontSize: 10)
         ),
         onSubmitted: (_) {
@@ -366,7 +370,12 @@ class WarehouseDataSource extends DataTableSource {
         content: const Text("Data ini akan dihapus permanen."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
-          TextButton(onPressed: () { onDelete(id); Navigator.pop(c); }, child: const Text("Hapus")),
+          ElevatedButton(
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade700,
+    foregroundColor: Colors.white,
+  ),
+          onPressed: () { onDelete(id); Navigator.pop(c); }, child: const Text("Hapus")),
         ],
       ),
     );

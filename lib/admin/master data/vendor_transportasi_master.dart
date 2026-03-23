@@ -345,31 +345,31 @@ class _VendorPaginatedPageState extends State<VendorPaginatedPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // --- SECTION 1: IDENTITAS VENDOR ---
-                  _buildEditableDropdown(nameController, 'Vendor Name*', 
+                  _buildEditableDropdown(nameController, 'Vendor Name *', 
                     ['BKE', 'BLI', 'BP', 'BWI', 'DEJAVU', 'DUNEX', 'GRAHA TRANS', 'IRON BIRD', 'JPM', 'KAMADJAJA', 'KARURA', 'KS', 'MIF', 'MK', 'PAJ', 'PELANGI', 'SAMPLE', 'SILKARGO', 'TPIL']),
                   
                   Row(
                     children: [
-                      Expanded(child: _buildField(noVendorController, 'No Vendor', isNum: true)),
+                      Expanded(child: _buildField(noVendorController, 'No Vendor *', isNum: true)),
                       const SizedBox(width: 10),
-                      Expanded(child: _buildField(idRekomController, 'ID Rekomendasi Winner')),
+                      Expanded(child: _buildField(idRekomController, 'ID Rekomendasi Winner *')),
                     ],
                   ),
                   Row(
                     children: [
-                      Expanded(child: _buildField(idStandarController, 'ID Standarisasi')),
+                      Expanded(child: _buildField(idStandarController, 'ID Standarisasi *')),
                       const SizedBox(width: 10),
-                      Expanded(child: _buildField(qcfController, 'QCF', isNum: true)),
+                      Expanded(child: _buildField(qcfController, 'QCF *', isNum: true)),
                     ],
                   ),
 
                   // --- SECTION 2: LOKASI & AREA ---
-                  _buildEditableDropdown(areaController, 'Area', 
+                  _buildEditableDropdown(areaController, 'Area *', 
                     ['BALI', 'BANTEN', 'GORONTALO', 'JABODETABEK', 'JAWA BARAT', 'JAWA TENGAH', 'JAWA TIMUR', 'KALIMANTAN BARAT', 'KALIMANTAN SELATAN', 'KALIMANTAN TENGAH', 'KALIMANTAN TIMUR', 'KALIMANTAN UTARA', 'KEPULAUAN RIAU', 'LAMPUNG', 'MALUKU', 'MALUKU UTARA', 'NTB', 'NTT', 'P. BANGKA & BELITUNG', 'PAPUA', 'PAPUA BARAT', 'RIAU', 'SULAWESI SELATAN', 'SULAWESI TENGGARA', 'SULAWESI TENGAH', 'SULAWESI UTARA', 'SUMATERA BARAT', 'SUMATERA SELATAN', 'SUMATERA UTARA']),
                   
                   Row(
                     children: [
-                      Expanded(child: _buildField(cityController, 'City')),
+                      Expanded(child: _buildField(cityController, 'City *')),
                       const SizedBox(width: 10),
                       Expanded(child: _buildDropdownField('Lokasi Gudang', selGudang, ['RUNGKUT', 'TAMBAK LANGON'], (v) => setDialogState(() => selGudang = v))),
                     ],
@@ -378,16 +378,16 @@ class _VendorPaginatedPageState extends State<VendorPaginatedPage> {
                   // --- SECTION 3: KLASIFIKASI & UNIT ---
                   Row(
                     children: [
-                      Expanded(child: _buildDropdownField('Jenis QCF', selJenisQcf, ['AP', 'DP', 'STO', 'DEDICATED'], (v) => setDialogState(() => selJenisQcf = v))),
+                      Expanded(child: _buildDropdownField('Jenis QCF *', selJenisQcf, ['AP', 'DP', 'STO', 'DEDICATED'], (v) => setDialogState(() => selJenisQcf = v))),
                       const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Type Unit', selTypeUnit, ['CDD', 'CDE', 'CONT', 'CONT (KA)', 'FUSO', 'WB', 'SAMPLE'], (v) => setDialogState(() => selTypeUnit = v))),
+                      Expanded(child: _buildDropdownField('Type Unit *', selTypeUnit, ['CDD', 'CDE', 'CONT', 'CONT (KA)', 'FUSO', 'WB', 'SAMPLE'], (v) => setDialogState(() => selTypeUnit = v))),
                     ],
                   ),
                   Row(
                     children: [
                       Expanded(child: _buildDropdownField('Vehicle Type', selVehicType, ['CDD', 'CDE', 'FUS', 'WBX', 'BL042', 'BL033'], (v) => setDialogState(() => selVehicType = v))),
                       const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Winner Rank', selRank, ['1','2','3','4','5','6','7','8','9'], (v) => setDialogState(() => selRank = v))),
+                      Expanded(child: _buildDropdownField('Winner Rank *', selRank, ['1','2','3','4','5','6','7','8','9'], (v) => setDialogState(() => selRank = v))),
                     ],
                   ),
 
@@ -454,7 +454,33 @@ class _VendorPaginatedPageState extends State<VendorPaginatedPage> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
             ElevatedButton(
-              onPressed: () {
+             
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade700,
+    foregroundColor: Colors.white,
+  ),
+  onPressed: () {
+    // 1. Validasi Kolom Wajib (*)
+    if (nameController.text.trim().isEmpty ||
+        noVendorController.text.trim().isEmpty ||
+        idRekomController.text.trim().isEmpty ||
+        idStandarController.text.trim().isEmpty ||
+        qcfController.text.trim().isEmpty ||
+        areaController.text.trim().isEmpty ||
+        cityController.text.trim().isEmpty ||
+        selJenisQcf == null ||
+        selTypeUnit == null ||
+        selRank == null) {
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Harap isi semua kolom yang bertanda bintang (*)"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+              
                 double? alokasiInput = double.tryParse(alokasiPersenController.text);
                 
                 if (alokasiInput != null && alokasiInput > 100) {
@@ -703,12 +729,17 @@ class VendorDataSource extends DataTableSource {
         content: const Text("Data vendor ini akan dihapus secara permanen."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
-          TextButton(
+          ElevatedButton(
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade700,
+    foregroundColor: Colors.white,
+  ),
+          
             onPressed: () {
               onDelete(id);
               Navigator.pop(c);
             },
-            child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+            child: const Text("Hapus", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

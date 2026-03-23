@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/services.dart';
 
 class MaterialPaginatedPage extends StatefulWidget {
   const MaterialPaginatedPage({super.key});
@@ -95,14 +96,17 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
     TextEditingController type,
   ) async {
     try {
+      final cleanGW = double.tryParse(gw.text.replaceAll(',', '.')) ?? 0.0;
+    final cleanNW = double.tryParse(nw.text.replaceAll(',', '.')) ?? 0.0;
+
       await supabase.from('material').upsert({
         'material_id': int.parse(id.text),
         'material_name': name.text,
         'box_per_pallet': boxPallet.text,
         'marketing_division': mDiv.text,
         'division_description': divDesc.text,
-        'gross_weight': double.tryParse(gw.text) ?? 0.0,
-        'net_weight': double.tryParse(nw.text) ?? 0.0,
+        'gross_weight': cleanGW,
+        'net_weight': cleanNW,
         'material_type': type.text,
       });
 
@@ -155,30 +159,30 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
           return AlertDialog(
             title: Text(isEdit ? 'Edit Material' : 'Tambah Material'),
             content: SizedBox( // <-- Tambahkan SizedBox di sini
-          width: 300,
+          width: 500,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildTextField(idController, 'No Mat', f1, f2, !isEdit, isNumber: true),
-                  _buildTextField(nameController, 'Material Deskripsi', f2, f3, true),
-                  _buildTextField(boxController, 'Box/Pallet', f3, f4, true),
+                  _buildTextField(idController, 'No Mat *', f1, f2, !isEdit, isNumber: true),
+                  _buildTextField(nameController, 'Material Deskripsi *', f2, f3, true),
+                  _buildTextField(boxController, 'Box/Pallet *', f3, f4, true, isNumber: true),
                   
                   // DROPDOWN: Marketing Division
-                  _buildDropdownField('Marketing Div', mDivController, mDivOptions, f4, (val) {
+                  _buildDropdownField('Marketing Div *', mDivController, mDivOptions, f4, (val) {
                     setDialogState(() => mDivController.text = val ?? '');
                   }),
 
                   // DROPDOWN: Div Description
-                  _buildDropdownField('Div Deskripsi', divDescController, divDescOptions, f5, (val) {
+                  _buildDropdownField('Div Deskripsi *', divDescController, divDescOptions, f5, (val) {
                     setDialogState(() => divDescController.text = val ?? '');
                   }),
 
-                  _buildTextField(gwController, 'Gross Weight (GW)', f6, f7, true, isNumber: true),
-                  _buildTextField(nwController, 'Net Weight (NW)', f7, f8, true, isNumber: true),
+                  _buildTextField(gwController, 'Gross Weight (GW) *', f6, f7, true, isDecimal: true),
+                  _buildTextField(nwController, 'Net Weight (NW) *', f7, f8, true, isDecimal: true),
 
                   // DROPDOWN: Material Type
-                  _buildDropdownField('Type', typeController, typeOptions, f8, (val) {
+                  _buildDropdownField('Type *', typeController, typeOptions, f8, (val) {
                     setDialogState(() => typeController.text = val ?? '');
                   }),
                 ],
@@ -188,6 +192,10 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.red.shade700, // Warna background tombol
+      foregroundColor: Colors.white,       // Warna teks/icon tombol
+    ),
                 onPressed: () => _validateAndSave(isEdit, idController, nameController, boxController, mDivController, divDescController, gwController, nwController, typeController),
                 child: const Text("Simpan"),
               )
@@ -199,9 +207,9 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
   }
 
   void _validateAndSave(bool isEdit, TextEditingController id, TextEditingController name, TextEditingController box, TextEditingController mDiv, TextEditingController div, TextEditingController gw, TextEditingController nw, TextEditingController type) {
-    if (id.text.isEmpty || name.text.isEmpty) {
+    if (id.text.isEmpty || name.text.isEmpty || box.text.isEmpty || mDiv.text.isEmpty || div.text.isEmpty || gw.text.isEmpty || nw.text.isEmpty || type.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No Mat dan Deskripsi tidak boleh kosong!"), backgroundColor: Colors.orange),
+        const SnackBar(content: Text("Semua field wajib diisi!"), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -210,7 +218,7 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
 
   // --- HELPER WIDGETS ---
 
-  Widget _buildTextField(TextEditingController controller, String label, FocusNode current, FocusNode? next, bool enabled, {bool isNumber = false, bool isLast = false, VoidCallback? onSave}) {
+  Widget _buildTextField(TextEditingController controller, String label, FocusNode current, FocusNode? next, bool enabled, {bool isNumber = false, bool isDecimal = false, bool isLast = false, VoidCallback? onSave}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
@@ -218,6 +226,14 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
         focusNode: current,
         enabled: enabled,
         keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        inputFormatters: isNumber 
+          ? [
+              isDecimal 
+                ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')) // Angka & Titik (Desimal)
+                : FilteringTextInputFormatter.digitsOnly, // Hanya Angka Bulat
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+            ] 
+          : null,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -385,12 +401,16 @@ class MaterialDataSource extends DataTableSource {
         content: const Text("Data material ini akan dihapus secara permanen."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
-          TextButton(
+          ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.red.shade700, // Warna background tombol
+      foregroundColor: Colors.white,       // Warna teks/icon tombol
+    ),
             onPressed: () {
               onDelete(id);
               Navigator.pop(c);
             },
-            child: const Text("Ya, Hapus", style: TextStyle(color: Colors.red)),
+            child: const Text("Ya, Hapus", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
