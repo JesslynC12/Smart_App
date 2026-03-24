@@ -113,9 +113,14 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
       body: SafeArea(
         child: Form(
           key: _formKey,
+          child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
                 const SizedBox(height: 24),
@@ -133,6 +138,8 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
               ],
             ),
           ),
+        ),
+      ),
         ),
       ),
     );
@@ -183,6 +190,7 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
     return Column(
       key: const ValueKey(0),
       children: [
+        
         _customTextField(
           label: 'NIK Vendor (ID 8 Karakter)',
           controller: nikController,
@@ -237,7 +245,7 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         _customTextField(
           label: 'Alamat Lengkap',
           controller: addressController,
-          hint: 'Jl. Industri No. 12',
+          hint: 'Jalan',
           icon: Icons.location_on_outlined,
           validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
         ),
@@ -360,6 +368,7 @@ Widget _buildNavigationButtons() {
         validator: validator,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
+        style: const TextStyle(fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,

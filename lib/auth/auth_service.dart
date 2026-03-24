@@ -40,8 +40,21 @@ bool hasPermission(String permissionName) {
     }
 
     String? statusValue;
-    if (json['profiles_vendor'] != null && (json['profiles_vendor'] as List).isNotEmpty) {
+    // if (json['profiles_vendor'] != null && (json['profiles_vendor'] as List).isNotEmpty) {
+    //   statusValue = json['profiles_vendor'][0]['status'];
+    // }
+     if (json['profiles_vendor'] != null) {
+
+    if (json['profiles_vendor'] is List && (json['profiles_vendor'] as List).isNotEmpty) {
+
       statusValue = json['profiles_vendor'][0]['status'];
+
+    } else if (json['profiles_vendor'] is Map) {
+
+      statusValue = json['profiles_vendor']['status'];
+
+    }
+
     }
 
     return User(
@@ -51,8 +64,8 @@ bool hasPermission(String permissionName) {
       name: json['name'],
       lokasi: json['lokasi'],
       role: json['role'],
-      //status: statusValue,
-      status: json['status'],
+      status: statusValue,
+      //status: json['status'],
       isActive: json['is_active'] ?? true,
       privileges: privs,
     );
@@ -87,26 +100,81 @@ class AuthService {
         password: password,
       );
 
-      if (response.user != null) {
-        final user = await getCurrentUser();
-        if (user != null && !user.isActive) {
-          await logout();
-          throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
-        }
-        // 2. Cek jika Vendor belum diverifikasi
-      if (user?.role == 'vendor' && user?.status == 'pending') {
-        await logout();
-        throw Exception('Akun vendor Anda sedang menunggu verifikasi admin.');
-      }
+      // if (response.user != null) {
+      //   final user = await getCurrentUser();
+      //   if (user != null && !user.isActive) {
+      //     await logout();
+      //     throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
+      //   }
+      //   // 2. Cek jika Vendor belum diverifikasi
+      // if (user?.role == 'vendor' && user?.status == 'pending') {
+      //   await logout();
+      //   throw Exception('Akun vendor Anda sedang menunggu verifikasi admin.');
+      // }
       
-      // 3. Cek jika pendaftaran ditolak
-      if (user?.role == 'vendor' && user?.status == 'rejected') {
-        await logout();
-        throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
-      }
+      // // 3. Cek jika pendaftaran ditolak
+      // if (user?.role == 'vendor' && user?.status == 'rejected') {
+      //   await logout();
+      //   throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
+      // }
     
-        return user;
+      //   return user;
+      // }
+      if (response.user != null) {
+
+  final user = await getCurrentUser();
+
+ 
+
+ if (user != null) {
+
+    // 1. Cek Blokir Admin (is_active)
+
+    if (!user.isActive) {
+
+      await logout();
+
+      throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
+
+    }
+
+
+
+    // 2. Cek Status Vendor
+
+    // Gunakan .toLowerCase() untuk memastikan 'Pending' atau 'pending' keduanya tertangkap
+
+    final role = user.role?.toLowerCase();
+
+    final status = user.status?.toLowerCase();
+
+
+
+    if (role == 'vendor') {
+
+      if (status == 'pending') {
+
+        await logout();
+
+        throw Exception('Akun Anda sedang menunggu verifikasi admin.');
+
+      // } else if (status == 'rejected') {
+
+      //   await logout();
+
+      //   throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
+
       }
+
+    }
+
+   
+
+    return user;
+
+  }
+      }
+
       return null;
     } on AuthException catch (e) {
       throw Exception('Login Gagal: ${e.message}');
@@ -219,7 +287,7 @@ try {
           'email': email,
           'nik': nik,
           'role': 'vendor',
-          'status': 'pending',
+          // 'status': 'pending',
           'is_active': true,
         });
 
@@ -295,20 +363,35 @@ static Future<List<Map<String, dynamic>>> getVendorEnrollments() async {
   }
 }
 
-static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
-  try {
-    final response = await _supabase
-        .from('profiles')
-        .select('*, profiles_vendor(*)')
-        .eq('role', 'vendor')
-        .eq('status', 'pending') // Filter: Hanya tampilkan yang pending
-        .order('created_at', ascending: false);
+// static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
+//   try {
+//     final response = await _supabase
+//         .from('profiles')
+//         .select('*, profiles_vendor(*)')
+//         .eq('role', 'vendor')
+//         .eq('status', 'pending') // Filter: Hanya tampilkan yang pending
+//         .order('created_at', ascending: false);
     
-    return List<Map<String, dynamic>>.from(response);
-  } catch (e) {
-    throw Exception('Gagal mengambil data: $e');
+//     return List<Map<String, dynamic>>.from(response);
+//   } catch (e) {
+//     throw Exception('Gagal mengambil data: $e');
+//   }
+// }
+
+static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
+    try {
+      // Kita memantau status yang ada di profiles_vendor
+      final response = await _supabase
+          .from('profiles_vendor')
+          .select('*, profiles(*)')
+          .eq('status', 'pending') 
+          .order('profile_id', ascending: false);
+      
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('Gagal mengambil data: $e');
+    }
   }
-}
 
 
 // static Future<void> updateVendorStatus(String profileId, String status) async {
@@ -321,18 +404,47 @@ static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
 //     throw Exception('Gagal memperbarui status: $e');
 //   }
 // }
+
+// static Future<void> updateVendorStatus(String userId, String newStatus) async {
+//   try {
+//     await Supabase.instance.client
+//         .from('profiles')
+//         .update({'status': newStatus})
+//         .eq('id', userId);
+//         if (newStatus == 'rejected') {
+//        await _supabase.from('profiles').update({'is_active': false}).eq('id', userId);
+//     }
+//   } catch (e) {
+//     throw Exception('Gagal memperbarui status: $e');
+//   }
+// }
+
 static Future<void> updateVendorStatus(String userId, String newStatus) async {
-  try {
-    await Supabase.instance.client
-        .from('profiles')
-        .update({'status': newStatus})
-        .eq('id', userId);
-        if (newStatus == 'rejected') {
-       await _supabase.from('profiles').update({'is_active': false}).eq('id', userId);
+    try {
+      // --- PERBAIKAN 3: Update tabel profiles_vendor, bukan profiles ---
+     await Supabase.instance.client
+          .from('profiles_vendor')
+          .update({'status': newStatus})
+          .eq('profile_id', userId);
+          //.select();
+
+      // Jika ditolak, kita nonaktifkan akunnya di tabel profiles
+      if (newStatus == 'rejected') {
+        await _supabase
+            .from('profiles')
+            .update({'is_active': false})
+            .eq('id', userId);
+      } 
+      // Jika diverifikasi, kita pastikan akun aktif
+      else if (newStatus == 'verified') {
+        await _supabase
+            .from('profiles')
+            .update({'is_active': true})
+            .eq('id', userId);
+      }
+    } catch (e) {
+      throw Exception('Gagal memperbarui status: $e');
     }
-  } catch (e) {
-    throw Exception('Gagal memperbarui status: $e');
   }
-}
 }
 

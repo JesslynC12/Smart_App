@@ -37,10 +37,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
 // Letakkan di dalam _UserManagementPageState
 final Map<String, List<String>> roleTemplates = {
-  'ADMIN': ['Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
-  'LOGISTIK': ['CheckIn', 'Loading', 'ListDO', 'DOdetailsGBJ', 'ListPermintaanPengiriman'],
-  'SUPERVISOR': ['Master', 'Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
-  'GUDANG': ['Loading', 'Occupancy', 'ListDO', 'DOdetailsGBJ'],
+  'admin': ['Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
+  'logistik': ['CheckIn', 'Loading', 'ListDO', 'DOdetailsGBJ', 'ListPermintaanPengiriman'],
+  'supervisor': ['Master', 'Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
+  'gudang': ['Loading', 'Occupancy', 'ListDO', 'DOdetailsGBJ'],
   // Tambahkan role lainnya...
 };
 
@@ -368,7 +368,11 @@ final Map<String, List<String>> roleTemplates = {
             if (val == true) {
               // Tambahkan semua ID dari master ke set
               for (var priv in _masterPrivileges) {
+                print("Membandingkan DB: ${priv['name']} dengan Template: ${roleTemplates[selectedRole] ?? []}");
+  if (roleTemplates[selectedRole]?.contains(priv['name']) == true) {
+    print("COCOK! Menambah ID: ${priv['id']}");
                 selectedPrivilegeIds.add(priv['id']);
+              }
               }
             } else {
               // Kosongkan semua
@@ -435,19 +439,41 @@ final Map<String, List<String>> roleTemplates = {
 //   }
 // }
 
+// void _applyRoleTemplate(String role, Function setDialogState) {
+//   // 1. Cek apakah role ada di template
+//   if (roleTemplates.containsKey(role)) {
+//     final List<String> templateNames = roleTemplates[role]!;
+    
+//     setDialogState(() {
+//       // 2. Kosongkan pilihan hak akses sebelumnya (opsional, tergantung kebutuhan)
+//       selectedPrivilegeIds.clear();
+
+//       // 3. Cocokkan nama di template dengan data dari _masterPrivileges
+//       for (var priv in _masterPrivileges) {
+//         // Jika nama privilege di database ada dalam daftar template
+//         if (templateNames.contains(priv['name'])) {
+//           selectedPrivilegeIds.add(priv['id']);
+//         }
+//       }
+//     });
+//   }
+// }
+
 void _applyRoleTemplate(String role, Function setDialogState) {
-  // 1. Cek apakah role ada di template
   if (roleTemplates.containsKey(role)) {
-    final List<String> templateNames = roleTemplates[role]!;
+    // Ubah semua nama di template ke lowercase untuk pembanding
+    final List<String> templateNames = roleTemplates[role]!
+        .map((e) => e.toLowerCase().trim())
+        .toList();
     
     setDialogState(() {
-      // 2. Kosongkan pilihan hak akses sebelumnya (opsional, tergantung kebutuhan)
       selectedPrivilegeIds.clear();
 
-      // 3. Cocokkan nama di template dengan data dari _masterPrivileges
       for (var priv in _masterPrivileges) {
-        // Jika nama privilege di database ada dalam daftar template
-        if (templateNames.contains(priv['name'])) {
+        // Bandingkan dengan versi lowercase
+        String dbPrivName = priv['name'].toString().toLowerCase().trim();
+        
+        if (templateNames.contains(dbPrivName)) {
           selectedPrivilegeIds.add(priv['id']);
         }
       }

@@ -7,6 +7,7 @@ import 'package:project_app/admin/input%20form/formDO_page.dart';
 import 'package:project_app/admin/input%20form/formKelayakanunit_page.dart';
 import 'package:project_app/admin/master%20data/checker_master.dart';
 import 'package:project_app/admin/master%20data/customer_master.dart';
+import 'package:project_app/admin/master%20data/manage_user_vendor.dart';
 import 'package:project_app/admin/master%20data/material_master.dart';
 import 'package:project_app/admin/master%20data/vendor_transportasi_master.dart';
 import 'package:project_app/admin/master%20data/enrollment_vendor_page.dart';
@@ -302,6 +303,10 @@ class _HomePageState extends State<HomePage> {
                     _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo,onTap: () {
                        Navigator.pop(context);
                        Navigator.push(context, MaterialPageRoute(builder: (context) => UserManagementPage()));
+                }),
+                 _menuItem(Icons.pattern_outlined, "Manajemen User Vendor Transportasi", Colors.indigo,onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorManagementPage()));
                 }),
                     _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue,onTap: () {
                        Navigator.pop(context);

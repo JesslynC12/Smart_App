@@ -4,6 +4,7 @@ import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/login.dart';
 import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
+import 'package:project_app/vendor/rejectedpage_vendor.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
@@ -68,9 +69,25 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (user != null) {
       // LOGIKA NAVIGASI BERDASARKAN ROLE
       if (user.role == 'vendor') {
-        if (user.status == 'approved') {
+        if (user.status == 'verified') {
           Navigator.pushReplacementNamed(context, '/home-vendor');
-        } else {
+        } 
+        // JIKA DITOLAK: Arahkan ke halaman edit data
+      else if (user.status == 'rejected') {
+        // Kita ambil data mentah dari Supabase untuk dikirim ke RejectedVendorPage
+        final rawVendorData = await Supabase.instance.client
+            .from('profiles_vendor')
+            .select()
+            .eq('profile_id', user.id)
+            .single();
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RejectedVendorPage(vendorData: rawVendorData),
+          ),
+        );
+      } else {
           // Jika vendor belum di-approve, paksa logout atau arahkan ke login dengan pesan
           await AuthService.logout();
           _navigateToLoginWithMsg("Akun Vendor Anda masih menunggu persetujuan Admin.");
