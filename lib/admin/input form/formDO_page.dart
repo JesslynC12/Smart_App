@@ -311,7 +311,8 @@ Widget _buildCustomerPickerForInputRow() {
       const SizedBox(height: 4),
       DropdownSearch<Map<String, dynamic>>(
         items: (f, l) => customers,
-        itemAsString: (i) => "${i['customer_name']}",
+        // itemAsString: (i) => "${i['customer_name']}",
+        itemAsString: (i) => "${i['customer_id']} - ${i['customer_name']}",
         // TAMBAHKAN KODE INI:
         compareFn: (item, selectedItem) => 
             item['customer_id'].toString() == selectedItem['customer_id'].toString(),
@@ -352,12 +353,20 @@ void _addItemToTable() {
   final String currentDo = _tempDoController.text.trim();
   final String currentMatId = _tempSelectedMaterial!['material_id'].toString();
   final String currentCustId = selectedCustomerId!;
-  final String currentCustName = customers.firstWhere((c) => c['customer_id'].toString() == currentCustId)['customer_name'];
+  // final String currentCustName = customers.firstWhere((c) => c['customer_id'].toString() == currentCustId)['customer_name'];
+
+final customerData = customers.firstWhere(
+    (c) => c['customer_id'].toString() == selectedCustomerId.toString()
+  );
 
   // VALIDASI: Jika No DO sama sudah ada di tabel, tujuannya (Customer) HARUS sama
-  bool isDoExistWithDifferentCust = selectedMaterials.any((item) => 
-      item['do_number'] == currentDo && item['customer_id'] != currentCustId);
+  // bool isDoExistWithDifferentCust = selectedMaterials.any((item) => 
+  //     item['do_number'] == currentDo && item['customer_id'] != currentCustId);
 
+// Validasi 1 DO 1 Customer
+  bool isDoExistWithDifferentCust = selectedMaterials.any((item) => 
+      item['do_number'] == currentDo && item['customer_id'].toString() != selectedCustomerId.toString());
+      
   if (isDoExistWithDifferentCust) {
     _showSnackBar("1 DO tidak bisa memiliki 2 tujuan", Colors.red);
     return;
@@ -375,8 +384,10 @@ void _addItemToTable() {
   setState(() {
     selectedMaterials.add({
       "do_number": currentDo,
-      "customer_id": currentCustId,
-      "customer_name": currentCustName, // Simpan nama untuk ditampilkan di tabel
+      "customer_id": customerData['customer_id'].toString(), // Pastikan ID tersimpan
+      "customer_name": customerData['customer_name'] ?? "",
+      // "customer_id": currentCustId,
+      // "customer_name": currentCustName, // Simpan nama untuk ditampilkan di tabel
       "material_id": currentMatId,
       "material_name": _tempSelectedMaterial!['material_name'] ?? "",
       "qty": _tempQtyController.text,

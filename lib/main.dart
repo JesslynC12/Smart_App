@@ -5,6 +5,7 @@ import 'package:project_app/login.dart';
 import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
 import 'package:project_app/vendor/rejectedpage_vendor.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
@@ -30,7 +31,17 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.red.shade700),
         useMaterial3: true,
+        
       ),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('id', 'ID'), // Bahasa Indonesia (Format dd/mm/yyyy)
+        Locale('en', 'US'), // Bahasa Inggris
+      ],
       // AuthWrapper sebagai pintu masuk utama
       home: const AuthWrapper(),
       routes: {
