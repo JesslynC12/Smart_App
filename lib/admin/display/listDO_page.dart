@@ -211,8 +211,8 @@ Future<void> _fetchShippingRequests() async {
             *,
             delivery_order (
               do_number,
-              customer (customer_name),
-              do_details (qty, material (material_name, net_weight))
+              customer (customer_id, customer_name),
+              do_details (qty, material (material_id, material_name, material_type, net_weight))
             )
           ''')
           .eq('status', 'waiting approval') 
@@ -287,11 +287,11 @@ void _toggleSelectAll(bool? selected) {
   //   }
   // }
 
-  Future<void> _prosesKePermintaan() async {
-  if (_selectedIds.isEmpty) return;
+  // Future<void> _prosesKePermintaan() async {
+  // if (_selectedIds.isEmpty) return;
 
-  try {
-    setState(() => _isLoading = true);
+  // try {
+  //   setState(() => _isLoading = true);
 
     // 1. Siapkan data insert yang menyertakan do_number
     // List<Map<String, dynamic>> dataToInsert = _selectedKeys.map((key) {
@@ -305,20 +305,48 @@ void _toggleSelectAll(bool? selected) {
     // await supabase.from('shipping_request_details').insert(dataToInsert);
 
 // Update status shipping_request ke 'waiting GBJ'
-      await supabase
-          .from('shipping_request')
-          .update({'status': 'waiting GBJ'})
-          .inFilter('shipping_id', _selectedIds.toList());
+      // await supabase
+      //     .from('shipping_request')
+      //     .update({'status': 'waiting GBJ'})
+      //     .inFilter('shipping_id', _selectedIds.toList());
 
     // CATATAN: Jangan update status 'shipping_request' ke 'waiting GBJ' di sini 
     // jika masih ada DO lain yang belum diproses dalam ID yang sama.
 
-    _showSnackBar("Berhasil memproses ${_selectedIds.length} DO", Colors.green);
+  //   _showSnackBar("Berhasil memproses ${_selectedIds.length} DO", Colors.green);
+  //   setState(() => _selectedIds.clear());
+  //   await _fetchShippingRequests(); 
+  // } catch (e) {
+  //   setState(() => _isLoading = false);
+  //   _showSnackBar("Gagal proses: $e", Colors.red);
+  // }
+//}
+
+Future<void> _prosesKePermintaan() async {
+  if (_selectedIds.isEmpty) return;
+  try {
+    setState(() => _isLoading = true);
+
+    // Cukup insert shipping_id saja, tidak perlu looping DO lagi
+    List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {
+      'shipping_id': id,
+      'storage_location': null,
+      'is_dedicated': null,
+    }).toList();
+
+    await supabase.from('shipping_request_details').insert(dataToInsert);
+
+    await supabase
+        .from('shipping_request')
+        .update({'status': 'waiting GBJ'})
+        .inFilter('shipping_id', _selectedIds.toList());
+
+    _showSnackBar("Berhasil memproses ${_selectedIds.length} Shipping ID", Colors.green);
     setState(() => _selectedIds.clear());
-    await _fetchShippingRequests(); 
+    await _fetchShippingRequests();
   } catch (e) {
     setState(() => _isLoading = false);
-    _showSnackBar("Gagal proses: $e", Colors.red);
+    _showSnackBar("Gagal: $e", Colors.red);
   }
 }
 
@@ -455,10 +483,10 @@ String formatSmart(dynamic value) {
   // Parsing ke double dulu untuk memastikan itu angka
   double n = double.tryParse(value.toString()) ?? 0.0;
   
-  String rounded = n.toStringAsFixed(3);
+  num rounded = num.parse(n.toStringAsFixed(3));
   // Trick cerdas: .toString() pada tipe 'num' di Dart 
   // otomatis menghilangkan nol yang tidak perlu.
-  return n.toString().replaceAll(RegExp(r'\.0$'), '');
+ return rounded.toString();
 }
 
   Widget _buildSearchBar() {
@@ -485,7 +513,7 @@ String formatSmart(dynamic value) {
           style: ElevatedButton.styleFrom(
             backgroundColor: _selectedDateRange != null ? Colors.red.shade700 : Colors.grey.shade200,
             foregroundColor: _selectedDateRange != null ? Colors.white : Colors.black87,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           icon: const Icon(Icons.date_range, size: 18),
@@ -593,8 +621,11 @@ String formatSmart(dynamic value) {
                   const DataColumn(label: Text('Ship ID')),
                   const DataColumn(label: Text('No DO')),
                   const DataColumn(label: Text('SO Number')),
+                  const DataColumn(label: Text('No Cust')),
                   const DataColumn(label: Text('Customer')),
+                  const DataColumn(label: Text('No Mat')),
                   const DataColumn(label: Text('Nama Material')),
+                  const DataColumn(label: Text('Type')),
                   const DataColumn(label: Text('Qty')),
                   const DataColumn(label: Text('NW')),
 const DataColumn(label: Text('TNW')),
@@ -617,6 +648,7 @@ const DataColumn(label: Text('TNW')),
                   // List<Widget> matNameWidgets = [];
                   // List<Widget> qtyWidgets = [];
                   List<Widget> doNumW = [], custW = [], matW = [], qtyW = [], nwW = [];
+                  List<Widget> custIdW = [], matIdW = [], matTypeW = []; // List Widget baru
                   double totalNetWeight = 0; // Variabel penampung TNW
                   List<Widget> doNumWidgets = [];
                   List<Widget> custNameWidgets = [];
@@ -636,20 +668,35 @@ const DataColumn(label: Text('TNW')),
                 //     }
                 //   }
                 for (var d in dos) {
+                   String custId = d['customer']?['customer_id']?.toString() ?? "-";
             for (var det in d['do_details']) {
-              double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-    double nwValue = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-    
-    // Hitung TNW akumulatif untuk Shipping ID ini
-    totalNetWeight += (qty * nwValue);
+             
+    String matId = det['material']?['material_id']?.toString() ?? "-";
+    String matType = det['material']?['material_type'] ?? "-";
+    //String matW = det['material']?['material_name'] ?? "-";
 
-    // Widget untuk kolom NW (per material)
-    nwW.add(_buildTextItem(nwValue.toStringAsFixed(2), width: 50));
+// Kalkulasi Angka
+              // 1. Ambil Qty dan Net Weight per item
+              double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+              double nwValue = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
+    
+              // 2. Hitung NW per Baris (Qty * Net Weight)
+              double rowNw = qty * nwValue;
+
+              // Hitung TNW akumulatif untuk Shipping ID ini
+              totalNetWeight += rowNw;
+
+    // 4. Tampilkan hasil perkalian di kolom NW
+    // Menggunakan formatSmart atau toStringAsFixed agar tampilan rapi
+    nwW.add(_buildTextItem(formatSmart(rowNw), width: 60));
     
     // Widget eksisting untuk DO Number, Customer, Material, dan Qty
               doNumW.add(_buildTextItem(d['do_number'] ?? "-", isBold: true, width: 80));
+                custIdW.add(_buildTextItem(custId, width: 60));
               custW.add(_buildTextItem(d['customer']?['customer_name'] ?? "-", width: 140));
+               matIdW.add(_buildTextItem(matId, width: 80));
               matW.add(_buildTextItem(det['material']?['material_name'] ?? "-", width: 180));
+                matTypeW.add(_buildTextItem(matType, width: 60));
               qtyW.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true));
             }
           }
@@ -683,6 +730,7 @@ double finalTNW = totalNetWeight / 1000;
                       DataCell(Text(shippingId.toString())),
                       DataCell(Padding(
                         padding: const EdgeInsets.symmetric(vertical: 1),
+                        
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: doNumW),
                       )),
                      // DataCell(Text(doItem['do_number'] ?? "-", style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -691,8 +739,11 @@ double finalTNW = totalNetWeight / 1000;
                       // DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matNameWidgets)),
                       // DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: qtyWidgets)),
                       // DataCell(Text(_formatDate(req['rdd']))),
+                      DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: custIdW)),
                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: custW)),
+                      DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matIdW)), // Mat ID
                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matW)),
+                      DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matTypeW)), // Mat Type
                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: qtyW)),
                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: nwW)),
                       DataCell(Text(
@@ -1040,49 +1091,49 @@ void _editShippingRequest(Map<String, dynamic> req) async {
                 ],
               ),
 
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Text("Edit Material & Qty", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-              ),
+              // const Padding(
+              //   padding: EdgeInsets.symmetric(vertical: 10),
+              //   child: Text("Edit Material & Qty", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+              // ),
 
-              if (detailEditors.isEmpty)
-                const Center(child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Text("Data detail material tidak ditemukan."),
-                )),
+              // if (detailEditors.isEmpty)
+              //   const Center(child: Padding(
+              //     padding: EdgeInsets.all(20.0),
+              //     child: Text("Data detail material tidak ditemukan."),
+              //   )),
               
               // Tampilkan List Editor untuk Material, Qty, dan Info Customer
-              ...detailEditors.entries.map((entry) {
-                final data = entry.value;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 15),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300)
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("DO: ${data['do_number']} | Cust: ${data['customer_name']}", 
-                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                      const SizedBox(height: 5),
-                      Text("Material: ${data['material_name']}", style: const TextStyle(fontSize: 13)),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: data['controller'],
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: "Input Qty Baru",
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+              // ...detailEditors.entries.map((entry) {
+              //   final data = entry.value;
+              //   return Container(
+              //     margin: const EdgeInsets.only(bottom: 15),
+              //     padding: const EdgeInsets.all(10),
+              //     decoration: BoxDecoration(
+              //       color: Colors.grey.shade100,
+              //       borderRadius: BorderRadius.circular(8),
+              //       border: Border.all(color: Colors.grey.shade300)
+              //     ),
+              //     child: Column(
+              //       crossAxisAlignment: CrossAxisAlignment.start,
+              //       children: [
+              //         Text("DO: ${data['do_number']} | Cust: ${data['customer_name']}", 
+              //              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+              //         const SizedBox(height: 5),
+              //         Text("Material: ${data['material_name']}", style: const TextStyle(fontSize: 13)),
+              //         const SizedBox(height: 8),
+              //         TextField(
+              //           controller: data['controller'],
+              //           keyboardType: TextInputType.number,
+              //           decoration: const InputDecoration(
+              //             labelText: "Input Qty Baru",
+              //             isDense: true,
+              //             border: OutlineInputBorder(),
+              //           ),
+              //         ),
+              //       ],
+              //     ),
+              //   );
+              // }).toList(),
 
               const SizedBox(height: 10),
               ElevatedButton(

@@ -187,7 +187,10 @@ class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
                   },
                 ),
     );
-  }Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded) {
+
+  }
+  
+  Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded) {
   final List dos = item['delivery_order'] ?? [];
 
   return Card(
