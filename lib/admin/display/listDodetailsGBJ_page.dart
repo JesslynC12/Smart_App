@@ -561,20 +561,11 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black)
               ),
               const Spacer(),
-              
-              // 2. SO NUMBER (Tengah - Bold Hitam/Abu)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.grey.shade300)
-                ),
-                child: Text(
+              Text(
                   "SO: $soPerItem", 
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)
                 ),
-              ),
+              
               const Spacer(),
 
               // 3. CUSTOMER NAME (Kanan - Hitam Bold)

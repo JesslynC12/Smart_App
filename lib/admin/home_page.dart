@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/listDO_page.dart' show ListDOPage;
 import 'package:project_app/admin/display/listDOdetailsGBJ_page.dart';
-import 'package:project_app/admin/display/vendorRequest_page.dart';
+import 'package:project_app/admin/display/ListvendorRequest_page.dart';
 import 'package:project_app/admin/input%20form/formComplain_page.dart';
 import 'package:project_app/admin/input%20form/formOccupancy_page.dart';
 import 'package:project_app/admin/input%20form/formDO_page.dart';
@@ -306,11 +306,11 @@ class _HomePageState extends State<HomePage> {
                 title: const Text("Master Data", style: TextStyle(fontWeight: FontWeight.w600)),
                 children: [
                   if (_hasAccess('Master'))  ...[
-                    _menuItem(Icons.people_alt_rounded, "Manajemen User", Colors.indigo,onTap: () {
+                    _menuItem(Icons.person_add, "Manajemen User", Colors.indigo,onTap: () {
                        Navigator.pop(context);
                        Navigator.push(context, MaterialPageRoute(builder: (context) => UserManagementPage()));
                 }),
-                 _menuItem(Icons.pattern_outlined, "Manajemen User Vendor Transportasi", Colors.indigo,onTap: () {
+                 _menuItem(Icons.people_alt_rounded, "Manajemen User Vendor Transportasi", Colors.indigo,onTap: () {
                        Navigator.pop(context);
                        Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorManagementPage()));
                 }),

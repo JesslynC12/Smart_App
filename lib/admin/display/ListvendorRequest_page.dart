@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/admin/display/pemilihanvendor_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -31,6 +32,7 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
 
       var query = supabase.from('shipping_request').select('''
             *,
+            so,
             shipping_request_details!inner(
               storage_location,
               is_dedicated
@@ -78,14 +80,27 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
         if (!groupedMap.containsKey(gId)) {
           groupedMap[gId] = Map<String, dynamic>.from(req);
           groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
-        } else {
-          groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
-          List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
-          currentDos.addAll(req['delivery_order'] ?? []);
-          groupedMap[gId]!['delivery_order'] = currentDos;
+        // Simpan SO induk ke dalam setiap DO di grup pertama
+        if (groupedMap[gId]!['delivery_order'] != null) {
+          for (var doItem in groupedMap[gId]!['delivery_order']) {
+            doItem['parent_so'] = req['so']; 
+          }
         }
+      } else {
+        groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
+        
+        // Ambil DO baru dan tempelkan nomor SO-nya
+        List newDos = List.from(req['delivery_order'] ?? []);
+        for (var ndo in newDos) {
+          ndo['parent_so'] = req['so']; // Menandai SO asal untuk tiap DO
+        }
+
+        List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
+        currentDos.addAll(newDos);
+        groupedMap[gId]!['delivery_order'] = currentDos;
       }
     }
+  }
     finalResult.addAll(groupedMap.values);
     finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
     return finalResult;
@@ -314,12 +329,16 @@ Widget _buildFilterBar() {
                   children: [
                     _infoText("📅 RDD:", _formatDate(item['rdd'])),
                     const SizedBox(width: 20),
-                    _infoText("🚛 Stuffing:", _formatDate(item['stuffing_date'])),
+                    _infoText("🚛 Stuffing:", _formatDate(item['stuffing_date'],)),
+                     const SizedBox(width: 20),
+                      _infoText("🛠️ Status:", details['is_dedicated']?.toString().toUpperCase() ?? "-"),
+const Divider(height: 40),
                   ],
+                  
                 ),
-                const SizedBox(height: 4),
-                _infoText("🛠️ Status:", details['is_dedicated']?.toString().toUpperCase() ?? "-"),
-                const Divider(height: 20),
+                // const SizedBox(height: 4),
+                // _infoText("🛠️ Status:", details['is_dedicated']?.toString().toUpperCase() ?? "-"),
+                // const Divider(height: 20),
 
                 // List Table per DO
                 ...dos.map((doItem) {
@@ -327,21 +346,45 @@ Widget _buildFilterBar() {
                   final String custName = doItem['customer']?['customer_name'] ?? "-";
                   final String custId = doItem['customer']?['customer_id']?.toString() ?? "-";
 
+                  // return Container(
+                  //   margin: const EdgeInsets.only(bottom: 12),
+                  //   decoration: BoxDecoration(
+                  //     border: Border.all(color: Colors.grey.shade200),
+                  //     borderRadius: BorderRadius.circular(8),
+                  //   ),
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade200),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
+    margin: const EdgeInsets.only(bottom: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.grey[300]!), // Border abu tipis
+    ),
+    child: Column(
+      children: [
+        // HEADER BOX (DO - SO - CUSTOMER)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.pink.shade50, // Background abu sangat muda sesuai gambar
+            borderRadius: const BorderRadius.only(
+             
+            ),
+          ),
+                    child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          color: Colors.grey.shade50,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blue)),
+                        // Container(
+                        //   padding: const EdgeInsets.all(8),
+                        //   color: Colors.grey.shade50,
+                        //   child: Row(
+                        //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        //     children: [
+                              Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black)),
+                              const Spacer(),
+                              Text(
+                  "SO: ${doItem['parent_so'] ?? item['so'] ?? '-'}", // Pastikan key 'so_number' sesuai data Anda
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
                               Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                             ],
                           ),
@@ -361,8 +404,13 @@ Widget _buildFilterBar() {
                           )).toList(),
                         ),
                       ],
-                    ),
+                   
+       
+    ),
+    
                   );
+                
+
                 }).toList(),
               ],
             ),
@@ -377,7 +425,14 @@ Widget _buildFilterBar() {
                 minimumSize: const Size(double.infinity, 48),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              onPressed: () => _submitToVendor(item),
+               onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AssignVendorPage(shippingData: item),
+        ),
+      );
+    },
               icon: const Icon(Icons.send, color: Colors.white, size: 18),
               label: Text(
                 // isGroup ? "PROSES GRUP (${(item['grouped_ids'] as List).length} DATA)" : 
@@ -395,7 +450,7 @@ Widget _buildFilterBar() {
   Widget _infoText(String label, String value) {
     return RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 11, color: Colors.black87),
+        style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.bold),
         children: [
           TextSpan(text: "$label "),
           TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -427,21 +482,21 @@ Widget _buildFilterBar() {
 
   Widget _buildEmptyState() => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.done_all, size: 64, color: Colors.grey[300]), const SizedBox(height: 16), const Text("Semua data sudah diproses", style: TextStyle(color: Colors.grey))]));
 
-  // --- Logic ---
-  Future<void> _submitToVendor(Map<String, dynamic> item) async {
-    final List ids = item['group_id'] != null ? item['grouped_ids'] : [item['shipping_id']];
-    try {
-      setState(() => _isLoading = true);
-      await supabase.from('shipping_request').update({'status': 'waiting vendor assignment'}).inFilter('shipping_id', ids);
-      final inserts = ids.map((id) => {'shipping_id': id, 'status': 'requested', 'id_profile': supabase.auth.currentUser?.id}).toList();
-      await supabase.from('vendor_delivery_request').insert(inserts);
-      _showSnackBar("Berhasil dikirim ke Vendor!", Colors.green);
-      _fetchVendorTargetData();
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar("Gagal: $e", Colors.red);
-    }
-  }
+  // // --- Logic ---
+  // Future<void> _submitToVendor(Map<String, dynamic> item) async {
+  //   final List ids = item['group_id'] != null ? item['grouped_ids'] : [item['shipping_id']];
+  //   try {
+  //     setState(() => _isLoading = true);
+  //     await supabase.from('shipping_request').update({'status': 'waiting vendor assignment'}).inFilter('shipping_id', ids);
+  //     final inserts = ids.map((id) => {'shipping_id': id, 'status': 'requested', 'id_profile': supabase.auth.currentUser?.id}).toList();
+  //     await supabase.from('vendor_delivery_request').insert(inserts);
+  //     _showSnackBar("Berhasil dikirim ke Vendor!", Colors.green);
+  //     _fetchVendorTargetData();
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //     _showSnackBar("Gagal: $e", Colors.red);
+  //   }
+  // }
 
   Future<void> _pickDateRange() async {
     DateTimeRange? picked = await showDateRangePicker(context: context, firstDate: DateTime(2023), lastDate: DateTime(2100), builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: Colors.red.shade700)), child: child!));
