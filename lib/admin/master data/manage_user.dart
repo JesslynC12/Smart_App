@@ -37,7 +37,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
 // Letakkan di dalam _UserManagementPageState
 final Map<String, List<String>> roleTemplates = {
-  'admin': ['Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
+  'admin': ['Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain', 'Master', 'Occupancy', 'VendorRequest'],
   'logistik': ['CheckIn', 'Loading', 'ListDO', 'DOdetailsGBJ', 'ListPermintaanPengiriman'],
   'supervisor': ['Master', 'Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
   'gudang': ['Loading', 'Occupancy', 'ListDO', 'DOdetailsGBJ'],

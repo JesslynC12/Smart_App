@@ -430,7 +430,7 @@ final customerData = customers.firstWhere(
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text("Total Qty: $_totalQty", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text("Total Qty: $_totalQty Box", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15)),
           onPressed: _submitForm,
