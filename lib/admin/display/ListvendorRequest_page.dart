@@ -429,7 +429,7 @@ const Divider(height: 40),
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => AssignVendorPage(shippingData: item),
+          builder: (context) => AssignVendorPage(shippingId: item['shipping_id']),
         ),
       );
     },
