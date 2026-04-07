@@ -37,7 +37,7 @@ class _ComplainPageState extends State<ComplainPage> {
           .select('''
             *,
             customer (customer_name),
-            shipping_request (shipping_date),
+            shipping_request (stuffing_date),
             do_details (
               details_id,
               qty,
@@ -60,8 +60,9 @@ class _ComplainPageState extends State<ComplainPage> {
             "do_id": data['do_id'],
             "do_number": data['do_number'],
             "customer": data['customer']?['customer_name'] ?? "-",
-          "tanggal": data['shipping_request']?['shipping_date'] != null 
-    ? DateFormat('dd MMM yyyy').format(DateTime.parse(data['shipping_request']['shipping_date'])) 
+          // "tanggal": data['shipping_request']?['shipping_date'] != null 
+          "tanggal": (data['shipping_request'] != null && data['shipping_request']['stuffing_date'] != null)
+    ? DateFormat('dd MMM yyyy').format(DateTime.parse(data['shipping_request']['stuffing_date'])) 
     : "Tanggal tidak ditemukan",
             "no_kendaraan": "-", 
             "jam_in": "-",

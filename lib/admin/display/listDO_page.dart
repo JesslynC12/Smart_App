@@ -1,5 +1,13 @@
+// ignore: file_names
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io' as io; // Gunakan prefix io untuk Mobile
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html; // Untuk Web
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file_plus/open_file_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'package:intl/intl.dart';
 
@@ -14,6 +22,7 @@ class _ListDOPageState extends State<ListDOPage> {
   final supabase = Supabase.instance.client;
   bool _isLoading = true;
   String _dateFilterType = "RDD"; // Default filter
+  String? userDisplayName;
 
   List<Map<String, dynamic>> _allRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
@@ -31,6 +40,192 @@ DateTimeRange? _selectedDateRange;
     _fetchShippingRequests();
   }
 
+// Future<void> _importMassalTigaTabel() async {
+//     try {
+//       FilePickerResult? result = await FilePicker.platform.pickFiles(
+//         type: FileType.custom,
+//         allowedExtensions: ['xlsx'],
+//         withData: true,
+//       );
+
+//       if (result == null || result.files.isEmpty) return;
+
+//       setState(() => _isLoading = true);
+//       final bytes = result.files.first.bytes;
+//       var excel = Excel.decodeBytes(bytes!);
+//       var sheet = excel.tables.values.first;
+
+//       Map<String, List<Map<String, dynamic>>> groupedByDO = {};
+      
+//       for (int i = 1; i < sheet.maxRows; i++) {
+//         var row = sheet.rows[i];
+//         if (row.length < 14 || row[2]?.value == null) continue; 
+
+//         String doNum = row[2]!.value.toString().trim();
+//         if (!groupedByDO.containsKey(doNum)) groupedByDO[doNum] = [];
+
+//         groupedByDO[doNum]!.add({
+//           "so": row[3]?.value.toString() ?? "",
+//           "cust_id": int.tryParse(row[4]?.value.toString() ?? ""),
+//           "mat_id": int.tryParse(row[6]?.value.toString() ?? ""),
+//           "qty": int.tryParse(row[9]?.value.toString() ?? "0"),
+//           "rdd": row[12]?.value.toString(),
+//           "stuffing": row[13]?.value.toString(),
+//         });
+//       }
+
+//       for (var entry in groupedByDO.entries) {
+//         String doNumber = entry.key;
+//         var items = entry.value;
+//         var firstItem = items.first;
+
+//         String rddRaw = firstItem['rdd']?.toString() ?? '';
+//         String stuffingRaw = firstItem['stuffing']?.toString() ?? '';
+
+//         if (rddRaw.contains(" ")) rddRaw = rddRaw.split(" ")[0];
+//         if (stuffingRaw.contains(" ")) stuffingRaw = stuffingRaw.split(" ")[0];
+
+//         final shipRes = await supabase.from('shipping_request').insert({
+//           'so': firstItem['so'],
+//           'status': 'waiting approval',
+//           'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
+//           'stuffing_date': DateTime.tryParse(stuffingRaw)?.toIso8601String(),
+//           'created_by': userDisplayName?? 'System Import',
+//         }).select().single();
+
+//         final int newShipId = shipRes['shipping_id'];
+
+//         final doRes = await supabase.from('delivery_order').insert({
+//           'shipping_id': newShipId,
+//           'do_number': doNumber,
+//           'customer_id': firstItem['cust_id'],
+//         }).select().single();
+
+//         final int newDoId = doRes['do_id'];
+
+//         List<Map<String, dynamic>> detailsToInsert = items.map((item) => {
+//           'do_id': newDoId,
+//           'material_id': item['mat_id'],
+//           'qty': item['qty'],
+//         }).toList();
+
+//         await supabase.from('do_details').insert(detailsToInsert);
+//       }
+
+//       _showSnackBar("Berhasil import massal 3 tabel sekaligus!", Colors.green);
+//       _fetchShippingRequests();
+
+//     } catch (e) {
+//       _showSnackBar("Gagal Import Massal: $e", Colors.red);
+//     } finally {
+//       setState(() => _isLoading = false);
+//     }
+//   }
+
+Future<void> _importMassalTigaTabel() async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    // --- LANGKAH 1: Kelompokkan Data Excel ---
+    Map<String, List<Map<String, dynamic>>> groupedByDO = {};
+    
+    for (int i = 1; i < sheet.maxRows; i++) {
+      var row = sheet.rows[i];
+      
+      // Validasi: Cek apakah baris kosong atau No DO (Indeks 0) kosong
+      if (row.isEmpty || row[0]?.value == null) continue;
+
+      String doNum = row[0]!.value.toString().trim();
+      if (!groupedByDO.containsKey(doNum)) groupedByDO[doNum] = [];
+
+      groupedByDO[doNum]!.add({
+        "so": row[1]?.value?.toString().trim() ?? "",
+        "cust_id": int.tryParse(row[2]?.value?.toString() ?? ""),
+        "mat_id": int.tryParse(row[3]?.value?.toString() ?? ""),
+        "qty": int.tryParse(row[4]?.value?.toString() ?? "0"),
+        "rdd": row[5]?.value?.toString(),
+        "stuffing": row[6]?.value?.toString(), // Jika ada di kolom G
+      });
+    }
+
+    // --- LANGKAH 2: Eksekusi ke Database ---
+    for (var entry in groupedByDO.entries) {
+      String doNumber = entry.key;
+      var items = entry.value;
+      var firstItem = items.first;
+
+// 1. CEK APAKAH NO DO SUDAH ADA DI DATABASE
+  final existingDO = await supabase
+      .from('delivery_order')
+      .select('do_id, shipping_id')
+      .eq('do_number', doNumber)
+      .maybeSingle();
+
+  if (existingDO != null) {
+    // JIKA SUDAH ADA, TAMPILKAN PESAN ATAU LANJUTKAN KE DO BERIKUTNYA
+    print("No DO $doNumber sudah ada, melewati baris ini.");
+    continue; // Melewati No DO ini agar tidak duplikat
+  }
+  
+      // Bersihkan tanggal
+      String rddRaw = firstItem['rdd']?.toString() ?? '';
+      //String? stuffingFinal = formatTanggal(firstItem['stuffing']);
+      String stuffing = firstItem['stuffing']?.toString() ?? '';
+      if (rddRaw.contains(" ")) rddRaw = rddRaw.split(" ")[0];
+
+      // A. Insert ke SHIPPING_REQUEST (Ship_ID otomatis dibuat DB)
+      final shipRes = await supabase.from('shipping_request').insert({
+        'so': firstItem['so'],
+        'status': 'waiting approval',
+        'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
+        'stuffing_date': stuffing, // Sudah format ISO
+        'created_by': userDisplayName ?? 'System Import',
+        // 'group_id' sengaja tidak diisi agar jadi single data
+      }).select().single();
+
+      final int newShipId = shipRes['shipping_id'];
+
+      // B. Insert ke DELIVERY_ORDER
+      final doRes = await supabase.from('delivery_order').insert({
+        'shipping_id': newShipId,
+        'do_number': doNumber,
+        'customer_id': firstItem['cust_id'],
+      }).select().single();
+
+      final int newDoId = doRes['do_id'];
+
+      // C. Insert ke DO_DETAILS (Bulk Insert)
+      List<Map<String, dynamic>> detailsToInsert = items.map((item) => {
+        'do_id': newDoId,
+        'material_id': item['mat_id'],
+        'qty': item['qty'],
+      }).toList();
+
+      await supabase.from('do_details').insert(detailsToInsert);
+    }
+
+    _showSnackBar("Berhasil import data!", Colors.green);
+    _fetchShippingRequests();
+
+  } catch (e) {
+    debugPrint("Error: $e");
+    _showSnackBar("Gagal: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
 Future<void> _fetchShippingRequests() async {
   try {
     setState(() => _isLoading = true);
@@ -39,7 +234,7 @@ Future<void> _fetchShippingRequests() async {
         .from('shipping_request')
         .select('''
           *,
-          cancel_reason,
+          pending_reason,
           group_id,
           delivery_order (
             do_number,
@@ -48,7 +243,7 @@ Future<void> _fetchShippingRequests() async {
           )
         ''')
         // .eq('status', 'waiting approval',) 
-        .inFilter('status', ['waiting approval', 'cancel'])
+        .inFilter('status', ['waiting approval', 'pending'])
         .order('shipping_id', ascending: false);
 
     List<Map<String, dynamic>> data = List<Map<String, dynamic>>.from(response);
@@ -391,8 +586,30 @@ String formatSmart(dynamic value) {
               _runFilter("");
             },
           ),
+          const SizedBox(width: 10),
+          IconButton(
+            onPressed: _importMassalTigaTabel,
+            icon: const Icon(Icons.file_upload, color: Colors.orange),
+            tooltip: "Import Excel",
+            style: IconButton.styleFrom(
+    backgroundColor: Colors.orange.shade50,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  ),
+          ),
+          const SizedBox(width: 6),
+IconButton(
+  onPressed: _exportToExcel,
+  icon: const Icon(Icons.file_download, color: Colors.green),
+  tooltip: "Export Excel",
+  style: IconButton.styleFrom(
+    backgroundColor: Colors.green.shade50,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  ),
+),
       ],
+      
     ),
+    
   );
 }
   
@@ -510,7 +727,7 @@ Widget _buildTableArea() {
                       if (states.contains(WidgetState.selected)) return Colors.grey.shade400.withOpacity(0.5);
                       // WARNA BARIS BERDASARKAN STATUS
     final String currentStatus = (req['status'] ?? "").toString().toLowerCase();
-    if (currentStatus == 'cancel') {
+    if (currentStatus == 'pending') {
       return Colors.red.shade100; // Warna kemerahan lembut untuk data cancel
     }
                       if (req['group_id'] != null) return Colors.blue.shade100.withOpacity(0.5);
@@ -538,7 +755,7 @@ Widget _buildTableArea() {
           Text(isGroupRow ? idsInRow.join(", ") : shippingId.toString(), 
                style: TextStyle(fontWeight: isGroupRow ? FontWeight.bold : FontWeight.normal, fontSize: 11)),
           // TAMPILKAN STATUS BADGE DI SINI
-       _buildStatusBadge(req['status'], req['cancel_reason']),
+       _buildStatusBadge(req['status'], req['pending_reason']),
 
         // TAMPILKAN ALASAN CANCEL (Hanya jika statusnya cancel)
     // if (req['status']?.toString().toLowerCase() == 'cancel' && req['cancel_reason'] != null)
@@ -865,7 +1082,7 @@ void _showReasonDialog(String reason) {
         children: [
           Icon(Icons.cancel, color: Colors.red.shade700),
           const SizedBox(width: 10),
-          const Text("Alasan Cancel", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text("Alasan Pending", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
       content: Text(
@@ -884,13 +1101,13 @@ void _showReasonDialog(String reason) {
 
 Widget _buildStatusBadge(String? status, String? reason) {
   // Jika status null atau BUKAN 'cancel', jangan tampilkan apa-apa (SizedBox kosong)
-  if (status == null || status.toLowerCase() != 'cancel') {
+  if (status == null || status.toLowerCase() != 'pending') {
     return const SizedBox.shrink();
   }
   
-  // Karena sudah pasti 'cancel' di titik ini, kita langsung set warnanya
+  // Karena sudah pasti 'pending' di titik ini, kita langsung set warnanya
   Color color = Colors.red.shade800;
-  String label = "CANCEL";
+  String label = "PENDING";
 
   return InkWell(
     onTap: () => _showReasonDialog(reason ?? "Tidak ada alasan spesifik."),
@@ -1053,4 +1270,102 @@ Future<void> _splitGroup() async {
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
+Future<void> _exportToExcel() async {
+  if (_filteredRequests.isEmpty) {
+    _showSnackBar("Tidak ada data untuk diekspor", Colors.orange);
+    return;
+  }
+
+  try {
+    setState(() => _isLoading = true);
+
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Data_Shipping_Detail'];
+    excel.delete('Sheet1'); 
+
+    // --- 1. HEADER (DIPERLENGKAP) ---
+    List<CellValue> headers = [
+      TextCellValue('Group ID'),      // Identitas Grup
+      TextCellValue('Ship ID'),
+      TextCellValue('No DO'),
+      TextCellValue('SO Number'),
+      TextCellValue('Customer'),
+      TextCellValue('Material'),
+      TextCellValue('Type'),
+      TextCellValue('Qty'),
+      TextCellValue('NW (Unit)'),     // Berat per unit
+      TextCellValue('TNW (Kg)'),     // Total Berat Baris (Hasil Hitung)
+      TextCellValue('RDD'),
+      TextCellValue('Stuffing'),
+      TextCellValue('Status'),
+      TextCellValue('Pending Reason'), // Alasan Pending/Cancel
+    ];
+    sheetObject.appendRow(headers);
+
+    // --- 2. ISI DATA ---
+    for (var req in _filteredRequests) {
+      final List dos = req['delivery_order'] ?? [];
+      final String status = (req['status'] ?? "-").toString().toUpperCase();
+      
+      // Ambil alasan pending atau cancel (sesuaikan dengan nama field di DB Anda)
+      final String reason = req['pending_reason'] ?? req['cancel_reason'] ?? "-";
+      final String groupId = req['group_id']?.toString() ?? "-"; // Munculkan Group ID
+
+      for (var d in dos) {
+        final List details = d['do_details'] ?? [];
+        for (var det in details) {
+          // Logika Perhitungan
+          double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+          double nwUnit = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
+          double totalNwRow = (qty * nwUnit) / 1000; // Hitung TNW dalam Kg
+
+          sheetObject.appendRow([
+            TextCellValue(groupId),           // Kolom Group
+            TextCellValue(req['shipping_id'].toString()),
+            TextCellValue(d['do_number'] ?? "-"),
+            TextCellValue(req['so'] ?? "-"),
+            TextCellValue(d['customer']?['customer_name'] ?? "-"),
+            TextCellValue(det['material']?['material_name'] ?? "-"),
+            TextCellValue(det['material']?['material_type'] ?? "-"),
+            DoubleCellValue(qty),
+            DoubleCellValue(nwUnit),          // NW per unit
+            DoubleCellValue(totalNwRow),      // TNW (Hasil Perhitungan)
+            TextCellValue(_formatDate(req['rdd'])),
+            TextCellValue(_formatDate(req['stuffing_date'])),
+            TextCellValue(status),
+            TextCellValue(reason), 
+          ]);
+        }
+      }
+    }
+
+    // --- 3. FINISHING (SIMPAN/DOWNLOAD) ---
+    var fileBytes = excel.save();
+    String fileName = "Shipping_Full_Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx";
+
+    if (kIsWeb) {
+      final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      final url = html.Url.createObjectUrlFromBlob(content);
+      html.AnchorElement(href: url)
+        ..setAttribute("download", fileName)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+      _showSnackBar("Excel diunduh!", Colors.green);
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      String filePath = '${directory.path}/$fileName';
+      io.File(filePath)
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(fileBytes!);
+
+      setState(() => _isLoading = false);
+      await OpenFile.open(filePath);
+    }
+
+    setState(() => _isLoading = false);
+  } catch (e) {
+    setState(() => _isLoading = false);
+    _showSnackBar("Gagal: $e", Colors.red);
+  }
+}
 }

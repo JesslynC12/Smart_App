@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file_plus/open_file_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 class CheckerPaginatedPage extends StatefulWidget {
   const CheckerPaginatedPage({super.key});
@@ -32,6 +39,131 @@ void initState() {
     _searchController.dispose();
     super.dispose();
   }
+
+Future<void> _exportCheckerToExcel() async {
+  if (_checkers.isEmpty) {
+    _showMsg("Tidak ada data untuk diekspor", Colors.orange);
+    return;
+  }
+
+  try {
+    setState(() => _isLoading = true);
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Master_Checker'];
+    excel.delete('Sheet1');
+
+    // --- 1. HEADER ---
+    List<CellValue> headers = [
+      TextCellValue('ID'),
+      TextCellValue('Nama Checker'),
+      TextCellValue('Shift'),
+      TextCellValue('Lokasi'),
+      TextCellValue('Status'),
+    ];
+    sheetObject.appendRow(headers);
+
+    // --- 2. ISI DATA ---
+    for (var checker in _checkers) {
+      sheetObject.appendRow([
+        TextCellValue(checker['checker_id']?.toString() ?? ""),
+        TextCellValue(checker['checker_name'] ?? "-"),
+        TextCellValue(checker['shift']?.toString().toUpperCase() ?? "-"),
+        TextCellValue(checker['lokasi'] ?? "-"),
+        TextCellValue(checker['status'] ?? "active"),
+      ]);
+    }
+
+    // --- 3. SAVE / DOWNLOAD ---
+    var fileBytes = excel.save();
+    String fileName = "Master_Checker_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+
+    if (kIsWeb) {
+      final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      final url = html.Url.createObjectUrlFromBlob(content);
+      html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      html.Url.revokeObjectUrl(url);
+      _showMsg("Download dimulai...", Colors.green);
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      String filePath = '${directory.path}/$fileName';
+      io.File(filePath)..createSync(recursive: true)..writeAsBytesSync(fileBytes!);
+      await OpenFile.open(filePath);
+      _showMsg("Berhasil ekspor ke Dokumen", Colors.green);
+    }
+  } catch (e) {
+    _showMsg("Gagal Ekspor: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
+Future<void> _importCheckerFromExcel() async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    List<Map<String, dynamic>> importData = [];
+
+    for (int i = 1; i < sheet.maxRows; i++) {
+      var row = sheet.rows[i];
+      // Minimal ada Nama (kolom 1) dan Shift (kolom 2)
+      if (row.isEmpty || row[1] == null || row[2] == null) continue;
+
+      final Map<String, dynamic> data = {
+        'checker_name': row[1]?.value?.toString(),
+        'shift': row[2]?.value?.toString().toUpperCase().trim(),
+        'lokasi': row[3]?.value?.toString() ?? "Rungkut",
+        'status': row[4]?.value?.toString()?.toLowerCase().trim() ?? "active",
+      };
+
+      // Jika ada ID di kolom 0, masukkan ke data untuk proses Update (Upsert)
+      final idValue = int.tryParse(row[0]?.value.toString() ?? "");
+      if (idValue != null) {
+        data['checker_id'] = idValue;
+      }
+
+      importData.add(data);
+    }
+
+    if (importData.isNotEmpty) {
+      await supabase.from('checker').upsert(importData);
+      _showMsg("Berhasil import ${importData.length} data checker", Colors.green);
+      _fetchData();
+    } else {
+      _showMsg("Tidak ada data valid di file Excel", Colors.orange);
+    }
+  } catch (e) {
+    _showMsg("Error Import: $e", Colors.red);
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
+
+Widget _buildActionButton({required IconData icon, required Color color, required String tooltip, required VoidCallback onPressed}) {
+  return Container(
+    height: 55, // Sejajar dengan tinggi standar TextField
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 26),
+      tooltip: tooltip,
+    ),
+  );
+}
 
   Future<void> _fetchData() async {
     if (!mounted) return;
@@ -247,29 +379,80 @@ void initState() {
               padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      labelText: "Cari ID atau Nama Checker...",
-                      prefixIcon: const Icon(Icons.search),
+//                   TextField(
+//                     controller: _searchController,
+//                     decoration: InputDecoration(
+//                       labelText: "Cari ID atau Nama Checker...",
+//                       prefixIcon: const Icon(Icons.search),
                       
-                     suffixIcon: _searchController.text.isNotEmpty
-        ? IconButton(
-            icon: const Icon(Icons.clear),
-            onPressed: () {
-              _searchController.clear();
-              _searchQuery = "";
-              _fetchData();
-              setState(() {}); // Refresh untuk menyembunyikan icon kembali
-            },
-          )
-        : null,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-  ),
-  onSubmitted: (val) {
-    _searchQuery = val;
-    _fetchData();
-  },
+//                      suffixIcon: _searchController.text.isNotEmpty
+//         ? IconButton(
+//             icon: const Icon(Icons.clear),
+//             onPressed: () {
+//               _searchController.clear();
+//               _searchQuery = "";
+//               _fetchData();
+//               setState(() {}); // Refresh untuk menyembunyikan icon kembali
+//             },
+//           )
+//         : null,
+//     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+//   ),
+//   onSubmitted: (val) {
+//     _searchQuery = val;
+//     _fetchData();
+//   },
+// ),
+// Di dalam Widget build -> Column
+Row(
+  children: [
+    // KOLOM PENCARIAN
+    Expanded(
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          labelText: "Cari ID atau Nama Checker...",
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _searchQuery = "";
+                    _fetchData();
+                    setState(() {});
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onSubmitted: (val) {
+          _searchQuery = val;
+          _fetchData();
+        },
+      ),
+    ),
+
+    const SizedBox(width: 10),
+
+    // TOMBOL IMPORT (ORANGE)
+    _buildActionButton(
+      icon: Icons.file_upload,
+      color: Colors.orange,
+      tooltip: "Import Checker",
+      onPressed: _importCheckerFromExcel,
+    ),
+
+    const SizedBox(width: 8),
+
+    // TOMBOL EXPORT (HIJAU)
+    _buildActionButton(
+      icon: Icons.download,
+      color: Colors.green,
+      tooltip: "Export Checker",
+      onPressed: _exportCheckerToExcel,
+    ),
+  ],
 ),
                   const SizedBox(height: 20),
                   SizedBox(

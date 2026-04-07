@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file_plus/open_file_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 class WarehousePaginatedPage extends StatefulWidget {
   const WarehousePaginatedPage({super.key});
@@ -28,6 +35,129 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
     _searchController.dispose();
     super.dispose();
   }
+
+Future<void> _exportWarehouseToExcel() async {
+  if (_warehouses.isEmpty) {
+    _showMsg("Tidak ada data untuk diekspor", Colors.orange);
+    return;
+  }
+
+  try {
+    setState(() => _isLoading = true);
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Master_Warehouse'];
+    excel.delete('Sheet1');
+
+    // --- 1. HEADER ---
+    List<CellValue> headers = [
+      TextCellValue('WH Code'),
+      TextCellValue('Warehouse Name'),
+      TextCellValue('Lokasi'),
+      TextCellValue('Kapasitas'),
+      TextCellValue('Max Utilize'),
+      TextCellValue('Tipe'),
+      TextCellValue('Status'),
+    ];
+    sheetObject.appendRow(headers);
+
+    // --- 2. ISI DATA ---
+    for (var wh in _warehouses) {
+      sheetObject.appendRow([
+        TextCellValue(wh['wh_code']?.toString() ?? ""),
+        TextCellValue(wh['warehouse_name'] ?? "-"),
+        TextCellValue(wh['lokasi'] ?? "-"),
+        IntCellValue(int.tryParse(wh['kapasitas']?.toString() ?? "0") ?? 0),
+        IntCellValue(int.tryParse(wh['max_utilize']?.toString() ?? "0") ?? 0),
+        TextCellValue(wh['tipe'] ?? "-"),
+        TextCellValue(wh['status'] ?? "active"),
+      ]);
+    }
+
+    // --- 3. SAVE / DOWNLOAD ---
+    var fileBytes = excel.save();
+    String fileName = "Master_Warehouse_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+
+    if (kIsWeb) {
+      final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      final url = html.Url.createObjectUrlFromBlob(content);
+      html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      html.Url.revokeObjectUrl(url);
+      _showMsg("Download dimulai...", Colors.green);
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      String filePath = '${directory.path}/$fileName';
+      io.File(filePath)..createSync(recursive: true)..writeAsBytesSync(fileBytes!);
+      await OpenFile.open(filePath);
+      _showMsg("Berhasil ekspor ke Dokumen", Colors.green);
+    }
+  } catch (e) {
+    _showMsg("Gagal Ekspor: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
+Future<void> _importWarehouseFromExcel() async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    List<Map<String, dynamic>> importData = [];
+
+    for (int i = 1; i < sheet.maxRows; i++) {
+      var row = sheet.rows[i];
+      if (row.isEmpty || row[0] == null || row[1] == null) continue;
+
+      importData.add({
+        'wh_code': int.tryParse(row[0]?.value.toString() ?? ""),
+        'warehouse_name': row[1]?.value?.toString(),
+        'lokasi': row[2]?.value?.toString() ?? "Rungkut",
+        'kapasitas': int.tryParse(row[3]?.value.toString() ?? "0"),
+        'max_utilize': int.tryParse(row[4]?.value.toString() ?? "0"),
+        'tipe': row[5]?.value?.toString() ?? "-",
+        'status': row[6]?.value?.toString()?.toLowerCase() ?? "active",
+      });
+    }
+
+    if (importData.isNotEmpty) {
+      await supabase.from('warehouse').upsert(importData);
+      _showMsg("Berhasil import ${importData.length} data gudang", Colors.green);
+      _fetchData();
+    } else {
+      _showMsg("Tidak ada data valid di file Excel", Colors.orange);
+    }
+  } catch (e) {
+    _showMsg("Error Import: $e", Colors.red);
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
+
+Widget _buildActionButton({required IconData icon, required Color color, required String tooltip, required VoidCallback onPressed}) {
+  return Container(
+    height: 50, // Disesuaikan agar sejajar dengan TextField
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 24),
+      tooltip: tooltip,
+    ),
+  );
+}
 
   Future<void> _fetchData() async {
     if (!mounted) return;
@@ -263,27 +393,77 @@ class _WarehousePaginatedPageState extends State<WarehousePaginatedPage> {
               padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      labelText: "Cari Nama Warehouse...",
-                      prefixIcon: const Icon(Icons.search),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      suffix: IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _searchQuery = "";
-                          _fetchData();
-                        },
-                      ),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onSubmitted: (val) {
-                      _searchQuery = val;
-                      _fetchData();
-                    },
-                  ),
+                  // TextField(
+                  //   controller: _searchController,
+                  //   decoration: InputDecoration(
+                  //     labelText: "Cari Nama Warehouse...",
+                  //     prefixIcon: const Icon(Icons.search),
+                  //     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  //     suffix: IconButton(
+                  //       icon: const Icon(Icons.clear),
+                  //       onPressed: () {
+                  //         _searchController.clear();
+                  //         _searchQuery = "";
+                  //         _fetchData();
+                  //       },
+                  //     ),
+                  //     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  //   ),
+                  //   onSubmitted: (val) {
+                  //     _searchQuery = val;
+                  //     _fetchData();
+                  //   },
+                  // ),
+                  // Di dalam Widget build -> Column
+Row(
+  children: [
+    // KOLOM PENCARIAN
+    Expanded(
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          labelText: "Cari Nama Warehouse...",
+          prefixIcon: const Icon(Icons.search),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.clear),
+            onPressed: () {
+              _searchController.clear();
+              _searchQuery = "";
+              _fetchData();
+            },
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onSubmitted: (val) {
+          _searchQuery = val;
+          _fetchData();
+        },
+      ),
+    ),
+
+    const SizedBox(width: 10),
+
+    // TOMBOL IMPORT (ORANGE)
+    _buildActionButton(
+      icon: Icons.file_upload,
+      color: Colors.orange,
+      tooltip: "Import Warehouse",
+      onPressed: _importWarehouseFromExcel,
+    ),
+
+    const SizedBox(width: 8),
+
+    // TOMBOL EXPORT (HIJAU)
+    _buildActionButton(
+      icon: Icons.download,
+      color: Colors.green,
+      tooltip: "Export Warehouse",
+      onPressed: _exportWarehouseToExcel,
+    ),
+  ],
+),
+
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,

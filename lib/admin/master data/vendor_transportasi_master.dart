@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file_plus/open_file_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 class VendorPaginatedPage extends StatefulWidget {
   const VendorPaginatedPage({super.key});
@@ -28,6 +35,170 @@ class _VendorPaginatedPageState extends State<VendorPaginatedPage> {
     _searchController.dispose();
     super.dispose();
   }
+
+Future<void> _exportVendorToExcel() async {
+  if (_vendors.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tidak ada data untuk diekspor"), backgroundColor: Colors.orange));
+    return;
+  }
+
+  try {
+    setState(() => _isLoading = true);
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Master_Vendor'];
+    excel.delete('Sheet1');
+
+    // --- 1. HEADER (Lengkap 25 Kolom) ---
+    List<CellValue> headers = [
+      TextCellValue('ID'), TextCellValue('Vendor Name'), TextCellValue('No Vendor'),
+      TextCellValue('ID Rekomendasi'), TextCellValue('ID Standarisasi'), TextCellValue('QCF'),
+      TextCellValue('Area'), TextCellValue('City'), TextCellValue('Jenis QCF'),
+      TextCellValue('Type Unit'), TextCellValue('Winner Rank'), TextCellValue('Alokasi (%)'),
+      TextCellValue('Transportation Mode'), TextCellValue('Alokasi Container'), TextCellValue('Cost Type'),
+      TextCellValue('Fixed Cost'), TextCellValue('Variable Cost'), TextCellValue('Lokasi Gudang'),
+      TextCellValue('Remark'), TextCellValue('Lead Time'), TextCellValue('POD Return'),
+      TextCellValue('Shipment Type'), TextCellValue('Shipping Conditions'), TextCellValue('Special Proc'),
+      TextCellValue('Vehicle Type'),
+    ];
+    sheetObject.appendRow(headers);
+
+    // --- 2. ISI DATA ---
+    for (var v in _vendors) {
+      sheetObject.appendRow([
+        TextCellValue(v['id']?.toString() ?? ""),
+        TextCellValue(v['vendor_name'] ?? ""),
+        TextCellValue(v['no_vendor'] ?? ""),
+        TextCellValue(v['id_rekomendasi_winner'] ?? ""),
+        TextCellValue(v['id_standarisasi'] ?? ""),
+        TextCellValue(v['qcf'] ?? ""),
+        TextCellValue(v['area'] ?? ""),
+        TextCellValue(v['city'] ?? ""),
+        TextCellValue(v['jenis_qcf'] ?? ""),
+        TextCellValue(v['type_unit'] ?? ""),
+        IntCellValue(int.tryParse(v['winner_rank']?.toString() ?? "0") ?? 0),
+        DoubleCellValue((v['alokasi_persen'] ?? 0.0) * 100), // Kembalikan ke format 0-100
+        TextCellValue(v['transportation_mode'] ?? ""),
+        TextCellValue(v['alokasi_container'] ?? ""),
+        TextCellValue(v['fix_var_cost'] ?? ""),
+        DoubleCellValue(double.tryParse(v['fixed_cost']?.toString() ?? "0") ?? 0.0),
+        DoubleCellValue(double.tryParse(v['variable_cost']?.toString() ?? "0") ?? 0.0),
+        TextCellValue(v['lokasi_gudang'] ?? ""),
+        TextCellValue(v['remark'] ?? ""),
+        IntCellValue(int.tryParse(v['lead_time']?.toString() ?? "0") ?? 0),
+        TextCellValue(v['pod_return']?.toString() ?? ""),
+        TextCellValue(v['shipment_type'] ?? ""),
+        TextCellValue(v['shipping_conditions'] ?? ""),
+        TextCellValue(v['special_proc_indicator'] ?? ""),
+        TextCellValue(v['vehicle_type'] ?? ""),
+      ]);
+    }
+
+    // --- 3. SAVE / DOWNLOAD ---
+    var fileBytes = excel.save();
+    String fileName = "Master_Vendor_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+
+    if (kIsWeb) {
+      final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      final url = html.Url.createObjectUrlFromBlob(content);
+      html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      String filePath = '${directory.path}/$fileName';
+      io.File(filePath)..createSync(recursive: true)..writeAsBytesSync(fileBytes!);
+      await OpenFile.open(filePath);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Berhasil ekspor ke Excel"), backgroundColor: Colors.green));
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal Ekspor: $e"), backgroundColor: Colors.red));
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
+Future<void> _importVendorFromExcel() async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    List<Map<String, dynamic>> importData = [];
+
+    for (int i = 1; i < sheet.maxRows; i++) {
+      var row = sheet.rows[i];
+      if (row.isEmpty || row[1] == null) continue; // Skip jika nama vendor kosong
+
+      double? alokasiRaw = double.tryParse(row[11]?.value?.toString() ?? "0");
+      
+      final Map<String, dynamic> data = {
+        'vendor_name': row[1]?.value?.toString().toUpperCase().trim(),
+        'no_vendor': row[2]?.value?.toString().trim(),
+        'id_rekomendasi_winner': row[3]?.value?.toString().toUpperCase().trim(),
+        'id_standarisasi': row[4]?.value?.toString().toUpperCase().trim(),
+        'qcf': row[5]?.value?.toString().trim(),
+        'area': row[6]?.value?.toString().toUpperCase().trim(),
+        'city': row[7]?.value?.toString().toUpperCase().trim(),
+        'jenis_qcf': row[8]?.value?.toString().trim(),
+        'type_unit': row[9]?.value?.toString().trim(),
+        'winner_rank': int.tryParse(row[10]?.value?.toString() ?? ""),
+        'alokasi_persen': alokasiRaw != null ? alokasiRaw / 100 : 0, // Konversi balik ke desimal
+        'transportation_mode': row[12]?.value?.toString().trim(),
+        'alokasi_container': row[13]?.value?.toString().trim(),
+        'fix_var_cost': row[14]?.value?.toString().trim(),
+        'fixed_cost': double.tryParse(row[15]?.value?.toString() ?? "0"),
+        'variable_cost': double.tryParse(row[16]?.value?.toString() ?? "0"),
+        'lokasi_gudang': row[17]?.value?.toString().trim(),
+        'remark': row[18]?.value?.toString().trim(),
+        'lead_time': int.tryParse(row[19]?.value?.toString() ?? ""),
+        'pod_return': row[20]?.value?.toString().trim(),
+        'shipment_type': row[21]?.value?.toString().trim(),
+        'shipping_conditions': row[22]?.value?.toString().trim(),
+        'special_proc_indicator': row[23]?.value?.toString().trim(),
+        'vehicle_type': row[24]?.value?.toString().trim(),
+      };
+
+      final idValue = int.tryParse(row[0]?.value.toString() ?? "");
+      if (idValue != null) data['id'] = idValue;
+
+      importData.add(data);
+    }
+
+    if (importData.isNotEmpty) {
+      await supabase.from('vendor_transportasi').upsert(importData);
+      _fetchData();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Berhasil import ${importData.length} vendor"), backgroundColor: Colors.green));
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error Import: $e"), backgroundColor: Colors.red));
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
+
+Widget _buildActionButton({required IconData icon, required Color color, required String tooltip, required VoidCallback onPressed}) {
+  return Container(
+    height: 55,
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 26),
+      tooltip: tooltip,
+    ),
+  );
+}
 
   // --- FETCH DATA ---
   Future<void> _fetchData() async {
@@ -620,26 +791,67 @@ Widget _buildField(TextEditingController ctrl, String label, {bool isNum = false
               padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      labelText: "Cari Nama atau No Vendor...",
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _searchQuery = "";
-                          _fetchData();
-                        },
-                      ),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onSubmitted: (val) {
-                      _searchQuery = val;
-                      _fetchData();
-                    },
-                  ),
+                  // TextField(
+                  //   controller: _searchController,
+                  //   decoration: InputDecoration(
+                  //     labelText: "Cari Nama atau No Vendor...",
+                  //     prefixIcon: const Icon(Icons.search),
+                  //     suffixIcon: IconButton(
+                  //       icon: const Icon(Icons.clear),
+                  //       onPressed: () {
+                  //         _searchController.clear();
+                  //         _searchQuery = "";
+                  //         _fetchData();
+                  //       },
+                  //     ),
+                  //     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  //   ),
+                  //   onSubmitted: (val) {
+                  //     _searchQuery = val;
+                  //     _fetchData();
+                  //   },
+                  // ),
+                  // Di dalam Widget build -> Column
+Row(
+  children: [
+    Expanded(
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          labelText: "Cari Nama atau No Vendor...",
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.clear),
+            onPressed: () {
+              _searchController.clear();
+              _searchQuery = "";
+              _fetchData();
+            },
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onSubmitted: (val) {
+          _searchQuery = val;
+          _fetchData();
+        },
+      ),
+    ),
+    const SizedBox(width: 10),
+    _buildActionButton(
+      icon: Icons.file_upload,
+      color: Colors.orange,
+      tooltip: "Import Vendor",
+      onPressed: _importVendorFromExcel,
+    ),
+    const SizedBox(width: 8),
+    _buildActionButton(
+      icon: Icons.download,
+      color: Colors.green,
+      tooltip: "Export Vendor",
+      onPressed: _exportVendorToExcel,
+    ),
+  ],
+),
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,

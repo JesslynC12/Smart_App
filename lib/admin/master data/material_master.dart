@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file_plus/open_file_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 class MaterialPaginatedPage extends StatefulWidget {
   const MaterialPaginatedPage({super.key});
@@ -28,6 +35,120 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
     _searchController.dispose();
     super.dispose();
   }
+
+Future<void> _exportMaterialToExcel() async {
+  if (_materials.isEmpty) {
+    _showSnackBar("Tidak ada data untuk diekspor", Colors.orange);
+    return;
+  }
+
+  try {
+    setState(() => _isLoading = true);
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Master_Material'];
+    excel.delete('Sheet1');
+
+    // --- 1. HEADER ---
+    List<CellValue> headers = [
+      TextCellValue('No Mat'),
+      TextCellValue('Deskripsi Material'),
+      TextCellValue('Box/Pallet'),
+      TextCellValue('Marketing Div'),
+      TextCellValue('Div Deskripsi'),
+      TextCellValue('Gross Weight'),
+      TextCellValue('Net Weight'),
+      TextCellValue('Type'),
+    ];
+    sheetObject.appendRow(headers);
+
+    // --- 2. ISI DATA ---
+    for (var mat in _materials) {
+      sheetObject.appendRow([
+        TextCellValue(mat['material_id']?.toString() ?? ""),
+        TextCellValue(mat['material_name'] ?? "-"),
+        TextCellValue(mat['box_per_pallet']?.toString() ?? "0"),
+        TextCellValue(mat['marketing_division'] ?? "-"),
+        TextCellValue(mat['division_description'] ?? "-"),
+        DoubleCellValue(double.tryParse(mat['gross_weight']?.toString() ?? "0") ?? 0.0),
+        DoubleCellValue(double.tryParse(mat['net_weight']?.toString() ?? "0") ?? 0.0),
+        TextCellValue(mat['material_type'] ?? "-"),
+      ]);
+    }
+
+    // --- 3. SAVE / DOWNLOAD ---
+    var fileBytes = excel.save();
+    String fileName = "Master_Material_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+
+    if (kIsWeb) {
+      final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      final url = html.Url.createObjectUrlFromBlob(content);
+      html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      html.Url.revokeObjectUrl(url);
+      _showSnackBar("Download dimulai...", Colors.green);
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      String filePath = '${directory.path}/$fileName';
+      io.File(filePath)..createSync(recursive: true)..writeAsBytesSync(fileBytes!);
+      await OpenFile.open(filePath);
+      _showSnackBar("Berhasil ekspor ke Dokumen", Colors.green);
+    }
+  } catch (e) {
+    _showSnackBar("Gagal Ekspor: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
+Future<void> _importMaterialFromExcel() async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    List<Map<String, dynamic>> importData = [];
+
+    for (int i = 1; i < sheet.maxRows; i++) {
+      var row = sheet.rows[i];
+      if (row.isEmpty || row[0] == null || row[0]?.value == null) continue;
+
+      importData.add({
+        'material_id': int.tryParse(row[0]?.value.toString() ?? ""),
+        'material_name': row[1]?.value?.toString(),
+        'box_per_pallet': row[2]?.value?.toString(),
+        'marketing_division': row[3]?.value?.toString(),
+        'division_description': row[4]?.value?.toString(),
+        'gross_weight': double.tryParse(row[5]?.value?.toString() ?? "0"),
+        'net_weight': double.tryParse(row[6]?.value?.toString() ?? "0"),
+        'material_type': row[7]?.value?.toString(),
+      });
+    }
+
+    if (importData.isNotEmpty) {
+      await supabase.from('material').upsert(importData);
+      _showSnackBar("Berhasil import ${importData.length} material", Colors.green);
+      _fetchData();
+    } else {
+      _showSnackBar("Tidak ada data valid di file Excel", Colors.orange);
+    }
+  } catch (e) {
+    _showSnackBar("Error Import: $e", Colors.red);
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
+
+void _showSnackBar(String msg, Color color) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+}
 
   // --- REFRESH / FETCH DATA ---
   Future<void> _fetchData() async {
@@ -295,33 +416,88 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
               padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
-                  ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: _searchController,
-                    builder: (context, value, child) {
-                      return TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          labelText: "Cari Deskripsi Material...",
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: value.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    _searchQuery = "";
-                                    _fetchData();
-                                  },
-                                )
-                              : null,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onSubmitted: (val) {
-                          _searchQuery = val;
-                          _fetchData();
-                        },
-                      );
-                    },
-                  ),
+                  // ValueListenableBuilder<TextEditingValue>(
+                  //   valueListenable: _searchController,
+                  //   builder: (context, value, child) {
+                  //     return TextField(
+                  //       controller: _searchController,
+                  //       decoration: InputDecoration(
+                  //         labelText: "Cari Deskripsi Material...",
+                  //         prefixIcon: const Icon(Icons.search),
+                  //         suffixIcon: value.text.isNotEmpty
+                  //             ? IconButton(
+                  //                 icon: const Icon(Icons.clear),
+                  //                 onPressed: () {
+                  //                   _searchController.clear();
+                  //                   _searchQuery = "";
+                  //                   _fetchData();
+                  //                 },
+                  //               )
+                  //             : null,
+                  //         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  //       ),
+                  //       onSubmitted: (val) {
+                  //         _searchQuery = val;
+                  //         _fetchData();
+                  //       },
+                  //     );
+                  //   },
+                  // ),
+                  Row(
+  children: [
+    // KOLOM PENCARIAN
+    Expanded(
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _searchController,
+        builder: (context, value, child) {
+          return TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              labelText: "Cari Deskripsi Material...",
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: value.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        _searchQuery = "";
+                        _fetchData();
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onSubmitted: (val) {
+              _searchQuery = val;
+              _fetchData();
+            },
+          );
+        },
+      ),
+    ),
+    
+    const SizedBox(width: 10),
+
+    // TOMBOL IMPORT
+    _buildActionButton(
+      icon: Icons.file_upload,
+      color: Colors.orange,
+      tooltip: "Import Material",
+      onPressed: _importMaterialFromExcel,
+    ),
+
+    const SizedBox(width: 8),
+
+    // TOMBOL EXPORT
+    _buildActionButton(
+      icon: Icons.download,
+      color: Colors.green,
+      tooltip: "Export Material",
+      onPressed: _exportMaterialToExcel,
+    ),
+  ],
+),
+
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -358,6 +534,22 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
       ),
     );
   }
+
+  Widget _buildActionButton({required IconData icon, required Color color, required String tooltip, required VoidCallback onPressed}) {
+  return Container(
+    height: 55,
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 26),
+      tooltip: tooltip,
+    ),
+  );
+}
 }
 
 // --- DATA SOURCE CLASS ---

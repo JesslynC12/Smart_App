@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+// import 'dart:io' as io;
+// import 'package:flutter/foundation.dart' show kIsWeb;
+// import 'package:universal_html/html.dart' as html;
+import 'package:excel/excel.dart' hide Border;
+// import 'package:path_provider/path_provider.dart';
+// import 'package:open_file_plus/open_file_plus.dart';
+import 'package:file_picker/file_picker.dart';
+// import 'package:excel/excel.dart' hide Border;
 
 class ShippingRequestPage extends StatefulWidget {
   final Map<String, dynamic>? editData; // Tambahkan ini
@@ -86,6 +94,206 @@ void _loadDataForEdit() {
   }
 }
 
+// Future<void> _importExcelToForm() async {
+//   try {
+//     // 1. Pilih File
+//     FilePickerResult? result = await FilePicker.platform.pickFiles(
+//       type: FileType.custom,
+//       allowedExtensions: ['xlsx'],
+//       withData: true,
+//     );
+
+//     if (result == null || result.files.isEmpty) return;
+
+//     setState(() => isLoading = true);
+
+//     final bytes = result.files.first.bytes;
+//     var excel = Excel.decodeBytes(bytes!);
+//     var sheet = excel.tables.values.first;
+
+//     // --- LOGIKA IMPORT ---
+//     // Kita asumsikan data header diambil dari baris pertama (index 1)
+//     // dan detail material diambil dari seluruh baris.
+    
+//     if (sheet.maxRows > 1) {
+//       var firstDataRow = sheet.rows[1];
+
+//       setState(() {
+//         // A. ISI HEADER (Diambil dari baris pertama data)
+//         // Kolom 3: SO Number, Kolom 12: RDD, Kolom 13: Stuffing
+//         _soNumberController.text = firstDataRow[3]?.value.toString() ?? "";
+        
+//         DateTime? rdd = DateTime.tryParse(firstDataRow[12]?.value.toString() ?? "");
+//         DateTime? stuffing = DateTime.tryParse(firstDataRow[13]?.value.toString() ?? "");
+
+//         if (rdd != null) {
+//           _tanggalRDD = rdd;
+//           _tanggalRDDController.text = DateFormat('dd/MM/yyyy').format(rdd);
+//         }
+//         if (stuffing != null) {
+//           _stuffingDate = stuffing;
+//           _stuffingDateController.text = DateFormat('dd/MM/yyyy').format(stuffing);
+//         }
+
+//         // B. ISI DETAIL TABEL
+//         selectedMaterials.clear(); // Bersihkan jika ada input manual sebelumnya
+        
+//         for (int i = 1; i < sheet.maxRows; i++) {
+//           var row = sheet.rows[i];
+//           if (row.isEmpty || row[2] == null) continue; // Skip jika No DO kosong
+
+//           // Kita butuh Customer ID dan Material ID dari Excel untuk relasi database
+//           // Jika di Excel hanya ada Nama, anda harus melakukan sinkronisasi dengan list lokal
+          
+//           String doNum = row[2]?.value.toString() ?? "";
+//           String custId = row[4]?.value.toString() ?? ""; // Asumsi index 4 No Cust
+//           String custName = row[5]?.value.toString() ?? ""; // Asumsi index 5 Nama Cust
+//           String matId = row[6]?.value.toString() ?? ""; // Asumsi index 6 No Mat
+//           String matName = row[7]?.value.toString() ?? ""; // Asumsi index 7 Nama Mat
+//           String qty = row[9]?.value.toString() ?? "0"; // Asumsi index 9 Qty
+
+//           selectedMaterials.add({
+//             "do_number": doNum,
+//             "customer_id": custId,
+//             "customer_name": custName,
+//             "material_id": matId,
+//             "material_name": matName,
+//             "qty": qty,
+//           });
+//         }
+//       });
+
+//       _showSnackBar("Data Excel berhasil dimuat ke form!", Colors.green);
+//     }
+//   } catch (e) {
+//     _showSnackBar("Gagal membaca Excel: $e", Colors.red);
+//   } finally {
+//     setState(() => isLoading = false);
+//   }
+// }
+
+Future<void> _importExcelToForm() async {
+  try {
+    // 1. Pilih File Excel
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => isLoading = true);
+
+    // 2. Decode File
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    if (sheet.maxRows > 1) {
+      // --- FUNGSI HELPER LOKAL ---
+      
+      // Ambil value sel sebagai String dan hapus spasi berlebih
+      String _getVal(List<Data?> row, int index) {
+        if (index >= row.length || row[index] == null || row[index]!.value == null) return "";
+        return row[index]!.value.toString().trim();
+      }
+
+      // Parsing tanggal format Indonesia (dd-mm-yyyy)
+      DateTime? _parseIndoDate(String dateStr) {
+        if (dateStr.isEmpty) return null;
+        try {
+          String cleanedDate = dateStr.replaceAll('/', '-');
+          return DateFormat('dd-MM-yyyy').parseStrict(cleanedDate);
+        } catch (e) {
+          // Fallback jika user pakai format YYYY-MM-DD
+          return DateTime.tryParse(dateStr);
+        }
+      }
+
+      // 3. --- PROSES DATA ---
+      
+      // Ambil baris pertama data (Baris indeks 1 / Baris ke-2 di Excel) untuk HEADER
+      var firstDataRow = sheet.rows[1];
+
+      setState(() {
+        // A. ISI FIELD HEADER (BAGIAN ATAS)
+        // Kolom B (Indeks 1) -> SO Number
+        _soNumberController.text = _getVal(firstDataRow, 1);
+        
+        // Kolom H (Indeks 7) -> RDD
+        // Kolom I (Indeks 8) -> Stuffing
+        DateTime? rdd = _parseIndoDate(_getVal(firstDataRow, 7));
+        DateTime? stuffing = _parseIndoDate(_getVal(firstDataRow, 8));
+
+        if (rdd != null) {
+          _tanggalRDD = rdd;
+          _tanggalRDDController.text = DateFormat('dd/MM/yyyy').format(rdd);
+        }
+        
+        if (stuffing != null) {
+          _stuffingDate = stuffing;
+          _stuffingDateController.text = DateFormat('dd/MM/yyyy').format(stuffing);
+        }
+
+      //   // B. ISI TABEL MATERIAL (BAGIAN BAWAH)
+      //   selectedMaterials.clear(); // Bersihkan list agar tidak duplikat saat re-import
+        
+      //   for (int i = 1; i < sheet.maxRows; i++) {
+      //     var row = sheet.rows[i];
+          
+      //     // Ambil No DO di Kolom A (Indeks 0)
+      //     String doNum = _getVal(row, 0);
+          
+      //     // Jika baris kosong atau No DO tidak ada, lewati
+      //     if (doNum.isEmpty || doNum.toLowerCase() == "no do") continue;
+
+      //     selectedMaterials.add({
+      //       "do_number": doNum,                 // Kolom A (Indeks 0)
+      //       "customer_id": _getVal(row, 2),     // Kolom C (Indeks 2)
+      //       "customer_name": _getVal(row, 3),   // Kolom D (Indeks 3)
+      //       "material_id": _getVal(row, 4),     // Kolom E (Indeks 4)
+      //       "material_name": _getVal(row, 5),   // Kolom F (Indeks 5)
+      //       "qty": _getVal(row, 6),             // Kolom G (Indeks 6)
+      //     });
+      //   }
+      // });
+      // --- TAMBAHKAN INI (SANGAT PENTING) ---
+        // Kita ambil ID Customer dari baris pertama Excel untuk validasi Submit
+        String custIdFromExcel = _getVal(firstDataRow, 2);
+        if (custIdFromExcel.isNotEmpty) {
+          selectedCustomerId = custIdFromExcel; 
+        }
+        // --------------------------------------
+
+        // 2. ISI TABEL DETAIL MATERIAL
+        selectedMaterials.clear(); 
+        for (int i = 1; i < sheet.maxRows; i++) {
+          var row = sheet.rows[i];
+          String doNum = _getVal(row, 0);
+          if (doNum.isEmpty || doNum.toLowerCase() == "no do") continue;
+
+          selectedMaterials.add({
+            "do_number": doNum,
+            "customer_id": _getVal(row, 2),
+            "customer_name": _getVal(row, 3),
+            "material_id": _getVal(row, 4),
+            "material_name": _getVal(row, 5),
+            "qty": _getVal(row, 6),
+          });
+        }
+      });
+
+      _showSnackBar("Impor Berhasil: Header terisi & ${selectedMaterials.length} item masuk tabel", Colors.green);
+    }
+  } catch (e) {
+    debugPrint("Error Import: $e");
+    _showSnackBar("Gagal mengimpor file. Periksa format kolom Excel Anda.", Colors.red);
+  } finally {
+    setState(() => isLoading = false);
+  }
+}
+
   @override
   void dispose() {
     _stuffingDateController.dispose();
@@ -97,6 +305,55 @@ void _loadDataForEdit() {
     super.dispose();
   }
 
+Future<String?> _checkDoExistence(String doNumber) async {
+  try {
+    // Mencari DO yang sama dan mengambil tanggal stuffing dari tabel shipping_request
+    final response = await supabase
+        .from('delivery_order')
+        .select('''
+          do_number,
+          shipping_request (
+            stuffing_date
+          )
+        ''')
+        .eq('do_number', doNumber)
+        .maybeSingle();
+
+    if (response != null && response['shipping_request'] != null) {
+      final rawDate = response['shipping_request']['stuffing_date'];
+      if (rawDate != null) {
+        DateTime date = DateTime.parse(rawDate);
+        return DateFormat('dd/MM/yyyy').format(date);
+      }
+    }
+    return null; // DO belum digunakan
+  } catch (e) {
+    debugPrint("Error checking DO: $e");
+    return null;
+  }
+}
+
+void _showErrorDialog(String message) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red),
+          SizedBox(width: 10),
+          Text("Peringatan"),
+        ],
+      ),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("OK"),
+        ),
+      ],
+    ),
+  );
+}
   Future<void> _fetchInitialData() async {
     try {
       final currentUser = supabase.auth.currentUser;
@@ -113,7 +370,7 @@ void _loadDataForEdit() {
       final customerResponse = await supabase
           .from('customer')
           .select('customer_id, customer_name')
-          .order('customer_name', ascending: true);
+          .order('customer_id', ascending: true);
 
       final materialResponse = await supabase
           .from('material')
@@ -185,6 +442,16 @@ void _loadDataForEdit() {
       ),
       child: Column(
         children: [
+          Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _importExcelToForm,
+            icon: const Icon(Icons.file_upload_outlined, color: Colors.orange),
+            label: const Text("Import dari Excel", style: TextStyle(color: Colors.orange)),
+            style: TextButton.styleFrom(backgroundColor: Colors.orange.withOpacity(0.1)),
+          ),
+        ),
+        const SizedBox(height: 10),
           Row(
             children: [
               
@@ -303,6 +570,7 @@ void _loadDataForEdit() {
     ),
   );
 }
+
 Widget _buildCustomerPickerForInputRow() {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +608,7 @@ Widget _buildCustomerPickerForInputRow() {
   );
 }
 
-void _addItemToTable() {
+void _addItemToTable() async {
   // Validasi input dasar
   if (_tempSelectedMaterial == null || 
       _tempDoController.text.isEmpty || 
@@ -351,8 +619,16 @@ void _addItemToTable() {
   }
 
   final String currentDo = _tempDoController.text.trim();
+  // --- PENGECEKAN DATABASE (BARU) ---
+  //setState(() => isLoading = true); // Tampilkan loading sebentar
+  String? usedDate = await _checkDoExistence(currentDo);
+  setState(() => isLoading = false);
+  if (usedDate != null) {
+    _showErrorDialog("No DO $currentDo sudah digunakan di Shipping Request dengan tanggal stuffing $usedDate. Mohon gunakan No DO lain atau cek tanggal stuffing untuk konsistensi.");
+    return;
+  }
   final String currentMatId = _tempSelectedMaterial!['material_id'].toString();
-  final String currentCustId = selectedCustomerId!;
+  //final String currentCustId = selectedCustomerId!;
   // final String currentCustName = customers.firstWhere((c) => c['customer_id'].toString() == currentCustId)['customer_name'];
 
 final customerData = customers.firstWhere(
@@ -548,8 +824,22 @@ void _pickDate(bool isStuffingDate) async {
     }
 
     setState(() => isLoading = true);
+try {
+    // --- PENGECEKAN DOUBLE CHECK NOMOR DO (DATABASE) ---
+    // Ambil semua unique DO numbers dari tabel UI
+    final List<String> distinctDoNumbers = selectedMaterials
+        .map((e) => e['do_number'].toString())
+        .toSet()
+        .toList();
 
-    try {
+    for (String doNum in distinctDoNumbers) {
+      String? usedDate = await _checkDoExistence(doNum);
+      if (usedDate != null) {
+        setState(() => isLoading = false);
+        _showErrorDialog("DO $doNum sudah digunakan pada tanggal $usedDate.\n\nSilakan hapus atau ganti DO tersebut sebelum submit.");
+        return; // Hentikan proses submit jika ada yang duplikat
+      }
+    }
       // --- LANGKAH 1: Insert ke SHIPPING_REQUEST ---
       final shippingResponse = await supabase
           .from('shipping_request')

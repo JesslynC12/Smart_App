@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/display/pemilihanvendor_page.dart';
+import 'package:project_app/admin/display/pemilihanVendor_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 

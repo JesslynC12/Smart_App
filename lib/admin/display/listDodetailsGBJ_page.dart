@@ -111,7 +111,7 @@ Future<void> _fetchData() async {
             )
           ''')
         .isFilter('vendor_delivery_request', null)
-        .not('status', 'eq', 'cancel')
+        .not('status', 'eq', 'pending')
         .order('shipping_id', ascending: false);
 
 
@@ -372,9 +372,9 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 // PERBAIKAN: Hapus "as int"
-                onPressed: () => _cancelRequest(item),
+                onPressed: () => _pendingRequest(item),
                 icon: const Icon(Icons.close, size: 18),
-                label: const Text("CANCEL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                label: const Text("PENDING", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ),
             const SizedBox(width: 12),
@@ -663,7 +663,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
   return finalResult;
 }
 
-Future<void> _cancelRequest(Map<String, dynamic> item) async {
+Future<void> _pendingRequest(Map<String, dynamic> item) async {
   final List<int> idsToCancel = item['group_id'] != null
       ? List<int>.from(item['grouped_ids'])
       : [item['shipping_id'] as int];
@@ -710,9 +710,9 @@ Future<void> _cancelRequest(Map<String, dynamic> item) async {
     // 1. TETAP UPDATE STATUS (Logika lama Anda)
     // Menggunakan .inFilter agar lebih efisien daripada loop for
     await supabase.from('shipping_request').update({
-      'status': 'cancel',
-      'cancel_reason': reasonController.text.trim(),
-      'cancelled_at': DateTime.now().toIso8601String(),
+      'status': 'pending',
+      'pending_reason': reasonController.text.trim(),
+      'pending_at': DateTime.now().toIso8601String(),
     }).inFilter('shipping_id', idsToCancel);
 
     // 2. TAMBAHAN: HAPUS BARIS DI TABEL DETAILS
