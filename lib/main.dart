@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/home_page.dart';
 import 'package:project_app/auth/auth_service.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/login.dart';
 import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
@@ -19,6 +20,7 @@ void main() async {
   
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -47,7 +49,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginPage(),
         '/register-vendor': (context) => const RegisterVendorPage(),
-        '/home-admin': (context) => const HomePage(),
+        '/home-admin': (context) => const DynamicTabPage(),
         '/home-vendor': (context) => const HomepageVendor(),
       },
     );
@@ -70,11 +72,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<void> _checkAuth() async {
     // Delay sedikit agar transisi mulus
-    await Future.delayed(const Duration(seconds: 2));
+    
     
     // Ambil data user lengkap (termasuk role & status)
     final user = await AuthService.getCurrentUser();
-    
+    await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
 
     if (user != null) {
@@ -113,16 +115,33 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
   }
 
+  // void _navigateToLoginWithMsg(String msg) {
+  //   Navigator.pushAndRemoveUntil(
+  //     context,
+  //     MaterialPageRoute(builder: (context) => const LoginPage()),
+  //     (route) => false,
+  //   );
+  //   // Tampilkan pesan kenapa dia tidak bisa masuk
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
+  //   );
+  // }
   void _navigateToLoginWithMsg(String msg) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginPage()),
-      (route) => false,
-    );
-    // Tampilkan pesan kenapa dia tidak bisa masuk
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
-    );
+    // Pindah dulu
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    
+    // Gunakan postFrameCallback agar SnackBar muncul setelah halaman login siap
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg), 
+            backgroundColor: Colors.orange.shade800,
+            behavior: SnackBarBehavior.floating, // Lebih modern
+          ),
+        );
+      }
+    });
   }
 
   @override

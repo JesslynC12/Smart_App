@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+// Gunakan alias 'model' jika ada potensi konflik class User
+import '../auth/auth_service.dart' as model;
 import '../auth/auth_service.dart';
 import '../login.dart';
 
@@ -10,7 +12,7 @@ class HomepageVendor extends StatefulWidget {
 }
 
 class _HomepageVendorState extends State<HomepageVendor> {
-  User? currentUser;
+  model.User? currentUser;
   bool isLoading = true;
 
   @override
@@ -38,11 +40,15 @@ class _HomepageVendorState extends State<HomepageVendor> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('Konfirmasi Logout'),
         content: const Text('Apakah Anda ingin keluar dari Portal Vendor?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Logout', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
@@ -60,47 +66,48 @@ class _HomepageVendorState extends State<HomepageVendor> {
 
   @override
   Widget build(BuildContext context) {
-    // Status diambil dari AuthService yang melakukan join ke vendor_details
-    final bool isApproved = currentUser?.status == 'approved';
+    // Menyesuaikan dengan primaryColor Admin (Merah)
+    final primaryColor = Colors.red.shade700;
+    final bool isApproved = currentUser?.status == 'verified';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('Vendor Portal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.orange.shade800,
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(onPressed: _logout, icon: const Icon(Icons.logout_rounded)),
-        ],
+        // actions: [
+        //   IconButton(onPressed: _logout, icon: const Icon(Icons.logout_rounded)),
+        // ],
       ),
+      drawer: _buildDrawer(primaryColor),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          ? Center(child: CircularProgressIndicator(color: primaryColor))
           : RefreshIndicator(
               onRefresh: _loadUserData,
-              color: Colors.orange.shade800,
+              color: primaryColor,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildProfileHeader(),
-                    const SizedBox(height: 20),
-                    _buildStatusBanner(isApproved),
-                    const SizedBox(height: 30),
-                    Row(
-                      children: [
-                        Icon(Icons.grid_view_rounded, size: 20, color: Colors.orange.shade800),
-                        const SizedBox(width: 8),
-                        const Text(
-                          "Dashboard Layanan",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                    _buildHeaderSection(primaryColor),
+                    Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildStatusBanner(isApproved),
+                          const SizedBox(height: 25),
+                          const Text(
+                            "Dashboard",
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 15),
+                          _buildVendorMenu(isApproved, primaryColor),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 15),
-                    _buildVendorMenu(isApproved),
                   ],
                 ),
               ),
@@ -108,42 +115,30 @@ class _HomepageVendorState extends State<HomepageVendor> {
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildHeaderSection(Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      padding: const EdgeInsets.only(bottom: 30, left: 20, right: 20, top: 10),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200),
+        color: color,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: Colors.orange.shade800,
-            child: const Icon(Icons.business_center, size: 30, color: Colors.white),
+          const Text('Selamat Datang, Vendor', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(
+            currentUser?.nik ?? 'Loading ID...',
+            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  // Menampilkan NIK Vendor
-                  "ID: ${currentUser?.nik ?? '-'}",
-                  style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-                Text(
-                  currentUser?.email ?? '-',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  "Vendor Partner",
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                ),
-              ],
-            ),
+          const SizedBox(height: 8),
+          Text(
+            currentUser?.email ?? '-',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ],
       ),
@@ -155,15 +150,15 @@ class _HomepageVendorState extends State<HomepageVendor> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isApproved ? Colors.green.shade50 : Colors.red.shade50,
+        color: isApproved ? Colors.green.shade50 : Colors.orange.shade50,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: isApproved ? Colors.green.shade300 : Colors.red.shade200),
+        border: Border.all(color: isApproved ? Colors.green.shade200 : Colors.orange.shade200),
       ),
       child: Row(
         children: [
           Icon(
-            isApproved ? Icons.verified_user_rounded : Icons.gpp_maybe_rounded,
-            color: isApproved ? Colors.green : Colors.red.shade700,
+            isApproved ? Icons.verified_user_rounded : Icons.pending_actions_rounded,
+            color: isApproved ? Colors.green : Colors.orange.shade800,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -171,20 +166,20 @@ class _HomepageVendorState extends State<HomepageVendor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isApproved ? 'AKUN AKTIF' : 'MENUNGGU VERIFIKASI',
+                  isApproved ? 'AKUN TERVERIFIKASI' : 'MENUNGGU VERIFIKASI',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: isApproved ? Colors.green.shade900 : Colors.red.shade900,
+                    color: isApproved ? Colors.green.shade900 : Colors.orange.shade900,
                   ),
                 ),
                 Text(
                   isApproved
-                      ? 'Silakan kelola transaksi dan pengiriman Anda.'
-                      : 'Akun Anda sedang ditinjau. Fitur akan aktif setelah disetujui Admin.',
+                      ? 'Silakan akses semua fitur operasional Anda.'
+                      : 'Fitur akan aktif secara otomatis setelah disetujui Admin.',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isApproved ? Colors.green.shade800 : Colors.red.shade800,
+                    color: isApproved ? Colors.green.shade800 : Colors.orange.shade800,
                   ),
                 ),
               ],
@@ -195,7 +190,7 @@ class _HomepageVendorState extends State<HomepageVendor> {
     );
   }
 
-  Widget _buildVendorMenu(bool isApproved) {
+  Widget _buildVendorMenu(bool isApproved, Color themeColor) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -216,16 +211,17 @@ class _HomepageVendorState extends State<HomepageVendor> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: isEnabled 
-          ? () { /* Navigasi ke fitur */ } 
-          : () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Akses Ditolak: Akun Anda belum diverifikasi oleh Admin.'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            },
+        onTap: isEnabled
+            ? () { /* Navigasi */ }
+            : () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Akses Dibatasi: Menunggu verifikasi admin.'),
+                    backgroundColor: Colors.orange,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
         borderRadius: BorderRadius.circular(15),
         child: Container(
           decoration: BoxDecoration(
@@ -233,30 +229,19 @@ class _HomepageVendorState extends State<HomepageVendor> {
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5, offset: const Offset(0, 2)),
+              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
             ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isEnabled ? color.withOpacity(0.1) : Colors.grey.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, size: 30, color: isEnabled ? color : Colors.grey),
-                  ),
-                  if (!isEnabled)
-                    const Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Icon(Icons.lock, size: 16, color: Colors.grey),
-                    ),
-                ],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isEnabled ? color.withOpacity(0.1) : Colors.grey.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 30, color: isEnabled ? color : Colors.grey),
               ),
               const SizedBox(height: 12),
               Text(
@@ -270,6 +255,48 @@ class _HomepageVendorState extends State<HomepageVendor> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDrawer(Color themeColor) {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: BoxDecoration(color: themeColor),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.business, size: 40, color: Colors.red),
+            ),
+            accountName: Text(
+              currentUser?.nik ?? 'Vendor ID',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            accountEmail: Text(currentUser?.email ?? '-'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.dashboard_rounded),
+            title: const Text("Dashboard"),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_outline_rounded),
+            title: const Text("Profil Perusahaan"),
+            onTap: () => Navigator.pop(context),
+          ),
+          const Spacer(),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout_rounded, color: Colors.red),
+            title: const Text("Keluar", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.pop(context);
+              _logout();
+            },
+          ),
+          const SizedBox(height: 10),
+        ],
       ),
     );
   }

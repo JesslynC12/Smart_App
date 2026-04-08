@@ -13,6 +13,7 @@ import 'package:project_app/admin/master%20data/material_master.dart';
 import 'package:project_app/admin/master%20data/vendor_transportasi_master.dart';
 import 'package:project_app/admin/master%20data/enrollment_vendor_page.dart';
 import 'package:project_app/admin/master%20data/warehouse_master.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 // Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
 import '../auth/auth_service.dart' as model;
 import '../auth/auth_service.dart'; 
@@ -148,8 +149,16 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
+        // Tambahkan tombol menu manual jika Drawer tidak muncul otomatis
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+    
       ),
-      drawer: _buildDrawer(primaryColor),
+      drawer: _buildDrawer(primaryColor, roleDisplay),
       body: isLoading
           ? Center(child: CircularProgressIndicator(color: primaryColor))
           : RefreshIndicator(
@@ -159,7 +168,7 @@ class _HomePageState extends State<HomePage> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
                   children: [
-                    _buildHeaderSection(primaryColor),
+                    _buildHeaderSection(primaryColor, roleDisplay),
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
@@ -195,7 +204,8 @@ class _HomePageState extends State<HomePage> {
             ),
     );
   }
-  Widget _buildDrawer(Color themeColor) {
+  
+  Widget _buildDrawer(Color themeColor,String roleDisplay) {
   return Drawer(
     child: Column(
       children: [
@@ -228,7 +238,7 @@ class _HomePageState extends State<HomePage> {
               ExpansionTile(
                 leading: const Icon(Icons.dvr_rounded), // Ikon terminal/sistem
                 title: const Text("Entry & Operasional", style: TextStyle(fontWeight: FontWeight.w600)),
-                initiallyExpanded: true,
+                initiallyExpanded: false,
                 children: [
                   if (_hasAccess('CheckIn')) 
                     _menuItem(Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
@@ -238,24 +248,48 @@ class _HomePageState extends State<HomePage> {
                   if (_hasAccess('Loading'))
                     _menuItem(Icons.unarchive_rounded, "Loading Barang", Colors.orange),
                   if (_hasAccess('Occupancy'))
-                    _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange, onTap: () {
-                      Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => WarehouseOccupancyForm()));
-                    }),
+  _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange, onTap: () {
+    Navigator.pop(context); 
+    DynamicTabPage.of(context)?.openTab(
+      "Occupancy", 
+      WarehouseOccupancyForm(),
+    );
+  }),
                   if (_hasAccess('KelayakanUnit'))
                     _menuItem(Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
                       Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const VehicleControlForm()));
+                      DynamicTabPage.of(context)?.openTab(
+                        "Kelayakan Unit", 
+                        VehicleControlForm(),
+                      );
                     }),
+                  // if (_hasAccess('InputDO'))
+                  //   _menuItem(Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
+                  //     Navigator.pop(context); 
+                  //     DynamicTabPage.of(context)?.openTab(
+                  //       "Input DO", 
+                  //     ShippingRequestPage(),
+                  //     );
+                  //   }),
                   if (_hasAccess('InputDO'))
-                    _menuItem(Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
-                      Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
-                    }),
+  _menuItem(Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
+    final tabState = DynamicTabPage.of(context);
+    if (tabState != null) {
+      tabState.openTab("Input DO", const ShippingRequestPage());
+    } else {
+      // Jika tabState null, artinya HomePage tidak dibungkus oleh DynamicTabPage
+      // Sebagai fallback, kita gunakan Navigator biasa
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
+    }
+  }),
+                    
                   if (_hasAccess('Complain'))
                     _menuItem(Icons.report_problem_rounded, "Complain", Colors.redAccent, onTap: () {
                       Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComplainPage()));
+                      DynamicTabPage.of(context)?.openTab(
+                        "Complain", 
+                        const ComplainPage(),
+                      );
                     
                     }),
                 ],
@@ -266,21 +300,32 @@ class _HomePageState extends State<HomePage> {
                 leading: const Icon(Icons.analytics_rounded),
                 title: const Text("Display", style: TextStyle(fontWeight: FontWeight.w600)),
                 children: [
-                     if (_hasAccess('ListDO'))
-                    _menuItem(Icons.list_alt, "List DO", Colors.redAccent, onTap: () {
-                      Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ListDOPage()));
-                      }),
+                   if (_hasAccess('ListDO'))
+  _menuItem(Icons.list_alt, "List DO", Colors.redAccent, onTap: () {
+    Navigator.pop(context); // Tutup Drawer
+    
+    // JANGAN PUSH HALAMAN BARU, tapi tambahkan tab ke kontainer yang ada
+    DynamicTabPage.of(context)?.openTab(
+      "List DO", 
+      const ListDOPage(),
+    );
+  }),
                       if (_hasAccess('DOdetailsGBJ'))
                     _menuItem(Icons.list_rounded, "Do Details GBJ", Colors.redAccent, onTap: () {
                       Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DetailsDOGbjPage()));
-                      }),
-                       if (_hasAccess('VendorRequest'))
+                      DynamicTabPage.of(context)?.openTab(
+                        "Do Details GBJ", 
+                        const DetailsDOGbjPage(),
+                      );
+                    }),
+                     if (_hasAccess('VendorRequest'))
                     _menuItem(Icons.request_quote_rounded, "Permintaan Vendor", Colors.redAccent, onTap: () {
                       Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorRequestPage()));
-                      }),
+                      DynamicTabPage.of(context)?.openTab(
+                        "Permintaan Vendor", 
+                        const VendorRequestPage(),
+                      );
+                    }),
 
                     _menuItem(Icons.list_alt_rounded, "List Planning", Colors.indigo),
                     _menuItem(Icons.confirmation_number_rounded, "Booking Antrian", Colors.amber.shade800),
@@ -295,8 +340,11 @@ class _HomePageState extends State<HomePage> {
                      if (_hasAccess('ListComplain'))
                     _menuItem(Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
                       Navigator.pop(context); 
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComplainPage()));
-                      }),
+                      DynamicTabPage.of(context)?.openTab(
+                        "List Complain", 
+                        const ComplainPage(),
+                      );
+                    }),
                 ],
               ),
 
@@ -308,36 +356,60 @@ class _HomePageState extends State<HomePage> {
                   if (_hasAccess('Master'))  ...[
                     _menuItem(Icons.person_add, "Manajemen User", Colors.indigo,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => UserManagementPage()));
-                }),
-                 _menuItem(Icons.people_alt_rounded, "Manajemen User Vendor Transportasi", Colors.indigo,onTap: () {
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen User",
+                         const UserManagementPage(),
+                       );
+                    }),
+                    _menuItem(Icons.people_alt_rounded, "Manajemen User Vendor Transportasi", Colors.indigo,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorManagementPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen User Vendor Transportasi",
+                         const VendorManagementPage(),
+                       );
+                    }),
                     _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const CustomerPaginatedPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen Customer",
+                         const CustomerPaginatedPage(),
+                       );
+                    }),
                     _menuItem(Icons.category_rounded, "Manajemen Material", Colors.brown,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const MaterialPaginatedPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen Material",
+                         const MaterialPaginatedPage(),
+                       );
+                    }),
                     _menuItem(Icons.warehouse_rounded, "Manajemen Warehouse", Colors.blueGrey,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const WarehousePaginatedPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen Warehouse",
+                         const WarehousePaginatedPage(),
+                       );
+                    }),
                     _menuItem(Icons.assignment_turned_in_rounded, "Manajemen Checker", Colors.teal,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckerPaginatedPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen Checker",
+                         const CheckerPaginatedPage(),
+                       );
+                    }),
                     _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorPaginatedPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Manajemen Vendor",
+                         const VendorPaginatedPage(),
+                       );
+                    }),
                     _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent,onTap: () {
                        Navigator.pop(context);
-                       Navigator.push(context, MaterialPageRoute(builder: (context) => const VendorEnrollmentPage()));
-                }),
+                       DynamicTabPage.of(context)?.openTab(
+                         "Enrollment Akun Vendor",
+                         const VendorEnrollmentPage(),
+                       );
+                    }),
                   ]
                 ],
               ),
@@ -369,12 +441,16 @@ class _HomePageState extends State<HomePage> {
       onTap: onTap ?? () {
         // Default action
         Navigator.pop(context);
-        _showSnackBar('Membuka $title...', color);
-      },
-    );
-  }
+       if (onTap != null) {
+        onTap();
+      } else {
+        _showSnackBar('Fitur $title belum diimplementasikan', Colors.grey);
+      }
+    },
+  );
+}
 
-  Widget _buildHeaderSection(Color color) {
+  Widget _buildHeaderSection(Color color,String roleDisplay) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(bottom: 30, left: 20, right: 20, top: 10),

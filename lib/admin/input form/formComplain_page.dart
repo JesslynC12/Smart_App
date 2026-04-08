@@ -377,7 +377,7 @@ class _ComplainPageState extends State<ComplainPage> {
               decoration: _inputDecoration("Pilih Jenis"),
             ),
             const SizedBox(height: 10),
-            _buildFieldLabel("Jumlah (Qty) Komplain"),
+            _buildFieldLabel("Jumlah (Qty)"),
             TextField(
               controller: _qtyController,
               keyboardType: TextInputType.number,
