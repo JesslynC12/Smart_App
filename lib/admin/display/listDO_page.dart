@@ -8,7 +8,7 @@ import 'package:excel/excel.dart' hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file_plus/open_file_plus.dart';
 import 'package:file_picker/file_picker.dart';
-
+import 'dart:async';
 import 'package:intl/intl.dart';
 
 class ListDOPage extends StatefulWidget {
@@ -20,6 +20,7 @@ class ListDOPage extends StatefulWidget {
 
 class _ListDOPageState extends State<ListDOPage> {
   final supabase = Supabase.instance.client;
+  StreamSubscription? _realtimeSubscription;
   bool _isLoading = true;
   String _dateFilterType = "RDD"; // Default filter
   String? userDisplayName;
@@ -38,8 +39,20 @@ DateTimeRange? _selectedDateRange;
   void initState() {
     super.initState();
     _fetchShippingRequests();
+    _setupRealtime();
   }
 
+void _setupRealtime() {
+    // Kita buat subscription untuk memantau perubahan status atau penambahan data
+    _realtimeSubscription = supabase
+        .from('shipping_request')
+        .stream(primaryKey: ['shipping_id'])
+        .listen((_) {
+          // Setiap kali ada perubahan (insert/update/delete) di DB,
+          // kita panggil fungsi fetch untuk memperbarui List dan Grouping.
+          _fetchShippingRequests(); 
+        });
+  }
 // Future<void> _importMassalTigaTabel() async {
 //     try {
 //       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -121,6 +134,13 @@ DateTimeRange? _selectedDateRange;
 //       setState(() => _isLoading = false);
 //     }
 //   }
+
+@override
+  void dispose() {
+    _realtimeSubscription?.cancel(); // WAJIB: Batalkan subscription agar tidak memory leak
+    _searchController.dispose();
+    super.dispose();
+  }
 
 Future<void> _importMassalTigaTabel() async {
   try {
@@ -228,8 +248,10 @@ Future<void> _importMassalTigaTabel() async {
 
 Future<void> _fetchShippingRequests() async {
   try {
-    setState(() => _isLoading = true);
-    
+    //setState(() => _isLoading = true);
+    if (_allRequests.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     final response = await supabase
         .from('shipping_request')
         .select('''
@@ -247,13 +269,15 @@ Future<void> _fetchShippingRequests() async {
         .order('shipping_id', ascending: false);
 
     List<Map<String, dynamic>> data = List<Map<String, dynamic>>.from(response);
-
+if (mounted) {
     setState(() {
       _allRequests = data;
       _filteredRequests = _allRequests;
+      _runFilter(_searchController.text);
       _isLoading = false;
       _selectedIds.clear();
     });
+}
   } catch (e) {
     setState(() => _isLoading = false);
     _showSnackBar("Gagal ambil data: $e", Colors.red);
@@ -370,31 +394,57 @@ void _toggleSelectAll(bool? selected) {
   });
 }
 
+// Future<void> _prosesKePermintaan() async {
+//   if (_selectedIds.isEmpty) return;
+//   try {
+//     setState(() => _isLoading = true);
+
+//     // Cukup insert shipping_id saja, tidak perlu looping DO lagi
+//     List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {
+//       'shipping_id': id,
+//       'storage_location': null,
+//       'is_dedicated': null,
+//     }).toList();
+
+//     await supabase.from('shipping_request_details').insert(dataToInsert);
+
+//     await supabase
+//         .from('shipping_request')
+//         .update({'status': 'waiting GBJ'})
+//         .inFilter('shipping_id', _selectedIds.toList());
+
+//     _showSnackBar("Berhasil memproses ${_selectedIds.length} Shipping ID", Colors.green);
+//     setState(() => _selectedIds.clear());
+//     await _fetchShippingRequests();
+//   } catch (e) {
+//     setState(() => _isLoading = false);
+//     _showSnackBar("Gagal: $e", Colors.red);
+//   }
+// }
+
 Future<void> _prosesKePermintaan() async {
   if (_selectedIds.isEmpty) return;
+  
   try {
     setState(() => _isLoading = true);
 
-    // Cukup insert shipping_id saja, tidak perlu looping DO lagi
-    List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {
-      'shipping_id': id,
-      'storage_location': null,
-      'is_dedicated': null,
-    }).toList();
-
-    await supabase.from('shipping_request_details').insert(dataToInsert);
-
+    // Sekarang kita tidak perlu INSERT ke tabel lain.
+    // Cukup UPDATE tabel shipping_request untuk ID yang dipilih.
     await supabase
         .from('shipping_request')
-        .update({'status': 'waiting GBJ'})
+        .update({
+          'status': 'waiting GBJ',
+        })
         .inFilter('shipping_id', _selectedIds.toList());
 
     _showSnackBar("Berhasil memproses ${_selectedIds.length} Shipping ID", Colors.green);
+    
     setState(() => _selectedIds.clear());
     await _fetchShippingRequests();
+    
   } catch (e) {
     setState(() => _isLoading = false);
-    _showSnackBar("Gagal: $e", Colors.red);
+    _showSnackBar("Gagal memproses data: $e", Colors.red);
   }
 }
 
@@ -472,11 +522,11 @@ String dateColumn = _dateFilterType == "RDD" ? 'rdd' : 'stuffing_date';
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("List DO (Per DO)", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //  // title: const Text("List DO (Per DO)", style: TextStyle(fontWeight: FontWeight.bold)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: Column(
         children: [
           _buildSearchBar(),
@@ -605,7 +655,30 @@ IconButton(
     backgroundColor: Colors.green.shade50,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ),
-),
+ ),
+// const SizedBox(width: 6),
+
+//         // 6. TOMBOL REFRESH (Sesuai permintaan Anda)
+//         IconButton(
+//           tooltip: "Refresh Data & Reset Filter",
+//           style: IconButton.styleFrom(
+//             backgroundColor: Colors.red.shade50,
+//             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+//           ),
+//           constraints: const BoxConstraints(),
+//           padding: const EdgeInsets.only(left: 4),
+//           onPressed: () { 
+//             setState(() { 
+//               _searchController.clear(); // Bersihkan teks pencarian
+//               _selectedDateRange = null; // Reset filter tanggal
+//               _dateFilterType = "RDD";   // Reset tipe tanggal ke default
+//               _searchQuery = "";         // Kosongkan variabel query
+//             }); 
+//             _fetchShippingRequests();    // Ambil data ulang dari database
+//           }, 
+//           icon: const Icon(Icons.refresh, color: Colors.red, size: 20),
+//         ),
+      
       ],
       
     ),
@@ -1272,7 +1345,7 @@ Future<void> _splitGroup() async {
   }
 Future<void> _exportToExcel() async {
   if (_filteredRequests.isEmpty) {
-    _showSnackBar("Tidak ada data untuk diekspor", Colors.orange);
+    _showSnackBar("Tidak ada data untuk dieksport", Colors.orange);
     return;
   }
 

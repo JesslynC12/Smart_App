@@ -148,12 +148,12 @@ class _ComplainPageState extends State<ComplainPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text("Detail & Komplain DO", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
+      // appBar: AppBar(
+      //   title: const Text("Detail & Komplain DO", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      //   elevation: 0,
+      // ),
       body: _isLoading 
       ? const Center(child: CircularProgressIndicator())
       : SingleChildScrollView(

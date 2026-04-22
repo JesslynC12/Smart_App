@@ -368,11 +368,11 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Master Checker'),
-        backgroundColor: Colors.red.shade700, // Warna dibedakan dengan Warehouse
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Master Checker'),
+      //   backgroundColor: Colors.red.shade700, // Warna dibedakan dengan Warehouse
+      //   foregroundColor: Colors.white,
+      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

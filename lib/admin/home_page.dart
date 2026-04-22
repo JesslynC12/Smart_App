@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/display/listDO_page.dart' show ListDOPage;
-import 'package:project_app/admin/display/listDOdetailsGBJ_page.dart';
-import 'package:project_app/admin/display/listVendorRequest_page.dart';
-import 'package:project_app/admin/input%20form/formComplain_page.dart';
-import 'package:project_app/admin/input%20form/formOccupancy_page.dart';
-import 'package:project_app/admin/input%20form/formDO_page.dart';
-import 'package:project_app/admin/input%20form/formKelayakanunit_page.dart';
-import 'package:project_app/admin/master%20data/checker_master.dart';
-import 'package:project_app/admin/master%20data/customer_master.dart';
-import 'package:project_app/admin/master%20data/manage_user_vendor.dart';
-import 'package:project_app/admin/master%20data/material_master.dart';
-import 'package:project_app/admin/master%20data/vendor_transportasi_master.dart';
-import 'package:project_app/admin/master%20data/enrollment_vendor_page.dart';
-import 'package:project_app/admin/master%20data/warehouse_master.dart';
-import 'package:project_app/dynamic_tab_page.dart';
+// import 'package:project_app/admin/main_drawer.dart';
+// import 'package:project_app/admin/display/listDO_page.dart' show ListDOPage;
+// import 'package:project_app/admin/display/listDOdetailsGBJ_page.dart';
+// import 'package:project_app/admin/display/listVendorRequest_page.dart';
+// import 'package:project_app/admin/input%20form/formComplain_page.dart';
+// import 'package:project_app/admin/input%20form/formOccupancy_page.dart';
+// import 'package:project_app/admin/input%20form/formDO_page.dart';
+// import 'package:project_app/admin/input%20form/formKelayakanunit_page.dart';
+// import 'package:project_app/admin/master%20data/checker_master.dart';
+// import 'package:project_app/admin/master%20data/customer_master.dart';
+// import 'package:project_app/admin/master%20data/manage_user_vendor.dart';
+// import 'package:project_app/admin/master%20data/material_master.dart';
+// import 'package:project_app/admin/master%20data/vendor_transportasi_master.dart';
+// import 'package:project_app/admin/master%20data/enrollment_vendor_page.dart';
+// import 'package:project_app/admin/master%20data/warehouse_master.dart';
+// import 'package:project_app/dynamic_tab_page.dart';
 // Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
-import '../auth/auth_service.dart' as model;
+// import '../auth/auth_service.dart' as model;
 import '../auth/auth_service.dart'; 
 import '../login.dart';
-import 'package:project_app/admin/master%20data/manage_user.dart'; 
+// import 'package:project_app/admin/master%20data/manage_user.dart'; 
 
 
 class HomePage extends StatefulWidget {
@@ -29,7 +30,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  model.User? currentUser;
+  User? currentUser;
   bool isLoading = true;
 
   @override
@@ -39,6 +40,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadCurrentUser() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     try {
       final user = await AuthService.getCurrentUser();
@@ -79,46 +81,46 @@ class _HomePageState extends State<HomePage> {
   //   return currentUser?.privileges.contains(privilegeName) ?? false;
   // }
 
-  bool _hasAccess(String privilegeName) {
-  // Pengecekan ketat: Hanya cek daftar privileges yang dimiliki user
-  // Tidak peduli apakah dia Admin, Staff, atau Manager.
-  return currentUser?.privileges.contains(privilegeName) ?? false;
-}
+//   bool _hasAccess(String privilegeName) {
+//   // Pengecekan ketat: Hanya cek daftar privileges yang dimiliki user
+//   // Tidak peduli apakah dia Admin, Staff, atau Manager.
+//   return currentUser?.privileges.contains(privilegeName) ?? false;
+// }
 
-  Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Konfirmasi Logout'),
-        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal')
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+  // Future<void> _logout() async {
+  //   final confirm = await showDialog<bool>(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+  //       title: const Text('Konfirmasi Logout'),
+  //       content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.pop(context, false),
+  //           child: const Text('Batal')
+  //         ),
+  //         TextButton(
+  //           onPressed: () => Navigator.pop(context, true),
+  //           child: const Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+  //         ),
+  //       ],
+  //     ),
+  //   );
 
-    if (confirm != true) return;
+  //   if (confirm != true) return;
 
-    try {
-      await AuthService.logout();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) _showSnackBar('Logout gagal: $e', Colors.red);
-    }
-  }
+  //   try {
+  //     await AuthService.logout();
+  //     if (mounted) {
+  //       Navigator.of(context).pushAndRemoveUntil(
+  //         MaterialPageRoute(builder: (context) => const LoginPage()),
+  //         (route) => false,
+  //       );
+  //     }
+  //   } catch (e) {
+  //     if (mounted) _showSnackBar('Logout gagal: $e', Colors.red);
+  //   }
+  // }
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -130,325 +132,195 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final primaryColor = Colors.red.shade700;
+  // @override
+  // Widget build(BuildContext context) {
+  //   final primaryColor = Colors.red.shade700;
     
-    String roleDisplay = "Admin";
-    if (currentUser?.role != null && currentUser!.role!.isNotEmpty) {
-      roleDisplay = currentUser!.role![0].toUpperCase() + currentUser!.role!.substring(1);
-    }
+  //   String roleDisplay = "Admin";
+  //   if (currentUser?.role != null && currentUser!.role!.isNotEmpty) {
+  //     roleDisplay = currentUser!.role![0].toUpperCase() + currentUser!.role!.substring(1);
+  //   }
 
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: Text(
-          '$roleDisplay Dashboard',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        // Tambahkan tombol menu manual jika Drawer tidak muncul otomatis
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+  //   return Scaffold(
+  //     backgroundColor: Colors.grey.shade50,
+  //     appBar: AppBar(
+  //       title: Text(
+  //         '$roleDisplay Dashboard',
+  //         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+  //       ),
+  //       backgroundColor: primaryColor,
+  //       foregroundColor: Colors.white,
+  //       elevation: 0,
+  //       // Tambahkan tombol menu manual jika Drawer tidak muncul otomatis
+  //       leading: Builder(
+  //         builder: (context) => IconButton(
+  //           icon: const Icon(Icons.menu),
+  //           onPressed: () => Scaffold.of(context).openDrawer(),
+  //         ),
+  //       ),
     
-      ),
-      drawer: _buildDrawer(primaryColor, roleDisplay),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator(color: primaryColor))
-          : RefreshIndicator(
-              onRefresh: _loadCurrentUser,
-              color: primaryColor,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildHeaderSection(primaryColor, roleDisplay),
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Informasi Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 15),
+  //     ),
+  //     drawer: _buildDrawer(primaryColor, roleDisplay),
+  //     body: isLoading
+  //         ? Center(child: CircularProgressIndicator(color: primaryColor))
+  //         : RefreshIndicator(
+  //             onRefresh: _loadCurrentUser,
+  //             color: primaryColor,
+  //             child: SingleChildScrollView(
+  //               physics: const AlwaysScrollableScrollPhysics(),
+  //               child: Column(
+  //                 children: [
+  //                   _buildHeaderSection(primaryColor, roleDisplay),
+  //                   Padding(
+  //                     padding: const EdgeInsets.all(20),
+  //                     child: Column(
+  //                       crossAxisAlignment: CrossAxisAlignment.start,
+  //                       children: [
+  //                         const Text("Informasi Akun", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  //                         const SizedBox(height: 15),
                           
-                          _buildProfileCard(primaryColor),
+  //                         _buildProfileCard(primaryColor),
                           
-                          // Menampilkan Chip Privileges (Hak Akses)
-                          // if (currentUser?.privileges.isNotEmpty ?? false) ...[
-                          //    const SizedBox(height: 20),
-                          //    const Text("Hak Akses Fitur", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          //    const SizedBox(height: 10),
-                          //    Wrap(
-                          //      spacing: 8,
-                          //      runSpacing: 8,
-                          //      children: currentUser!.privileges.map((priv) => Chip(
-                          //        avatar: const Icon(Icons.check_circle, size: 16, color: Colors.white),
-                          //        label: Text(priv, style: const TextStyle(fontSize: 11, color: Colors.white)),
-                          //        backgroundColor: Colors.grey.shade700,
-                          //        visualDensity: VisualDensity.compact,
-                          //      )).toList(),
-                          //    )
-                          // ]
-                        ],
-                      ),
+  //                         // Menampilkan Chip Privileges (Hak Akses)
+  //                         // if (currentUser?.privileges.isNotEmpty ?? false) ...[
+  //                         //    const SizedBox(height: 20),
+  //                         //    const Text("Hak Akses Fitur", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  //                         //    const SizedBox(height: 10),
+  //                         //    Wrap(
+  //                         //      spacing: 8,
+  //                         //      runSpacing: 8,
+  //                         //      children: currentUser!.privileges.map((priv) => Chip(
+  //                         //        avatar: const Icon(Icons.check_circle, size: 16, color: Colors.white),
+  //                         //        label: Text(priv, style: const TextStyle(fontSize: 11, color: Colors.white)),
+  //                         //        backgroundColor: Colors.grey.shade700,
+  //                         //        visualDensity: VisualDensity.compact,
+  //                         //      )).toList(),
+  //                         //    )
+  //                         // ]
+  //                       ],
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ),
+  //   );
+//   // }
+//   @override
+// Widget build(BuildContext context) {
+//   final primaryColor = Colors.red.shade700;
+
+//   String roleDisplay = "Admin";
+//   if (currentUser?.role != null && currentUser!.role!.isNotEmpty) {
+//     roleDisplay = currentUser!.role![0].toUpperCase() +
+//         currentUser!.role!.substring(1);
+//   }
+
+//   // ❌ HAPUS SCAFFOLD
+//   return Container(
+//     color: Colors.grey.shade50,
+//     child: isLoading
+//         ? Center(child: CircularProgressIndicator(color: primaryColor))
+//         : RefreshIndicator(
+//             onRefresh: _loadCurrentUser,
+//             color: primaryColor,
+//             child: SingleChildScrollView(
+//               physics: const AlwaysScrollableScrollPhysics(),
+//               child: Column(
+//                 children: [
+//                   _buildHeaderSection(primaryColor, roleDisplay),
+//                   Padding(
+//                     padding: const EdgeInsets.all(20),
+//                     child: Column(
+//                       crossAxisAlignment: CrossAxisAlignment.start,
+//                       children: [
+//                         const Text(
+//                           "Informasi Akun",
+//                           style: TextStyle(
+//                               fontSize: 16, fontWeight: FontWeight.bold),
+//                         ),
+//                         const SizedBox(height: 15),
+//                         _buildProfileCard(primaryColor),
+//                       ],
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//           ),
+//   );
+// }
+@override
+Widget build(BuildContext context) {
+  final primaryColor = Colors.red.shade700;
+
+  String roleDisplay = "User";
+  if (currentUser?.role != null && currentUser!.role!.isNotEmpty) {
+    roleDisplay = currentUser!.role![0].toUpperCase() + currentUser!.role!.substring(1);
+  }
+
+  return Material(
+    // 1. Tambahkan AppBar agar bisa membuka Drawer
+    // appBar: AppBar(
+    //   // title: const Text("Dashboard", style: TextStyle(fontWeight: FontWeight.bold)),
+    //   backgroundColor: primaryColor,
+    //   foregroundColor: Colors.white,
+    //   elevation: 0,
+    // ),
+
+    // 2. Hubungkan dengan MainDrawer yang sudah dibuat sebelumnya
+    // drawer: MainDrawer(currentUser: currentUser),
+
+    color: Colors.grey.shade50,
+      child: isLoading
+        ? Center(child: CircularProgressIndicator(color: primaryColor))
+        : RefreshIndicator(
+            onRefresh: _loadCurrentUser,
+            color: primaryColor,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildHeaderSection(primaryColor, roleDisplay),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Informasi Akun",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 15),
+                        _buildProfileCard(primaryColor),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-    );
-  }
+          ),
+  );
+}
   
-  Widget _buildDrawer(Color themeColor,String roleDisplay) {
-  return Drawer(
-    child: Column(
-      children: [
-        UserAccountsDrawerHeader(
-          decoration: BoxDecoration(color: themeColor),
-          currentAccountPicture: const CircleAvatar(
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, size: 40, color: Colors.red),
-          ),
-          accountName: Text(
-            currentUser?.nik ?? 'Loading...',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          accountEmail: Text(currentUser?.email ?? '-'),
-        ),
-        
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  "SISTEM OPERASIONAL",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                ),
-              ),
-              
-              // --- SECTION 1: ENTRY & OPERASIONAL ---
-              ExpansionTile(
-                leading: const Icon(Icons.dvr_rounded), // Ikon terminal/sistem
-                title: const Text("Entry & Operasional", style: TextStyle(fontWeight: FontWeight.w600)),
-                initiallyExpanded: false,
-                children: [
-                  if (_hasAccess('CheckIn')) 
-                    _menuItem(Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
-                       Navigator.pop(context);
-                       _showSnackBar("Membuka Presensi...", Colors.blue);
-                    }),
-                  if (_hasAccess('Loading'))
-                    _menuItem(Icons.unarchive_rounded, "Loading Barang", Colors.orange),
-                  if (_hasAccess('Occupancy'))
-  _menuItem(Icons.fact_check_rounded, "Occupancy Form", Colors.orange, onTap: () {
-    Navigator.pop(context); 
-    DynamicTabPage.of(context)?.openTab(
-      "Occupancy", 
-      WarehouseOccupancyForm(),
-    );
-  }),
-                  if (_hasAccess('KelayakanUnit'))
-                    _menuItem(Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
-                      Navigator.pop(context); 
-                      DynamicTabPage.of(context)?.openTab(
-                        "Kelayakan Unit", 
-                        VehicleControlForm(),
-                      );
-                    }),
-                  // if (_hasAccess('InputDO'))
-                  //   _menuItem(Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
-                  //     Navigator.pop(context); 
-                  //     DynamicTabPage.of(context)?.openTab(
-                  //       "Input DO", 
-                  //     ShippingRequestPage(),
-                  //     );
-                  //   }),
-                  if (_hasAccess('InputDO'))
-  _menuItem(Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
-    final tabState = DynamicTabPage.of(context);
-    if (tabState != null) {
-      tabState.openTab("Input DO", const ShippingRequestPage());
-    } else {
-      // Jika tabState null, artinya HomePage tidak dibungkus oleh DynamicTabPage
-      // Sebagai fallback, kita gunakan Navigator biasa
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const ShippingRequestPage()));
-    }
-  }),
-                    
-                  if (_hasAccess('Complain'))
-                    _menuItem(Icons.report_problem_rounded, "Complain", Colors.redAccent, onTap: () {
-                      Navigator.pop(context); 
-                      DynamicTabPage.of(context)?.openTab(
-                        "Complain", 
-                        const ComplainPage(),
-                      );
-                    
-                    }),
-                ],
-              ),
-
-              // --- SECTION 2: DISPLAY & MONITORING ---
-              ExpansionTile(
-                leading: const Icon(Icons.analytics_rounded),
-                title: const Text("Display", style: TextStyle(fontWeight: FontWeight.w600)),
-                children: [
-                   if (_hasAccess('ListDO'))
-  _menuItem(Icons.list_alt, "List DO", Colors.redAccent, onTap: () {
-    Navigator.pop(context); // Tutup Drawer
-    
-    // JANGAN PUSH HALAMAN BARU, tapi tambahkan tab ke kontainer yang ada
-    DynamicTabPage.of(context)?.openTab(
-      "List DO", 
-      const ListDOPage(),
-    );
-  }),
-                      if (_hasAccess('DOdetailsGBJ'))
-                    _menuItem(Icons.list_rounded, "Do Details GBJ", Colors.redAccent, onTap: () {
-                      Navigator.pop(context); 
-                      DynamicTabPage.of(context)?.openTab(
-                        "Do Details GBJ", 
-                        const DetailsDOGbjPage(),
-                      );
-                    }),
-                     if (_hasAccess('VendorRequest'))
-                    _menuItem(Icons.request_quote_rounded, "Permintaan Vendor", Colors.redAccent, onTap: () {
-                      Navigator.pop(context); 
-                      DynamicTabPage.of(context)?.openTab(
-                        "Permintaan Vendor", 
-                        const VendorRequestPage(),
-                      );
-                    }),
-
-                    _menuItem(Icons.list_alt_rounded, "List Planning", Colors.indigo),
-                    _menuItem(Icons.confirmation_number_rounded, "Booking Antrian", Colors.amber.shade800),
-                    _menuItem(Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
-                    _menuItem(Icons.event_note_rounded, "Daily Occupancy", Colors.cyan),
-                    _menuItem(Icons.monitor_rounded, "Dashboard Internal (Daily)", Colors.green),
-                    _menuItem(Icons.date_range_rounded, "Dashboard Internal (Range)", Colors.green.shade700),
-                    _menuItem(Icons.assessment_rounded, "Dashboard Eksternal (Daily)", Colors.deepOrange),
-                    _menuItem(Icons.history_toggle_off_rounded, "Dashboard Eksternal (Range)", Colors.deepOrange.shade700),
-                    _menuItem(Icons.star_rate_rounded, "Penilaian Vendor", Colors.orange),
-                   
-                     if (_hasAccess('ListComplain'))
-                    _menuItem(Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
-                      Navigator.pop(context); 
-                      DynamicTabPage.of(context)?.openTab(
-                        "List Complain", 
-                        const ComplainPage(),
-                      );
-                    }),
-                ],
-              ),
-
-              // --- SECTION 3: MASTER DATA ---
-              ExpansionTile(
-                leading: const Icon(Icons.storage_rounded),
-                title: const Text("Master Data", style: TextStyle(fontWeight: FontWeight.w600)),
-                children: [
-                  if (_hasAccess('Master'))  ...[
-                    _menuItem(Icons.person_add, "Manajemen User", Colors.indigo,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen User",
-                         const UserManagementPage(),
-                       );
-                    }),
-                    _menuItem(Icons.people_alt_rounded, "Manajemen User Vendor Transportasi", Colors.indigo,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen User Vendor Transportasi",
-                         const VendorManagementPage(),
-                       );
-                    }),
-                    _menuItem(Icons.storefront_rounded, "Manajemen Customer", Colors.blue,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen Customer",
-                         const CustomerPaginatedPage(),
-                       );
-                    }),
-                    _menuItem(Icons.category_rounded, "Manajemen Material", Colors.brown,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen Material",
-                         const MaterialPaginatedPage(),
-                       );
-                    }),
-                    _menuItem(Icons.warehouse_rounded, "Manajemen Warehouse", Colors.blueGrey,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen Warehouse",
-                         const WarehousePaginatedPage(),
-                       );
-                    }),
-                    _menuItem(Icons.assignment_turned_in_rounded, "Manajemen Checker", Colors.teal,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen Checker",
-                         const CheckerPaginatedPage(),
-                       );
-                    }),
-                    _menuItem(Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Manajemen Vendor",
-                         const VendorPaginatedPage(),
-                       );
-                    }),
-                    _menuItem(Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent,onTap: () {
-                       Navigator.pop(context);
-                       DynamicTabPage.of(context)?.openTab(
-                         "Enrollment Akun Vendor",
-                         const VendorEnrollmentPage(),
-                       );
-                    }),
-                  ]
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const Divider(height: 1),
-        ListTile(
-          leading: const Icon(Icons.logout_rounded, color: Colors.red),
-          title: const Text("Keluar", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          onTap: () {
-            Navigator.pop(context);
-            _logout();
-          },
-        ),
-        const SizedBox(height: 10),
-      ],
-    ),
-  );
-}
 
 
-  Widget _menuItem(IconData icon, String title, Color color, {VoidCallback? onTap}) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 32),
-      leading: Icon(icon, color: color, size: 22),
-      title: Text(title, style: const TextStyle(fontSize: 14)),
-      onTap: onTap ?? () {
-        // Default action
-        Navigator.pop(context);
-       if (onTap != null) {
-        onTap();
-      } else {
-        _showSnackBar('Fitur $title belum diimplementasikan', Colors.grey);
-      }
-    },
-  );
-}
+//   Widget _menuItem(IconData icon, String title, Color color, {VoidCallback? onTap}) {
+//     return ListTile(
+//       contentPadding: const EdgeInsets.symmetric(horizontal: 32),
+//       leading: Icon(icon, color: color, size: 22),
+//       title: Text(title, style: const TextStyle(fontSize: 14)),
+//       onTap: () {
+//         // Default action
+//         Navigator.pop(context);
+//        if (onTap != null) {
+//         onTap();
+//       } else {
+//         _showSnackBar('Fitur $title belum diimplementasikan', Colors.grey);
+//       }
+//     },
+//   );
+// }
 
   Widget _buildHeaderSection(Color color,String roleDisplay) {
     return Container(

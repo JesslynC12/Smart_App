@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 
 // ===================== USER MODEL (Tetap) =====================
 class User {
@@ -9,8 +11,11 @@ class User {
   final String? lokasi;
   final String? role;
   final String? status;
+  final String? nikVendor;
+    // final String? regist_code;
   final bool isActive;
   final List<String> privileges;
+
 
   User({
     required this.id,
@@ -20,13 +25,17 @@ class User {
     this.lokasi,
     this.role,
     this.status,
+    this.nikVendor,
+    //this.regist_code,
     this.isActive = true,
     this.privileges = const [],
   });
 
+
 bool hasPermission(String permissionName) {
     return privileges.contains(permissionName);
   }
+
 
   factory User.fromJson(Map<String, dynamic> json) {
     List<String> privs = [];
@@ -39,23 +48,31 @@ bool hasPermission(String permissionName) {
       }
     }
 
-    String? statusValue;
+
+    //String? statusValue;
     // if (json['profiles_vendor'] != null && (json['profiles_vendor'] as List).isNotEmpty) {
     //   statusValue = json['profiles_vendor'][0]['status'];
     // }
-     if (json['profiles_vendor'] != null) {
+    //  if (json['profiles_vendor'] != null) {
 
-    if (json['profiles_vendor'] is List && (json['profiles_vendor'] as List).isNotEmpty) {
 
-      statusValue = json['profiles_vendor'][0]['status'];
+    // if (json['profiles_vendor'] is List && (json['profiles_vendor'] as List).isNotEmpty) {
 
-    } else if (json['profiles_vendor'] is Map) {
 
-      statusValue = json['profiles_vendor']['status'];
+    //   statusValue = json['profiles_vendor'][0]['status'];
 
-    }
 
-    }
+    // } else if (json['profiles_vendor'] is Map) {
+
+
+    //   statusValue = json['profiles_vendor']['status'];
+
+
+    // }
+
+
+    // }
+
 
     return User(
       id: json['id'] ?? '',
@@ -64,8 +81,10 @@ bool hasPermission(String permissionName) {
       name: json['name'],
       lokasi: json['lokasi'],
       role: json['role'],
-      status: statusValue,
-      //status: json['status'],
+      status: json['status'],
+      //status: statusValue,
+      nikVendor: json['nik_vendor'],
+      //regist_code: json['regist_code'],
       isActive: json['is_active'] ?? true,
       privileges: privs,
     );
@@ -73,115 +92,217 @@ bool hasPermission(String permissionName) {
 }
 
 
+
+
 // ===================== AUTH SERVICE (Disesuaikan dengan Edge Functions) =====================
 class AuthService {
   static final _supabase = Supabase.instance.client;
 
+
   // 1. LOGIN SYSTEM (Tetap)
-  static Future<User?> login(String identifier, String password) async {
-    try {
-      String emailForAuth = identifier.trim();
+//   static Future<User?> login(String identifier, String password) async {
+//     try {
+//       String emailForAuth = identifier.trim();
 
-      if (!identifier.contains('@')) {
-        if (identifier.length != 8) throw Exception('Format NIK harus 8 digit');
 
-        final findUser = await _supabase
-            .from('profiles')
-            .select('email')
-            .eq('nik', identifier.trim())
-            .maybeSingle();
+//       if (!identifier.contains('@')) {
+//         if (identifier.length != 8) throw Exception('Format NIK harus 8 digit');
 
-        if (findUser == null) throw Exception('NIK tidak terdaftar');
-        emailForAuth = findUser['email'];
-      }
 
-      final response = await _supabase.auth.signInWithPassword(
-        email: emailForAuth,
-        password: password,
-      );
+//         final findUser = await _supabase
+//             .from('profiles')
+//             .select('email')
+//             .eq('nik', identifier.trim())
+//             .maybeSingle();
 
-      // if (response.user != null) {
-      //   final user = await getCurrentUser();
-      //   if (user != null && !user.isActive) {
-      //     await logout();
-      //     throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
-      //   }
-      //   // 2. Cek jika Vendor belum diverifikasi
-      // if (user?.role == 'vendor' && user?.status == 'pending') {
-      //   await logout();
-      //   throw Exception('Akun vendor Anda sedang menunggu verifikasi admin.');
-      // }
-      
-      // // 3. Cek jika pendaftaran ditolak
-      // if (user?.role == 'vendor' && user?.status == 'rejected') {
-      //   await logout();
-      //   throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
-      // }
-    
-      //   return user;
-      // }
-      if (response.user != null) {
 
-  final user = await getCurrentUser();
+//         if (findUser == null) throw Exception('NIK tidak terdaftar');
+//         emailForAuth = findUser['email'];
+//       }
+
+
+//       final response = await _supabase.auth.signInWithPassword(
+//         email: emailForAuth,
+//         password: password,
+//       );
+
+
+//       // if (response.user != null) {
+//       //   final user = await getCurrentUser();
+//       //   if (user != null && !user.isActive) {
+//       //     await logout();
+//       //     throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
+//       //   }
+//       //   // 2. Cek jika Vendor belum diverifikasi
+//       // if (user?.role == 'vendor' && user?.status == 'pending') {
+//       //   await logout();
+//       //   throw Exception('Akun vendor Anda sedang menunggu verifikasi admin.');
+//       // }
+     
+//       // // 3. Cek jika pendaftaran ditolak
+//       // if (user?.role == 'vendor' && user?.status == 'rejected') {
+//       //   await logout();
+//       //   throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
+//       // }
+   
+//       //   return user;
+//       // }
+//       if (response.user != null) {
+
+
+//   final user = await getCurrentUser();
+
 
  
 
- if (user != null) {
 
-    // 1. Cek Blokir Admin (is_active)
-
-    if (!user.isActive) {
-
-      await logout();
-
-      throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
-
-    }
+//  if (user != null) {
 
 
+//     // 1. Cek Blokir Admin (is_active)
 
-    // 2. Cek Status Vendor
 
-    // Gunakan .toLowerCase() untuk memastikan 'Pending' atau 'pending' keduanya tertangkap
+//     if (!user.isActive) {
 
-    final role = user.role?.toLowerCase();
 
-    final status = user.status?.toLowerCase();
+//       await logout();
+
+
+//       throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
+
+
+//     }
 
 
 
-    if (role == 'vendor') {
 
-      if (status == 'pending') {
 
-        await logout();
 
-        throw Exception('Akun Anda sedang menunggu verifikasi admin.');
+//     // 2. Cek Status Vendor
 
-      // } else if (status == 'rejected') {
 
-      //   await logout();
+//     // Gunakan .toLowerCase() untuk memastikan 'Pending' atau 'pending' keduanya tertangkap
 
-      //   throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
 
-      }
+//     final role = user.role?.toLowerCase();
 
-    }
+
+//     final status = user.status?.toLowerCase();
+
+
+
+
+
+
+//     if (role == 'vendor') {
+
+
+//       if (status == 'pending') {
+
+
+//         await logout();
+
+
+//         throw Exception('Akun Anda sedang menunggu verifikasi admin.');
+
+
+//       // } else if (status == 'rejected') {
+
+
+//       //   await logout();
+
+
+//       //   throw Exception('Maaf, pendaftaran vendor Anda ditolak.');
+
+
+//       }
+
+
+//     }
+
 
    
 
-    return user;
 
-  }
+//     return user;
+
+
+//   }
+//       }
+
+
+//       return null;
+//     } on AuthException catch (e) {
+//       throw Exception('Login Gagal: ${e.message}');
+//     } catch (e) {
+//       rethrow;
+//     }
+//   }
+
+
+static Future<User?> login(String identifier, String password) async {
+  try {
+    String emailForAuth = identifier.trim();
+
+    // 1. Cek jika input user bukan email (asumsi itu adalah NIK)
+    if (!identifier.contains('@')) {
+      // Kita cari di tabel profiles: 
+      // Apakah identifier ada di kolom 'nik' OR kolom 'nik_vendor'
+      final findUser = await _supabase
+          .from('profiles')
+          .select('email')
+          .or('nik.eq.${identifier.trim()}, nik_vendor.eq.${identifier.trim()}')
+          .maybeSingle();
+
+      if (findUser == null) {
+        throw Exception('NIK tidak terdaftar.');
       }
-
-      return null;
-    } on AuthException catch (e) {
-      throw Exception('Login Gagal: ${e.message}');
-    } catch (e) {
-      rethrow;
+      
+      // Jika ketemu, ambil email terkait untuk proses signIn auth
+      emailForAuth = findUser['email'];
     }
+
+    // 2. Proses Sign In menggunakan email yang ditemukan
+    final response = await _supabase.auth.signInWithPassword(
+      email: emailForAuth,
+      password: password,
+    );
+
+    // 3. Validasi Akun setelah Login Sukses
+    if (response.user != null) {
+      final user = await getCurrentUser();
+      if (user != null) {
+        // Cek apakah akun aktif (Blokir Admin)
+        if (!user.isActive) {
+          await logout();
+          throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
+        }
+
+        // Pengecekan khusus status Vendor
+        final role = user.role?.toLowerCase();
+        final status = user.status?.toLowerCase();
+
+        if (role == 'vendor' && status == 'pending') {
+          await logout();
+          throw Exception('Akun vendor Anda sedang menunggu verifikasi.');
+        }
+
+        return user;
+      }
+    }
+    return null;
+  } on AuthException catch (e) {
+    // Pesan error ramah user
+    String message = e.message;
+    if (message.contains("Invalid login credentials")) {
+      message = "Password yang Anda masukkan salah.";
+    }
+    throw Exception(message);
+  } catch (e) {
+    throw Exception('Terjadi kesalahan: $e');
   }
+}
+
 
 
   // 2. USER MANAGEMENT (Menggunakan Edge Function)
@@ -216,6 +337,7 @@ try {
       },
     );
 
+
     if (response.status != 200) {
       throw Exception(response.data['error'] ?? 'Gagal mendaftarkan user');
     }
@@ -223,6 +345,7 @@ try {
     throw Exception('Terjadi kesalahan: $e');
   }
 }
+
 
   // --- UPDATE USER ACCESS ---
   static Future<void> updateUserAccess({
@@ -245,11 +368,13 @@ try {
       },
     );
 
+
     if (response.status != 200) {
       throw Exception(response.data['error'] ?? 'Gagal update user');
     }
   }
-  
+ 
+
 
   // --- DELETE USER ---
   static Future<void> deleteUserPermanently(String userId) async {
@@ -258,50 +383,191 @@ try {
       body: {'userId': userId},
     );
 
+
     if (response.status != 200) {
       throw Exception(response.data['error'] ?? 'Gagal menghapus user');
     }
   }
 
+
   // 3. VENDOR REGISTRATION (Masih menggunakan signUp karena biasanya dilakukan oleh user sendiri)
+  // static Future<void> registerVendor({
+  //   required String email,
+  //   required String password,
+  //   required String nik,
+  //   required String companyName,
+  //   required String address,
+  //   required String city,
+  //   required String phone,
+  // }) async {
+  //   if (nik.length != 8) throw Exception('NIK harus tepat 8 karakter.');
+
+
+  //   final checkNik = await _supabase.from('profiles').select('id').eq('nik', nik).maybeSingle();
+  //   if (checkNik != null) throw Exception('NIK sudah terdaftar.');
+
+
+  //   try {
+  //     final response = await _supabase.auth.signUp(email: email, password: password);
+  //     if (response.user != null) {
+  //       final userId = response.user!.id;
+  //       await _supabase.from('profiles').insert({
+  //         'id': userId,
+  //         'email': email,
+  //         'nik': nik,
+  //         'role': 'vendor',
+  //         // 'status': 'pending',
+  //         'is_active': true,
+  //       });
+
+
+  //       await _supabase.from('profiles_vendor').insert({
+  //         'profile_id': userId,
+  //         'nama_perusahaan': companyName,
+  //         'alamat': address,
+  //         'city': city,
+  //         'phone': phone,
+  //         'status': 'pending',
+  //       });
+  //     }
+  //   } catch (e) {
+  //     throw Exception('Gagal registrasi vendor: $e');
+  //   }
+  // }
+
+// static Future<void> registerVendor({
+//     required String email,
+//     required String password,
+//     required String nik,
+//     // required String companyName,
+//     // required String address,
+//     // required String city,
+//     // required String phone,
+//     required String name,
+//   required String registCode,
+ 
+//   }) async {
+//     //if (nik.length != 8) throw Exception('NIK harus tepat 8 karakter.');
+
+
+//     // final checkNik = await _supabase.from('profiles').select('id').eq('nik', nik).maybeSingle();
+//     // if (checkNik != null) throw Exception('NIK sudah terdaftar.');
+
+
+//     try {
+      
+//        final inputCode = registCode.trim().toUpperCase();
+//        final existing = await _supabase
+//         .from('profiles')
+//         .select('id')
+//         .eq('email', email)
+//         .maybeSingle();
+
+
+//     if (existing != null) {
+//       throw Exception('Email sudah terdaftar');
+//     }
+
+
+     
+//       final vendor = await _supabase
+//         .from('master_vendor')
+//         .select('vendor_name')
+//         .eq('regist_code', inputCode)
+//         .maybeSingle();
+
+
+//     if (vendor == null) {
+//       throw Exception('Kode vendor tidak valid.');
+//     }
+//       // 2. SIGN UP AUTH
+//     final response = await _supabase.auth.signUp(
+//       email: email,
+//       password: password,
+//     );
+
+
+//     if (response.user == null) {
+//       throw Exception('Gagal membuat akun.');
+//     }
+
+
+//      // if (response.user != null) {
+//         final userId = response.user!.id;
+//         await _supabase.from('profiles').insert({
+//           'id': userId,
+//           'email': email,
+//           'nik': nik.toUpperCase(),
+//            'name': name,
+//           'role': 'vendor',
+//           'regist_code': inputCode,
+//           'status': 'pending',
+//           'is_active': true,
+//         });
+ 
+     
+//     } catch (e) {
+//       throw Exception('Gagal registrasi vendor: $e');
+//     }
+//   }
+
+// 2. REGISTER VENDOR (Dengan Validasi Master Vendor)
+  // Perhatian: Ini diletakkan di AuthService dan dipanggil dari UI Page Register
   static Future<void> registerVendor({
     required String email,
     required String password,
-    required String nik,
-    required String companyName,
-    required String address,
-    required String city,
-    required String phone,
+    required String name,
+    required String nikInput,
+    required String registCodeInput,
   }) async {
-    if (nik.length != 8) throw Exception('NIK harus tepat 8 karakter.');
-
-    final checkNik = await _supabase.from('profiles').select('id').eq('nik', nik).maybeSingle();
-    if (checkNik != null) throw Exception('NIK sudah terdaftar.');
-
     try {
-      final response = await _supabase.auth.signUp(email: email, password: password);
-      if (response.user != null) {
-        final userId = response.user!.id;
-        await _supabase.from('profiles').insert({
-          'id': userId,
+      // --- LANGKAH 1: Validasi ke Master Vendor ---
+      final vendorCheck = await _supabase
+          .from('master_vendor')
+          .select()
+          .eq('nik', nikInput)
+          .eq('regist_code', registCodeInput)
+          .maybeSingle();
+
+      if (vendorCheck == null) {
+        throw Exception("NIK atau Kode Registrasi tidak valid. Silakan hubungi admin.");
+      }
+
+      // --- LANGKAH 2: Sign Up Auth ---
+      final res = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'full_name': name,
+          'nik_vendor': nikInput,
+        },
+      );
+
+      if (res.user != null) {
+        // --- LANGKAH 3: Update Profile (Karena biasanya Trigger DB hanya insert dasar) ---
+      //   await _supabase.from('profiles').update({
+      //     'name': name,
+      //     'nik': nikInput, // NIK akun
+      //     'nik_vendor': nikInput, // FK ke master_vendor
+      //     'role': 'Vendor',
+      //     'status': 'active', // Atau 'pending' jika butuh approval lagi
+      //     'is_active': true,
+      //   }).eq('id', res.user!.id);
+      // }
+      await _supabase.from('profiles').upsert({
+          'id': res.user!.id,
           'email': email,
-          'nik': nik,
+          'name': name,
+          'nik_vendor': nikInput,
           'role': 'vendor',
-          // 'status': 'pending',
+          'status': 'pending', // Menunggu verifikasi admin
           'is_active': true,
         });
-
-        await _supabase.from('profiles_vendor').insert({
-          'profile_id': userId,
-          'nama_perusahaan': companyName,
-          'alamat': address,
-          'city': city,
-          'phone': phone,
-          'status': 'pending',
-        });
       }
+    } on AuthException catch (e) {
+      throw Exception(e.message);
     } catch (e) {
-      throw Exception('Gagal registrasi vendor: $e');
+      throw Exception(e.toString());
     }
   }
 
@@ -309,13 +575,14 @@ try {
   static Future<bool> isLoggedIn() async => _supabase.auth.currentSession != null;
   static Future<void> logout() async => await _supabase.auth.signOut();
 
+
   static Future<User?> getCurrentUser() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user != null) {
         final userData = await _supabase.from('profiles').select('''
               *,
-              profiles_vendor ( status ),
+              
               profile_privileges ( privileges ( name ) )
             ''').eq('id', user.id).single();
         return User.fromJson(userData);
@@ -326,11 +593,12 @@ try {
     }
   }
 
+
   static Future<List<Map<String, dynamic>>> getAvailablePrivileges() async {
     return await _supabase.from('privileges').select('id, name').order('id');
   }
-  
-  
+ 
+ 
   // Tambahkan di dalam class AuthService
 // static Future<List<Map<String, dynamic>>> getVendorEnrollments() async {
 //   try {
@@ -340,7 +608,7 @@ try {
 //         .select('*, profiles_vendor(*)')
 //         .eq('role', 'vendor')
 //         .order('created_at', ascending: false);
-    
+   
 //     return List<Map<String, dynamic>>.from(response);
 //   } catch (e) {
 //     throw Exception('Gagal mengambil data enrollment: $e');
@@ -348,20 +616,23 @@ try {
 // }
 
 
+
+
 static Future<List<Map<String, dynamic>>> getVendorEnrollments() async {
   try {
     // Kita melakukan join (*) dari profiles dan profiles_vendor
     final response = await _supabase
         .from('profiles')
-        .select('*, profiles_vendor(*)')
+        .select('*')
         .eq('role', 'vendor')
         .order('created_at', ascending: false);
-    
+   
     return List<Map<String, dynamic>>.from(response);
   } catch (e) {
     throw Exception('Gagal mengambil data: $e');
   }
 }
+
 
 // static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
 //   try {
@@ -371,27 +642,30 @@ static Future<List<Map<String, dynamic>>> getVendorEnrollments() async {
 //         .eq('role', 'vendor')
 //         .eq('status', 'pending') // Filter: Hanya tampilkan yang pending
 //         .order('created_at', ascending: false);
-    
+   
 //     return List<Map<String, dynamic>>.from(response);
 //   } catch (e) {
 //     throw Exception('Gagal mengambil data: $e');
 //   }
 // }
 
+
 static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
     try {
       // Kita memantau status yang ada di profiles_vendor
       final response = await _supabase
-          .from('profiles_vendor')
-          .select('*, profiles(*)')
-          .eq('status', 'pending') 
-          .order('profile_id', ascending: false);
-      
+          .from('profiles')
+          .select('*')
+          .eq('status', 'pending')
+          .order('id', ascending: false);
+     
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Gagal mengambil data: $e');
     }
   }
+
+
 
 
 // static Future<void> updateVendorStatus(String profileId, String status) async {
@@ -404,6 +678,7 @@ static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
 //     throw Exception('Gagal memperbarui status: $e');
 //   }
 // }
+
 
 // static Future<void> updateVendorStatus(String userId, String newStatus) async {
 //   try {
@@ -419,14 +694,16 @@ static Future<List<Map<String, dynamic>>> getPendingVendorEnrollments() async {
 //   }
 // }
 
+
 static Future<void> updateVendorStatus(String userId, String newStatus) async {
     try {
       // --- PERBAIKAN 3: Update tabel profiles_vendor, bukan profiles ---
      await Supabase.instance.client
-          .from('profiles_vendor')
+          .from('profiles')
           .update({'status': newStatus})
-          .eq('profile_id', userId);
+          .eq('id', userId);
           //.select();
+
 
       // Jika ditolak, kita nonaktifkan akunnya di tabel profiles
       if (newStatus == 'rejected') {
@@ -434,7 +711,7 @@ static Future<void> updateVendorStatus(String userId, String newStatus) async {
             .from('profiles')
             .update({'is_active': false})
             .eq('id', userId);
-      } 
+      }
       // Jika diverifikasi, kita pastikan akun aktif
       else if (newStatus == 'verified') {
         await _supabase
@@ -446,5 +723,27 @@ static Future<void> updateVendorStatus(String userId, String newStatus) async {
       throw Exception('Gagal memperbarui status: $e');
     }
   }
+
+// Di dalam file auth_service.dart atau service khusus shipping
+static Future<List<Map<String, dynamic>>> getVendorShippingRequests(String registCode) async {
+  final response = await _supabase
+      .from('shipping_request')
+      .select('*, shipping_request_details(*)')
+      .eq('vendor_id', registCode)
+      .order('date_created', ascending: false);
+  
+  return List<Map<String, dynamic>>.from(response);
 }
+
+static Future<void> updateShippingStatus(int id, String status) async {
+  await _supabase
+      .from('shipping_request')
+      .update({'status': status})
+      .eq('shipping_id', id);
+}  
+}
+
+
+
+
 

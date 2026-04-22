@@ -382,11 +382,11 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Master Warehouse'),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Master Warehouse'),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

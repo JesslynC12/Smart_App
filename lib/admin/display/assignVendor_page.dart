@@ -2,6 +2,8 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
+import 'package:project_app/dynamic_tab_page.dart';
 
 class AssignVendorPage extends StatefulWidget {
   final int shippingId;
@@ -14,6 +16,7 @@ class AssignVendorPage extends StatefulWidget {
 
 class _AssignVendorPageState extends State<AssignVendorPage> {
   final supabase = Supabase.instance.client;
+  StreamSubscription? _realtimeSubscription;
   bool _isLoading = true;
 
   List<Map<String, dynamic>> _recommendations = [];
@@ -32,107 +35,198 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
   void initState() {
     super.initState();
     _loadData();
+    _setupRealtime();
+  }
+
+  void _setupRealtime() {
+    // Memantau perubahan hanya pada baris data yang sedang dibuka
+    _realtimeSubscription = supabase
+        .from('shipping_request')
+        .stream(primaryKey: ['shipping_id'])
+        .eq('shipping_id', widget.shippingId)
+        .listen((data) {
+          // Jika ada perubahan di database (misal status berubah atau data diedit admin lain)
+          // panggil _loadData() untuk memperbarui kalkulasi NW/TNW dan rekomendasi vendor.
+          if (data.isNotEmpty) {
+            _loadData();
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat keluar halaman
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     try {
       setState(() => _isLoading = true);
 
-      // 1. Ambil group_id
-      final header = await supabase
-          .from('shipping_request')
-          .select('group_id')
-          .eq('shipping_id', widget.shippingId)
-          .single();
+      // // 1. Ambil group_id
+      // final header = await supabase
+      //     .from('shipping_request')
+      //     .select('group_id')
+      //     .eq('shipping_id', widget.shippingId)
+      //     .single();
 
-      final groupId = header['group_id'];
-      dynamic rawData;
-
-      // 2. Ambil data dengan Join lengkap
-      String queryStr = '''
-        *,
-        shipping_request_details(*),
-        delivery_order(
+// 1. Ambil data shipping utama
+    final response = await supabase
+        .from('shipping_request')
+        .select('''
           *,
-          customer(*),
-          do_details(
-            qty,
-            material:material_id (
-              material_id,
-              material_name,
-              net_weight
+          delivery_order(
+            *,
+            customer(*),
+            do_details(
+              qty,
+              material:material_id (material_id, material_name, net_weight)
             )
           )
-        )
-      ''';
+        ''')
+        .eq('shipping_id', widget.shippingId)
+        .single();
 
-      if (groupId != null) {
-        rawData = await supabase
-            .from('shipping_request')
-            .select(queryStr)
-            .eq('group_id', groupId)
-            .order('shipping_id');
-      } else {
-        rawData = await supabase
-            .from('shipping_request')
-            .select(queryStr)
-            .eq('shipping_id', widget.shippingId)
-            .single();
-      }
+      // final groupId = header['group_id'];
+      // dynamic rawData;
 
-      List<Map<String, dynamic>> shippingList = groupId != null
-          ? List<Map<String, dynamic>>.from(rawData)
-          : [rawData];
+      // // 2. Ambil data dengan Join lengkap
+      // String queryStr = '''
+      //   *,
+      //   delivery_order(
+      //     *,
+      //     customer(*),
+      //     do_details(
+      //       qty,
+      //       material:material_id (
+      //         material_id,
+      //         material_name,
+      //         net_weight
+      //       )
+      //     )
+      //   )
+      // ''';
 
-      List allDOs = [];
-      for (var ship in shippingList) {
-        allDOs.addAll(ship['delivery_order'] ?? []);
-      }
+      final groupId = response['group_id'];
+    List<Map<String, dynamic>> shippingList = [];
 
-      // 🔥 3. AMBIL STORAGE LOCATION (Titik Muat)
-    // Kita ambil dari baris pertama shipping_request_details
-    final detailsList = shippingList.first['shipping_request_details'] as List? ?? [];
-    String storageLoc = "";
-    if (detailsList.isNotEmpty) {
-      storageLoc = detailsList[0]['storage_location']?.toString().trim() ?? "";
+    // 2. Jika grup, ambil semua anggota grup
+    if (groupId != null) {
+      final groupData = await supabase
+          .from('shipping_request')
+          .select('''
+            *,
+            delivery_order(
+              *,
+              customer(*),
+              do_details(
+                qty,
+                material:material_id (material_id, material_name, net_weight)
+              )
+            )
+          ''')
+          .eq('group_id', groupId);
+      shippingList = List<Map<String, dynamic>>.from(groupData);
+    } else {
+      shippingList = [response];
     }
 
-      // 3. Hitung Kota Tujuan
+      // if (groupId != null) {
+      //   rawData = await supabase
+      //       .from('shipping_request')
+      //       .select(queryStr)
+      //       .eq('group_id', groupId)
+      //       .order('shipping_id');
+      // } else {
+      //   rawData = await supabase
+      //       .from('shipping_request')
+      //       .select(queryStr)
+      //       .eq('shipping_id', widget.shippingId)
+      //       .single();
+      // }
+
+      // List<Map<String, dynamic>> shippingList = groupId != null
+      //     ? List<Map<String, dynamic>>.from(rawData)
+      //     : [rawData];
+
+     // 3. Inisialisasi variabel perhitungan
+      List allDOs = [];
       List<String> cities = [];
-      for (var doItem in allDOs) {
-        var cust = doItem['customer'];
-        if (cust is Map<String, dynamic>) {
-          String city = cust['city']?.toString().trim() ?? "";
+      double sumQty = 0;
+      double sumNW = 0;
+
+      // 4. Loop data untuk mengumpulkan DO, Kota, dan Berat
+      for (var ship in shippingList) {
+        allDOs.addAll(ship['delivery_order'] ?? []);
+        
+        for (var doItem in ship['delivery_order'] ?? []) {
+          // Ambil Kota Tujuan
+          String city = doItem['customer']?['city']?.toString().trim() ?? "";
           if (city.isNotEmpty && !cities.contains(city)) {
             cities.add(city);
           }
+
+          // Hitung Berat (Logika tidak berubah)
+          for (var det in doItem['do_details'] ?? []) {
+            double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+            // Akses net_weight dari hasil join material
+            double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
+            
+            sumNW += (qty * unitWeight);
+            sumQty += qty;
+          }
         }
       }
+      
+
+      // 🔥 3. AMBIL STORAGE LOCATION (Titik Muat)
+    // Kita ambil dari baris pertama shipping_request_details
+    // final detailsList = shippingList.first['shipping_request_details'] as List? ?? [];
+    // String storageLoc = "";
+    // if (detailsList.isNotEmpty) {
+    //   storageLoc = detailsList[0]['storage_location']?.toString().trim() ?? "";
+    // }
+
+      // 3. Hitung Kota Tujuan
+      
+      // for (var doItem in allDOs) {
+      //   var cust = doItem['customer'];
+      //   if (cust is Map<String, dynamic>) {
+      //     String city = cust['city']?.toString().trim() ?? "";
+      //     if (city.isNotEmpty && !cities.contains(city)) {
+      //       cities.add(city);
+      //     }
+     
 
       // 🔥 4. OPTIMASI: HITUNG TOTALITAS SEKALI SAJA DI SINI
-      double sumQty = 0;
-      double sumNW = 0;
-      for (var doItem in allDOs) {
-        final details = doItem['do_details'] as List? ?? [];
-        for (var det in details) {
-          double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-          dynamic matSource = det['material'];
-          Map<String, dynamic>? materialMap;
-          if (matSource is List && matSource.isNotEmpty) {
-            materialMap = matSource.first as Map<String, dynamic>;
-          } else if (matSource is Map<String, dynamic>) {
-            materialMap = matSource;
-          }
-          double unitWeight = 0;
-          if (materialMap != null) {
-            var nw = materialMap['net_weight'];
-            unitWeight = nw is num ? nw.toDouble() : (double.tryParse(nw?.toString() ?? "0") ?? 0);
-          }
-          sumNW += (qty * unitWeight);
-          sumQty += qty;
-        }
-      }
+      // double sumQty = 0;
+      // double sumNW = 0;
+      // for (var doItem in allDOs) {
+      //   final details = doItem['do_details'] as List? ?? [];
+      //   for (var det in details) {
+      //     double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+      //     dynamic matSource = det['material'];
+      //     Map<String, dynamic>? materialMap;
+      //     if (matSource is List && matSource.isNotEmpty) {
+      //       materialMap = matSource.first as Map<String, dynamic>;
+      //     } else if (matSource is Map<String, dynamic>) {
+      //       materialMap = matSource;
+      //     }
+      //     double unitWeight = 0;
+      //     if (materialMap != null) {
+      //       var nw = materialMap['net_weight'];
+      //       unitWeight = nw is num ? nw.toDouble() : (double.tryParse(nw?.toString() ?? "0") ?? 0);
+      // //     }
+      // for (var det in doItem['do_details'] ?? []) {
+      //       double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+      //       double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
+      //     sumNW += (qty * unitWeight);
+      //     sumQty += qty;
+      //   }
+      // }
+      // }
 
+String storageLoc = shippingList.first['storage_location']?.toString().trim() ?? "";
       double tnwCalculated = sumNW / 1000;
       String unitRequired = _determineUnitByWeight(tnwCalculated);
 
@@ -156,12 +250,14 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
       setState(() {
         _shippingData = {
           'group_id': groupId,
+          'shipping_id': widget.shippingId,
+          'all_ids': shippingList.map((e) => e['shipping_id']).toList(), // Untuk proses insert assignments
           'so': shippingList.first['so'],
           'delivery_order': allDOs,
-          'shipping_request_details': shippingList.first['shipping_request_details'],
           'rdd': shippingList.first['rdd'],
           'stuffing_date': shippingList.first['stuffing_date'],
-          'shipping_id': widget.shippingId,
+          'storage_location': storageLoc,
+          'is_dedicated': shippingList.first['is_dedicated'],
         };
         targetCities = cities;
         _qtyTotal = sumQty;
@@ -187,17 +283,20 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text("Assign Transport Vendor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: _isLoading
+    return Material(
+      color: Colors.white,
+      // appBar: AppBar(
+      //   title: const Text("Assign Transport Vendor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      //   elevation: 0,
+      // ),
+      child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.red))
-          : SingleChildScrollView(
+          : Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -215,6 +314,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                         if (_recommendations.isEmpty) _emptyRecommendationBox(),
                       ],
                     ),
+                  
                   ),
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -227,9 +327,15 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                 ],
               ),
             ),
-      bottomNavigationBar: _isLoading
-          ? null
-          : Container(
+              ),  
+              _buildBottomAction(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildBottomAction() {
+    return Container(
               decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -2))]),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -241,11 +347,10 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, minimumSize: const Size(double.infinity, 52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: _selectedVendor == null ? null : _processToDatabase,
                       child: const Text("KONFIRMASI & ASSIGN VENDOR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
                   ),
-                ],
-              ),
-            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -253,8 +358,8 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
     final data = _shippingData ?? {};
     final bool isGroup = data['group_id'] != null;
     final List dos = data['delivery_order'] ?? [];
-    final List rawDetails = data['shipping_request_details'] ?? [];
-    final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
+    //final List rawDetails = data['shipping_request_details'] ?? [];
+    //final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
 
     return Container(
       decoration: BoxDecoration(
@@ -273,7 +378,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-                    _buildBadge(details['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                    _buildBadge(data['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -283,7 +388,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                   children: [
                     _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
-                    _infoBox("Dedicated", (details['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
                   ],
                 ),
               ],
@@ -489,7 +594,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                       const SizedBox(width: 4),
                       _miniBadge("Rank ${item['winner_rank']}", Colors.orange),
                       const SizedBox(width: 4),
-                      _miniBadge(p, Colors.green),
+                      _miniBadge("Alokasi: $p", Colors.green),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -561,59 +666,171 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
   void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
   String _formatDate(String? s) => s == null || s.isEmpty ? "-" : DateFormat('dd/MM/yy').format(DateTime.parse(s));
   //Future<void> _processToDatabase() async => _showSnackBar("Vendor ${_selectedVendor!['vendor_name']} dipilih!", Colors.green);
+
+// Future<void> _processToDatabase() async {
+//   if (_selectedVendor == null) return;
+
+//   try {
+//     setState(() => _isLoading = true);
+
+//     // 1. Ambil NIK (No Vendor) dari vendor yang dipilih
+//     final String? noVendor = _selectedVendor!['no_vendor'];
+
+//     if (noVendor == null || noVendor.isEmpty) {
+//       throw "Vendor ini tidak memiliki nomor vendor (NIK) yang valid.";
+//     }
+
+//     // 2. Cari UUID di tabel profiles yang NIK-nya cocok
+//     final vendorProfile = await supabase
+//         .from('profiles')
+//         .select('id')
+//         .eq('nik', noVendor)
+//         .maybeSingle();
+
+//     if (vendorProfile == null) {
+//       throw "Akun vendor dengan NIK $noVendor belum terdaftar di sistem.";
+//     }
+
+//     final String vendorUuid = vendorProfile['id'];
+
+//     // 3. Update Shipping Request (Single atau Group)
+//     final groupId = _shippingData!['group_id'];
+    
+//     if (groupId != null) {
+//       // Jika Group, update semua shipping yang memiliki group_id tersebut
+//       await supabase
+//           .from('shipping_request')
+//           .update({
+//             'assigned_vendor_id': vendorUuid,
+//             'status': 'vendor assigned', // Ubah status agar muncul di dashboard vendor
+//           })
+//           .eq('group_id', groupId);
+//     } else {
+//       // Jika Single, update berdasarkan shipping_id saja
+//       await supabase
+//           .from('shipping_request')
+//           .update({
+//             'assigned_vendor_id': vendorUuid,
+//             'status': 'vendor assigned',
+//           })
+//           .eq('shipping_id', widget.shippingId);
+//     }
+
+//     _showSnackBar("Berhasil! Request telah dikirim ke akun ${_selectedVendor!['vendor_name']}", Colors.green);
+    
+//     // Kembali ke halaman sebelumnya setelah sukses
+//     if (mounted) Navigator.pop(context, true);
+
+//   } catch (e) {
+//     _showSnackBar("Gagal Assign: $e", Colors.red);
+//   } finally {
+//     if (mounted) setState(() => _isLoading = false);
+//   }
+// }
+
 Future<void> _processToDatabase() async {
   if (_selectedVendor == null) return;
 
   try {
     setState(() => _isLoading = true);
 
-    // 1. Ambil NIK (No Vendor) dari vendor yang dipilih
-    final String? noVendor = _selectedVendor!['no_vendor'];
+    // // 1. Ambil regist_code dari vendor_transportasi
+    // final String? registCode = _selectedVendor!['regist_code'];
 
-    if (noVendor == null || noVendor.isEmpty) {
-      throw "Vendor ini tidak memiliki nomor vendor (NIK) yang valid.";
+    // if (registCode == null || registCode.isEmpty) {
+    //   throw "Vendor ini tidak memiliki kode vendor (regist_code) yang valid.";
+    // }
+    // 1. Gunakan NIK dari vendor_transportasi (sesuai tabel baru)
+    final String? nikVendor = _selectedVendor!['nik']; // Ambil NIK vendor
+
+    if (nikVendor == null || nikVendor.isEmpty) {
+      throw "Vendor ini tidak memiliki NIK yang valid di database.";
     }
 
-    // 2. Cari UUID di tabel profiles yang NIK-nya cocok
-    final vendorProfile = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('nik', noVendor)
-        .maybeSingle();
+//     final groupId = _shippingData!['group_id'];
+// final String vendorName = _selectedVendor!['vendor_name'] ?? "Vendor";
+//     // 2. Update shipping_request → assign ke VENDOR (bukan user)
+//     if (groupId != null) {
+//       await supabase
+//           .from('shipping_request')
+//           .update({
+//             'vendor_id': registCode, // ✅ INI YANG PALING PENTING
+//             'status': 'vendor assigned',
+//           })
+//           .eq('group_id', groupId);
+//     } else {
+//       await supabase
+//           .from('shipping_request')
+//           .update({
+//             'vendor_id': registCode, // ✅ INI YANG PALING PENTING
+//             'status': 'vendor assigned',
+//           })
+//           .eq('shipping_id', widget.shippingId);
+//     }
+// 2. Siapkan List ID yang akan di-assign (bisa single atau group)
+    final List<int> idsToAssign = List<int>.from(_shippingData!['all_ids']);
 
-    if (vendorProfile == null) {
-      throw "Akun vendor dengan NIK $noVendor belum terdaftar di sistem.";
+    // 3. JALANKAN TRANSACTIONAL LOGIC
+    // A. Masukkan data ke shipping_assignments
+    final List<Map<String, dynamic>> assignmentData = idsToAssign.map((sid) => {
+      'shipping_id': sid,
+      'nik': nikVendor,
+      'status_assignment': 'offered', // Status awal sesuai schema Anda
+      'assigned_at': DateTime.now().toIso8601String(),
+    }).toList();
+    await supabase.from('shipping_assignments').insert(assignmentData);
+// if (mounted) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(
+//           content: Text("Berhasil! Shipping di-assign ke vendor $vendorName"),
+//           backgroundColor: Colors.green,
+//           duration: const Duration(seconds: 1), // Pesan muncul sebentar
+//           // behavior: SnackBarBehavior.floating,
+//         ),
+//       );
+//     }
+
+    // _showSnackBar(
+    //   "Berhasil! Shipping di-assign ke vendor ${_selectedVendor!['vendor_name']}",
+    //   Colors.green,
+    // );
+
+    // if (mounted) Navigator.pop(context, true);
+    // await Future.delayed(const Duration(milliseconds: 500));
+
+    // if (mounted) {
+    //   // Menutup halaman detail/assign dan kembali ke halaman sebelumnya
+    //   // Parameter 'true' memberi tahu halaman asal untuk me-refresh data
+    //   Navigator.of(context).pop(true);
+    // }
+// B. Update status di shipping_request utama
+    await supabase
+        .from('shipping_request')
+        .update({'status': 'waiting vendor approval'}) // Status baru agar sinkron dengan 'offered'
+        .inFilter('shipping_id', idsToAssign);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Berhasil! Vendor ditugaskan."), backgroundColor: Colors.green),
+      );
     }
 
-    final String vendorUuid = vendorProfile['id'];
+    // --- PERBAIKAN DI SINI ---
+    await Future.delayed(const Duration(milliseconds: 500));
 
-    // 3. Update Shipping Request (Single atau Group)
-    final groupId = _shippingData!['group_id'];
-    
-    if (groupId != null) {
-      // Jika Group, update semua shipping yang memiliki group_id tersebut
-      await supabase
-          .from('shipping_request')
-          .update({
-            'assigned_vendor_id': vendorUuid,
-            'status': 'vendor assigned', // Ubah status agar muncul di dashboard vendor
-          })
-          .eq('group_id', groupId);
-    } else {
-      // Jika Single, update berdasarkan shipping_id saja
-      await supabase
-          .from('shipping_request')
-          .update({
-            'assigned_vendor_id': vendorUuid,
-            'status': 'vendor assigned',
-          })
-          .eq('shipping_id', widget.shippingId);
+    if (mounted) {
+      // 1. Ambil instance dari DynamicTabPage
+      final dynamicTab = DynamicTabPage.of(context);
+      
+      if (dynamicTab != null) {
+        // 2. Tutup tab saat ini secara otomatis
+        // Fungsi ini akan menghapus tab dari list dan pindah ke tab sebelumnya
+        dynamicTab.closeCurrentTab(); 
+      } else {
+        // Fallback jika dibuka via Navigator biasa
+        Navigator.of(context).pop(true);
+      }
     }
-
-    _showSnackBar("Berhasil! Request telah dikirim ke akun ${_selectedVendor!['vendor_name']}", Colors.green);
-    
-    // Kembali ke halaman sebelumnya setelah sukses
-    if (mounted) Navigator.pop(context, true);
 
   } catch (e) {
     _showSnackBar("Gagal Assign: $e", Colors.red);

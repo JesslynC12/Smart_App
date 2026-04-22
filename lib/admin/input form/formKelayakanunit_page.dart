@@ -30,7 +30,7 @@ class _VehicleControlFormState extends State<VehicleControlForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Vehicle Control Form')),
+      // appBar: AppBar(title: const Text('Vehicle Control Form')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12.0),
         child: Column(

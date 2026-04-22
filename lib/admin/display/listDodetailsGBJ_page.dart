@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-
+import 'dart:async';
 
 class DetailsDOGbjPage extends StatefulWidget {
   const DetailsDOGbjPage({super.key});
@@ -14,6 +14,7 @@ class DetailsDOGbjPage extends StatefulWidget {
 
 class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
   final supabase = Supabase.instance.client;
+  StreamSubscription? _realtimeSubscription;
   bool _isLoading = true;
   List<Map<String, dynamic>> _dataList = [];
 
@@ -25,12 +26,25 @@ class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
   // State input sementara
   String? _selectedSLoc;
   String? _selectedDedicated;
-
+String? _currentUserName; // Untuk menyimpan nama dari public.profiles
 
   @override
   void initState() {
     super.initState();
+    _fetchUserProfile();
     _fetchData();
+    _setupRealtime();
+  }
+
+  void _setupRealtime() {
+    // Memantau tabel shipping_request_details
+    // Jika ada data masuk ke tabel ini (dari proses List DO), halaman ini akan refresh otomatis
+    _realtimeSubscription = supabase
+        .from('shipping_request')
+        .stream(primaryKey: ['shipping_id']) // Sesuaikan dengan PK tabel Anda
+        .listen((_) {
+          _fetchData(); // Panggil fetch data setiap ada perubahan di DB
+        });
   }
 
 
@@ -102,29 +116,37 @@ Future<void> _fetchData() async {
         .select('''
             *,
             group_id,
-            shipping_request_details!inner(*),
-            vendor_delivery_request!left(id),
+            
             delivery_order(
               do_number,
               customer(customer_id,customer_name),
               do_details(qty, material_id, material(material_name))
             )
           ''')
-        .isFilter('vendor_delivery_request', null)
+        // .isFilter('vendor_delivery_request', null)
+         .eq('status', 'waiting GBJ')
         .not('status', 'eq', 'pending')
         .order('shipping_id', ascending: false);
 
-
+if (mounted) {
     setState(() {
       // PROSES GROUPING DI SINI
       _dataList = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
       _isLoading = false;
     });
+}
   } catch (e) {
+    if (mounted) setState(() => _isLoading = false);
+    debugPrint("Realtime Error: $e");
     // ... handle error
   }
 }
 
+@override
+  void dispose() {
+    _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat pindah halaman
+    super.dispose();
+  }
 
   // Future<void> _simpanDanPindahkan(int sid) async {
   //   if (_selectedSLoc == null || _selectedDedicated == null) {
@@ -218,64 +240,64 @@ Future<void> _fetchData() async {
 // }
 
 
-Future<void> _simpanDanPindahkan(Map<String, dynamic> item) async {
-  if (_selectedSLoc == null || _selectedDedicated == null) {
-    _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
-    return;
-  }
+// Future<void> _simpanDanPindahkan(Map<String, dynamic> item) async {
+//   if (_selectedSLoc == null || _selectedDedicated == null) {
+//     _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
+//     return;
+//   }
 
 
-  // Ambil semua ID (bisa satu atau banyak jika grup)
-  final List<int> idsToProcess = item['group_id'] != null
-      ? List<int>.from(item['grouped_ids'])
-      : [item['shipping_id'] as int];
+//   // Ambil semua ID (bisa satu atau banyak jika grup)
+//   final List<int> idsToProcess = item['group_id'] != null
+//       ? List<int>.from(item['grouped_ids'])
+//       : [item['shipping_id'] as int];
 
 
-  try {
-    setState(() => _isLoading = true);
+//   try {
+//     setState(() => _isLoading = true);
 
 
-    for (int sid in idsToProcess) {
-      // 1. Update Detail Logistik
-      await supabase.from('shipping_request_details').update({
-        'storage_location': _selectedSLoc,
-        'is_dedicated': _selectedDedicated,
-      }).eq('shipping_id', sid);
+//     for (int sid in idsToProcess) {
+//       // 1. Update Detail Logistik
+//       await supabase.from('shipping_request_details').update({
+//         'storage_location': _selectedSLoc,
+//         'is_dedicated': _selectedDedicated,
+//       }).eq('shipping_id', sid);
 
 
-      // 2. Update Status
-      await supabase.from('shipping_request').update({
-        'status': 'waiting vendor delivery request',
-      }).eq('shipping_id', sid);
+//       // 2. Update Status
+//       await supabase.from('shipping_request').update({
+//         'status': 'waiting assign vendor delivery',
+//       }).eq('shipping_id', sid);
 
 
-      // 3. Insert ke Vendor Request
-      await supabase.from('vendor_delivery_request').insert({
-        'shipping_id': sid,
-        'status': 'waiting approval',
-        'id_profile': supabase.auth.currentUser?.id,
-      });
-    }
+//       // // 3. Insert ke Vendor Request
+//       // await supabase.from('vendor_delivery_request').insert({
+//       //   'shipping_id': sid,
+//       //   'status': 'waiting approval',
+//       //   'id_profile': supabase.auth.currentUser?.id,
+//       // });
+//     }
 
 
-    _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
-    _expandedId = null;
-    await _fetchData();
-  } catch (e) {
-    // ... handle error
-  }
-}
+//     _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
+//     _expandedId = null;
+//     await _fetchData();
+//   } catch (e) {
+//     // ... handle error
+//   }
+// }
 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text("DO Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text("DO Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: _isLoading && _dataList.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _dataList.isEmpty
@@ -296,6 +318,27 @@ Future<void> _simpanDanPindahkan(Map<String, dynamic> item) async {
 
 
   }
+  Future<void> _fetchUserProfile() async {
+  try {
+    final user = supabase.auth.currentUser;
+    if (user != null) {
+      final data = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+      
+      setState(() {
+        _currentUserName = data['name'];
+      });
+    }
+  } catch (e) {
+    debugPrint("Error fetch profil: $e");
+    setState(() {
+      _currentUserName = "System GBJ"; // Fallback jika gagal
+    });
+  }
+}
  
   // 1. Tombol Cancel di Form Input (Perbaikan Casting)
 Widget _buildActionForm(Map<String, dynamic> item) {
@@ -388,7 +431,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                onPressed: () => _bulkAction(item, 'SAVE'),
+                onPressed: () => _processShippingRequest(item, 'SAVE'),
                 icon: const Icon(Icons.send_rounded, size: 18),
                 label: Text(
                   item['group_id'] != null
@@ -407,7 +450,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
 
 
 // 2. Fungsi Bulk Action (Optimasi Request)
-Future<void> _bulkAction(Map<String, dynamic> item, String actionType) async {
+Future<void> _processShippingRequest(Map<String, dynamic> item, String actionType) async {
   if (_selectedSLoc == null || _selectedDedicated == null) {
     _showSnackBar("Harap isi lokasi dan status", Colors.orange);
     return;
@@ -423,26 +466,33 @@ Future<void> _bulkAction(Map<String, dynamic> item, String actionType) async {
     setState(() => _isLoading = true);
    
     // 1. Update Detail Massal
-    await supabase.from('shipping_request_details').update({
-      'storage_location': _selectedSLoc,
-      'is_dedicated': _selectedDedicated,
-    }).inFilter('shipping_id', idsToProcess);
+    // await supabase.from('shipping_request_details').update({
+    //   'storage_location': _selectedSLoc,
+    //   'is_dedicated': _selectedDedicated,
+    // }).inFilter('shipping_id', idsToProcess);
 
 
-    // 2. Update Status Shipping Massal
+    // // 2. Update Status Shipping Massal
+    // await supabase.from('shipping_request').update({
+    //   'status': 'waiting assign vendor delivery'
+    // }).inFilter('shipping_id', idsToProcess);
     await supabase.from('shipping_request').update({
-      'status': 'waiting vendor delivery request'
-    }).inFilter('shipping_id', idsToProcess);
+        'storage_location': _selectedSLoc,
+        'is_dedicated': _selectedDedicated,
+        'status': 'waiting assign vendor delivery',
+        'createdDODetail_at': DateTime.now().toIso8601String(),
+        'createdDODetail_by': _currentUserName ?? 'Unknown Admin', // Sesuaikan dengan user login Anda
+      }).inFilter('shipping_id', idsToProcess);
 
 
-    // 3. Insert ke Vendor Request (Tetap loop karena insert beda baris)
-    final List<Map<String, dynamic>> inserts = idsToProcess.map((sid) => {
-      'shipping_id': sid,
-      'status': 'waiting approval',
-      'id_profile': supabase.auth.currentUser?.id,
-    }).toList();
+    // // 3. Insert ke Vendor Request (Tetap loop karena insert beda baris)
+    // final List<Map<String, dynamic>> inserts = idsToProcess.map((sid) => {
+    //   'shipping_id': sid,
+    //   'status': 'waiting approval',
+    //   'id_profile': supabase.auth.currentUser?.id,
+    // }).toList();
    
-    await supabase.from('vendor_delivery_request').insert(inserts);
+    // await supabase.from('vendor_delivery_request').insert(inserts);
    
     _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
     setState(() {
@@ -717,9 +767,9 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
 
     // 2. TAMBAHAN: HAPUS BARIS DI TABEL DETAILS
     // Ini yang akan membuat data hilang dari UI karena filter !inner
-    await supabase.from('shipping_request_details')
-        .delete()
-        .inFilter('shipping_id', idsToCancel);
+    // await supabase.from('shipping_request_details')
+    //     .delete()
+    //     .inFilter('shipping_id', idsToCancel);
 
     _showSnackBar("Berhasil membatalkan dan membersihkan data", Colors.grey.shade800);
     

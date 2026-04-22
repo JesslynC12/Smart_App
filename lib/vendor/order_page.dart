@@ -33,7 +33,7 @@ class _VendorOrdersPageState extends State<VendorOrdersPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Pesanan Saya")),
+      //appBar: AppBar(title: const Text("Pesanan Saya")),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _getVendorOrders(),
         builder: (context, snapshot) {

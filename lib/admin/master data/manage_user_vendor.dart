@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 class VendorManagementPage extends StatefulWidget {
   const VendorManagementPage({super.key});
+
 
   @override
   State<VendorManagementPage> createState() => _VendorManagementPageState();
@@ -12,6 +14,7 @@ class VendorManagementPage extends StatefulWidget {
 
 class _VendorManagementPageState extends State<VendorManagementPage> {
   final supabase = Supabase.instance.client;
+  StreamSubscription? _vendorSubscription;
 
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _namaPerusahaanController = TextEditingController();
@@ -27,7 +30,19 @@ class _VendorManagementPageState extends State<VendorManagementPage> {
   @override
   void initState() {
     super.initState();
+    _setupRealtimeSubscription();
     _fetchVendors();
+  }
+
+void _setupRealtimeSubscription() {
+    setState(() => _isLoading = true);
+    _vendorSubscription = supabase
+        .from('profiles_vendor')
+        .stream(primaryKey: ['id'])
+         .listen((_) {
+          _fetchVendors(); // Setiap ada insert/update/delete, ambil data terbaru
+        });
+          
   }
 
   @override
@@ -42,8 +57,8 @@ class _VendorManagementPageState extends State<VendorManagementPage> {
   }
 
   Future<void> _fetchVendors() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+    // if (!mounted) return;
+    // setState(() => _isLoading = true);
     try {
       // Mengambil data vendor yang terverifikasi beserta status is_active dari tabel profiles
       var query = supabase
@@ -148,11 +163,11 @@ class _VendorManagementPageState extends State<VendorManagementPage> {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Manajemen Vendor Terverifikasi"),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text("Manajemen Vendor Terverifikasi"),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

@@ -72,16 +72,7 @@ class _HomepageVendorState extends State<HomepageVendor> {
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: const Text('Vendor Portal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        // actions: [
-        //   IconButton(onPressed: _logout, icon: const Icon(Icons.logout_rounded)),
-        // ],
-      ),
-      drawer: _buildDrawer(primaryColor),
+      
       body: isLoading
           ? Center(child: CircularProgressIndicator(color: primaryColor))
           : RefreshIndicator(
@@ -132,7 +123,7 @@ class _HomepageVendorState extends State<HomepageVendor> {
           const Text('Selamat Datang, Vendor', style: TextStyle(color: Colors.white70, fontSize: 12)),
           const SizedBox(height: 4),
           Text(
-            currentUser?.nik ?? 'Loading ID...',
+            currentUser?.nikVendor ?? 'Loading ID...',
             style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),

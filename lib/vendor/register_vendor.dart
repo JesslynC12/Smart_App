@@ -12,56 +12,51 @@ class RegisterVendorPage extends StatefulWidget {
 
 class _RegisterVendorPageState extends State<RegisterVendorPage> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controllers
   final emailController = TextEditingController();
-  final nikController = TextEditingController(); // Sudah disesuaikan ke NIK
-  final companyNameController = TextEditingController();
-  final addressController = TextEditingController();
-  final cityController = TextEditingController();
-  final phoneController = TextEditingController();
+  final nikController = TextEditingController();
+  final nameController = TextEditingController();
+  final registCodeController = TextEditingController();
   final passwordController = TextEditingController();
   final passwordConfirmController = TextEditingController();
 
   bool isLoading = false;
   bool obscurePassword = true;
   bool obscurePasswordConfirm = true;
-  int currentStep = 0;
 
   @override
   void dispose() {
     emailController.dispose();
     nikController.dispose();
-    companyNameController.dispose();
-    addressController.dispose();
-    cityController.dispose();
-    phoneController.dispose();
+    nameController.dispose();
+    registCodeController.dispose();
     passwordController.dispose();
     passwordConfirmController.dispose();
     super.dispose();
   }
 
   // --- LOGIKA REGISTRASI ---
+  // Disesuaikan dengan AuthService: registerVendor(email, password, name, nikInput, registCodeInput)
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => isLoading = true);
 
     try {
       await AuthService.registerVendor(
         email: emailController.text.trim(),
-        nik: nikController.text.trim().toUpperCase(), // NIK otomatis Uppercase
         password: passwordController.text.trim(),
-        companyName: companyNameController.text.trim(),
-        address: addressController.text.trim(),
-        city: cityController.text.trim(),
-        phone: phoneController.text.trim(),
+        name: nameController.text.trim(),
+        nikInput: nikController.text.trim(),
+        registCodeInput: registCodeController.text.trim().toUpperCase(),
       );
 
       if (!mounted) return;
 
       _showSuccessDialog();
     } catch (e) {
+      // Menghilangkan prefix 'Exception: ' agar pesan lebih bersih di SnackBar
       _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -75,7 +70,8 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Pendaftaran Berhasil'),
-        content: const Text('Akun Anda telah didaftarkan. Silakan tunggu persetujuan admin untuk bisa login.'),
+        content: const Text(
+            'Akun Anda telah didaftarkan. Silakan cek email untuk verifikasi, lalu tunggu persetujuan admin untuk bisa login.'),
         actions: [
           TextButton(
             onPressed: () {
@@ -84,7 +80,8 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                 MaterialPageRoute(builder: (context) => const LoginPage()),
               );
             },
-            child: const Text('SAYA MENGERTI', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+            child: const Text('SAYA MENGERTI',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
           ),
         ],
       ),
@@ -93,7 +90,10 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700, behavior: SnackBarBehavior.floating),
+      SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -114,32 +114,81 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         child: Form(
           key: _formKey,
           child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 24),
-                _buildStepProgress(),
-                const SizedBox(height: 32),
-                
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: currentStep == 0 ? _buildAccountStep() : _buildCompanyStep(),
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 32),
+                    _customTextField(
+                      label: 'NIK Vendor (ID 8 Karakter)',
+                      controller: nikController,
+                      hint: 'Masukkan 8 karakter NIK',
+                      icon: Icons.badge_outlined,
+                      inputFormatters: [LengthLimitingTextInputFormatter(8)],
+                      validator: (v) =>
+                          v!.length != 8 ? 'NIK harus 8 karakter' : null,
+                    ),
+                    _customTextField(
+                      label: 'Nama Admin Vendor',
+                      controller: nameController,
+                      hint: 'Nama penanggung jawab',
+                      icon: Icons.person_outline,
+                      validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
+                    ),
+                    _customTextField(
+                      label: 'Registration Code',
+                      controller: registCodeController,
+                      hint: 'Masukkan kode registrasi dari Admin',
+                      icon: Icons.vpn_key_outlined,
+                      validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
+                    ),
+                    _customTextField(
+                      label: 'Email Perusahaan',
+                      controller: emailController,
+                      hint: 'email@perusahaan.com',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) =>
+                          !v!.contains('@') ? 'Email tidak valid' : null,
+                    ),
+                    _customTextField(
+                      label: 'Password',
+                      controller: passwordController,
+                      hint: 'Minimal 6 karakter',
+                      icon: Icons.lock_outline,
+                      isPassword: true,
+                      obscure: obscurePassword,
+                      onToggle: () =>
+                          setState(() => obscurePassword = !obscurePassword),
+                      validator: (v) =>
+                          v!.length < 6 ? 'Password minimal 6 karakter' : null,
+                    ),
+                    _customTextField(
+                      label: 'Konfirmasi Password',
+                      controller: passwordConfirmController,
+                      hint: 'Ulangi password',
+                      icon: Icons.lock_reset,
+                      isPassword: true,
+                      obscure: obscurePasswordConfirm,
+                      onToggle: () => setState(() =>
+                          obscurePasswordConfirm = !obscurePasswordConfirm),
+                      validator: (v) => v != passwordController.text
+                          ? 'Password tidak cocok'
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildRegisterButton(),
+                    const SizedBox(height: 16),
+                  ],
                 ),
-
-                const SizedBox(height: 24),
-                _buildNavigationButtons(),
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
         ),
       ),
     );
@@ -152,201 +201,45 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         const SizedBox(height: 16),
         Text(
           'Registrasi Vendor',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red.shade900),
+          style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.red.shade900),
         ),
-        const Text('Daftarkan perusahaan Anda ke sistem', style: TextStyle(color: Colors.grey)),
+        const Text('Lengkapi data untuk mendaftarkan akun',
+            style: TextStyle(color: Colors.grey)),
       ],
     );
   }
 
-  Widget _buildStepProgress() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _stepCircle(1, "Akun", currentStep >= 0),
-        _stepLine(currentStep >= 1),
-        _stepCircle(2, "Profil", currentStep >= 1),
-      ],
-    );
-  }
-
-  Widget _stepCircle(int step, String label, bool isActive) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: isActive ? Colors.red.shade700 : Colors.grey.shade300,
-          child: Text('$step', style: const TextStyle(color: Colors.white)),
+  Widget _buildRegisterButton() {
+    return SizedBox(
+      height: 55,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : _register,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red.shade700,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 2,
         ),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
-      ],
-    );
-  }
-
-  Widget _stepLine(bool isActive) => Container(width: 50, height: 2, color: isActive ? Colors.red.shade700 : Colors.grey.shade300, margin: const EdgeInsets.symmetric(horizontal: 8));
-
-  Widget _buildAccountStep() {
-    return Column(
-      key: const ValueKey(0),
-      children: [
-        
-        _customTextField(
-          label: 'NIK Vendor (ID 8 Karakter)',
-          controller: nikController,
-          hint: 'Contoh: VEND0001',
-          icon: Icons.badge_outlined,
-          inputFormatters: [LengthLimitingTextInputFormatter(8)],
-          validator: (v) => v!.length != 8 ? 'NIK harus 8 karakter' : null,
-        ),
-        _customTextField(
-          label: 'Email Perusahaan',
-          controller: emailController,
-          hint: 'email@perusahaan.com',
-          icon: Icons.email_outlined,
-          keyboardType: TextInputType.emailAddress,
-          validator: (v) => !v!.contains('@') ? 'Email tidak valid' : null,
-        ),
-        _customTextField(
-          label: 'Password',
-          controller: passwordController,
-          hint: 'Minimal 6 karakter',
-          icon: Icons.lock_outline,
-          isPassword: true,
-          obscure: obscurePassword,
-          onToggle: () => setState(() => obscurePassword = !obscurePassword),
-          validator: (v) => v!.length < 6 ? 'Password terlalu pendek' : null,
-        ),
-        _customTextField(
-          label: 'Konfirmasi Password',
-          controller: passwordConfirmController,
-          hint: 'Ulangi password',
-          icon: Icons.lock_reset,
-          isPassword: true,
-          obscure: obscurePasswordConfirm,
-          onToggle: () => setState(() => obscurePasswordConfirm = !obscurePasswordConfirm),
-          validator: (v) => v != passwordController.text ? 'Password tidak cocok' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCompanyStep() {
-    return Column(
-      key: const ValueKey(1),
-      children: [
-        _customTextField(
-          label: 'Nama Perusahaan',
-          controller: companyNameController,
-          hint: 'PT. Maju Bersama',
-          icon: Icons.business,
-          validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
-        ),
-        _customTextField(
-          label: 'Alamat Lengkap',
-          controller: addressController,
-          hint: 'Jalan',
-          icon: Icons.location_on_outlined,
-          validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
-        ),
-        _customTextField(
-          label: 'Kota',
-          controller: cityController,
-          hint: 'Jakarta Selatan',
-          icon: Icons.location_city,
-          validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
-        ),
-        _customTextField(
-          label: 'Nomor WhatsApp/Telepon',
-          controller: phoneController,
-          hint: '0812xxxxxxxx',
-          icon: Icons.phone_android,
-          keyboardType: TextInputType.phone,
-          validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
-        ),
-      ],
-    );
-  }
-Widget _buildNavigationButtons() {
-  return Column(
-    children: [
-      Row(
-  children: [
-    if (currentStep > 0)
-      Expanded(
-        child: SizedBox(
-          height: 55,
-          child: OutlinedButton(
-            onPressed: isLoading
-                ? null
-                : () => setState(() => currentStep = 0),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: Colors.red.shade700),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        child: isLoading
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              )
+            : const Text(
+                'DAFTAR SEKARANG',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
               ),
-            ),
-            child: Text(
-              'Kembali',
-              style: TextStyle(
-                color: Colors.red.shade700,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
       ),
-          if (currentStep > 0) const SizedBox(width: 12),
-
-          Expanded(
-            child: SizedBox(
-              height: 55,
-              child: ElevatedButton(
-                onPressed: isLoading
-                    ? null
-                    : () {
-                        if (currentStep == 0) {
-                          if (_formKey.currentState!.validate()) {
-                            setState(() => currentStep = 1);
-                          }
-                        } else {
-                          _register();
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 2,
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Text(
-                        currentStep == 0
-                            ? 'Lanjutkan'
-                            : 'Daftar Sekarang',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ],
-  );
-}
+    );
+  }
 
   Widget _customTextField({
     required String label,
@@ -373,9 +266,15 @@ Widget _buildNavigationButtons() {
           labelText: label,
           hintText: hint,
           prefixIcon: Icon(icon, color: Colors.red.shade700),
-          suffixIcon: isPassword ? IconButton(icon: Icon(obscure ? Icons.visibility_off : Icons.visibility), onPressed: onToggle) : null,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                  onPressed: onToggle)
+              : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade700, width: 2)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.red.shade700, width: 2)),
         ),
       ),
     );

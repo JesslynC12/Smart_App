@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/home_page.dart';
+//import 'package:project_app/admin/home_page.dart';
 import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/login.dart';
-import 'package:project_app/vendor/homepage_vendor.dart';
+// import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
 import 'package:project_app/vendor/rejectedpage_vendor.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -16,6 +16,9 @@ void main() async {
   await Supabase.initialize(
     url: 'https://izjiqeoydfyhvaqfgnlx.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6amlxZW95ZGZ5aHZhcWZnbmx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MzU2OTEsImV4cCI6MjA4NDQxMTY5MX0.5nxxKrzD_K2D9JvaADyMJcKpFEC5bLCb0_yvNXtAvKA',
+  realtimeClientOptions: const RealtimeClientOptions(
+    eventsPerSecond: 10,
+  ),
   );
   
   runApp(const MyApp());
@@ -49,8 +52,8 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginPage(),
         '/register-vendor': (context) => const RegisterVendorPage(),
-        '/home-admin': (context) => const DynamicTabPage(),
-        '/home-vendor': (context) => const HomepageVendor(),
+        '/home-admin': (context) => const DynamicTabPage(role: 'admin'),
+        '/home-vendor': (context) => const DynamicTabPage(role: 'vendor')
       },
     );
   }
@@ -76,7 +79,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     
     // Ambil data user lengkap (termasuk role & status)
     final user = await AuthService.getCurrentUser();
-    await Future.delayed(const Duration(seconds: 1));
+    // await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
 
     if (user != null) {
@@ -94,11 +97,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
             .eq('profile_id', user.id)
             .single();
 
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (context) => RejectedVendorPage(vendorData: rawVendorData),
-          ),
+            builder: (context) => RejectedVendorPage(vendorData: rawVendorData)),
+            (route) => false,
+          
         );
       } else {
           // Jika vendor belum di-approve, paksa logout atau arahkan ke login dengan pesan
@@ -126,7 +130,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
   //     SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
   //   );
   // }
+
+  void _navigateTo(String routeName) {
+    if (mounted) {
+      Navigator.pushReplacementNamed(context, routeName);
+    }
+  }
+  
   void _navigateToLoginWithMsg(String msg) {
+    if (!mounted) return;
     // Pindah dulu
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     
@@ -138,6 +150,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
             content: Text(msg), 
             backgroundColor: Colors.orange.shade800,
             behavior: SnackBarBehavior.floating, // Lebih modern
+            margin: const EdgeInsets.all(20),
           ),
         );
       }
@@ -146,8 +159,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
+    return Material(
+     
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -162,7 +175,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
             ),
           ],
         ),
-      ),
+      
     );
   }
 }

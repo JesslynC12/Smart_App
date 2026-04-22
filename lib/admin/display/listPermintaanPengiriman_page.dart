@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/display/pemilihanVendor_page.dart';
+import 'package:project_app/admin/display/assignVendor_page.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 class VendorRequestPage extends StatefulWidget {
   const VendorRequestPage({super.key});
@@ -12,6 +14,7 @@ class VendorRequestPage extends StatefulWidget {
 
 class _VendorRequestPageState extends State<VendorRequestPage> {
   final supabase = Supabase.instance.client;
+  StreamSubscription? _realtimeSubscription;
   bool _isLoading = false;
   List<Map<String, dynamic>> _dataList = [];
 
@@ -24,6 +27,26 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
   void initState() {
     super.initState();
     _fetchVendorTargetData();
+    _setupRealtime();
+  }
+
+  void _setupRealtime() {
+    // Kita memantau perubahan pada tabel shipping_request
+    // Karena halaman ini memfilter status 'waiting vendor delivery request'
+    _realtimeSubscription = supabase
+        .from('shipping_request')
+        .stream(primaryKey: ['shipping_id'])
+        .listen((_) {
+          // Setiap ada data masuk (Insert) atau berubah (Update) di DB,
+          // kita panggil fungsi fetch untuk memperbarui UI secara otomatis.
+          _fetchVendorTargetData(); 
+        });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat pindah halaman
+    super.dispose();
   }
 
   Future<void> _fetchVendorTargetData() async {
@@ -33,19 +56,15 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
       var query = supabase.from('shipping_request').select('''
             *,
             so,
-            shipping_request_details!inner(
-              storage_location,
-              is_dedicated
-            ),
             delivery_order(
               do_number,
               customer(customer_id, customer_name),
               do_details(qty, material(material_id, material_name))
             )
-          ''').eq('status', 'waiting vendor delivery request');
-
+          ''').eq('status', 'waiting assign vendor delivery');
+// .filter('vendor_id', 'is', null);
       if (_selectedFilterLoc != "SEMUA") {
-        query = query.eq('shipping_request_details.storage_location', _selectedFilterLoc.toLowerCase());
+        query = query.eq('storage_location', _selectedFilterLoc.toLowerCase());
       }
 
       if (_selectedDateRange != null) {
@@ -57,14 +76,17 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
       }
 
       final response = await query.order('shipping_id', ascending: false);
-      
+      if (mounted) {
       setState(() {
         _dataList = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
         _isLoading = false;
       });
+      }
     } catch (e) {
+      if (mounted) {
       setState(() => _isLoading = false);
       _showSnackBar("Error: $e", Colors.red);
+      }
     }
   }
 
@@ -108,14 +130,14 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text("Permintaan Vendor Tracking", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
+    return Material(
+      color: Colors.grey[100],
+      // appBar: AppBar(
+      //   title: const Text("Permintaan Vendor Tracking", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
+      child: Column(
         children: [
           _buildFilterBar(),
           Expanded(
@@ -288,8 +310,8 @@ Widget _buildFilterBar() {
     final List dos = item['delivery_order'] ?? [];
     
     // Perbaikan akses detail (Menangani List dari inner join)
-    final List rawDetails = item['shipping_request_details'] ?? [];
-    final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
+    // final List rawDetails = item['shipping_request_details'] ?? [];
+    // final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
 
     return Card(
       elevation: 2,
@@ -314,7 +336,7 @@ Widget _buildFilterBar() {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 const Spacer(),
-                _buildBadge(details['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                _buildBadge(item['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
               ],
             ),
           ),
@@ -331,13 +353,13 @@ Widget _buildFilterBar() {
                     const SizedBox(width: 20),
                     _infoText("🚛 Stuffing:", _formatDate(item['stuffing_date'],)),
                      const SizedBox(width: 20),
-                      _infoText("🛠️ Status:", details['is_dedicated']?.toString().toUpperCase() ?? "-"),
+                      _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
 const Divider(height: 40),
                   ],
                   
                 ),
                 // const SizedBox(height: 4),
-                // _infoText("🛠️ Status:", details['is_dedicated']?.toString().toUpperCase() ?? "-"),
+                // _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
                 // const Divider(height: 20),
 
                 // List Table per DO
@@ -426,13 +448,37 @@ const Divider(height: 40),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
                onPressed: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AssignVendorPage(shippingId: item['shipping_id']),
-        ),
-      );
-    },
+    //   Navigator.push(
+    //     context,
+    //     MaterialPageRoute(
+    //       builder: (context) => AssignVendorPage(shippingId: item['shipping_id']),
+    //     ),
+    //   );
+    // },
+  //  final String shipId = item['shipping_id'].toString();
+              
+  //             DynamicTabPage.of(context)?.openTab(
+  //               "Assign Vendor Shipping #$shipId", 
+  //               AssignVendorPage(shippingId: item['shipping_id']),
+  //             );
+  //           },
+  final groupId = item['group_id'];
+  final shipId = item['shipping_id'];
+  
+  // 2. Tentukan Judul Tab secara dinamis
+  String tabTitle;
+  if (groupId != null) {
+    tabTitle = "Assign Vendor Grup #$groupId";
+  } else {
+    tabTitle = "Assign Vendor Shipping #$shipId";
+  }
+
+  // 3. Panggil DynamicTab untuk membuka halaman di dalam bingkai
+  DynamicTabPage.of(context)?.openTab(
+    tabTitle, 
+    AssignVendorPage(shippingId: shipId), // ID yang dikirim tetap shippingId utama
+  );
+},
               icon: const Icon(Icons.send, color: Colors.white, size: 18),
               label: Text(
                 // isGroup ? "PROSES GRUP (${(item['grouped_ids'] as List).length} DATA)" : 
@@ -445,6 +491,7 @@ const Divider(height: 40),
       ),
     );
   }
+
 
   // --- UI Helpers ---
   Widget _infoText(String label, String value) {

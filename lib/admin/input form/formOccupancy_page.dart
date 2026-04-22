@@ -148,11 +148,11 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Input Occupancy"),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text("Input Occupancy"),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: _isLoading && _warehouseList.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : Form(

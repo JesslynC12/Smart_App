@@ -3,6 +3,7 @@ import 'package:project_app/admin/home_page.dart';
 import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
@@ -83,17 +84,19 @@ class _LoginPageState extends State<LoginPage> {
   void _navigateBasedOnRole(User user) {
     if (user.role == 'vendor') {
       if (user.status == 'verified') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomepageVendor()),
-        );
+        // Navigator.of(context).pushReplacement(
+        //   MaterialPageRoute(builder: (_) => const HomepageVendor()),
+        // );
+        Navigator.pushReplacementNamed(context, '/home-vendor');
       } else {
         _showErrorSnackBar('Akun vendor Anda sedang dalam proses verifikasi.');
       }
     } else {
       // Role Admin (PPIC, Logistic, dll)
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
-      );
+      // Navigator.of(context).pushReplacement(
+      //   MaterialPageRoute(builder: (_) => const HomePage()),
+      // );
+      Navigator.pushReplacementNamed(context, '/home-admin');
     }
   }
 

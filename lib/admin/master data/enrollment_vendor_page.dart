@@ -14,6 +14,12 @@ class _VendorEnrollmentPageState extends State<VendorEnrollmentPage> {
 
 final TextEditingController _reasonController = TextEditingController();
 
+@override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+  
   Future<void> _handleAction(String id, String name, String status) async {
     String? rejectReason;
   //   final actionText = status == 'verified' ? 'Memverifikasi' : 'Menolak';
@@ -132,13 +138,13 @@ final TextEditingController _reasonController = TextEditingController();
   try {
     Map<String, dynamic> updateData = {'status': status};
     if (status == 'rejected') {
-      updateData['notes'] = rejectReason; // Simpan alasan ke kolom notes
+      updateData['reject_reason'] = rejectReason; // Simpan alasan ke kolom notes
     }
 
     await _supabase
-        .from('profiles_vendor')
+        .from('profiles')
         .update(updateData)
-        .eq('profile_id', id);
+        .eq('id', id);
 
     // Jika status rejected, panggil fungsi di AuthService untuk nonaktifkan profile
     if (status == 'rejected' || status == 'verified') {
@@ -166,24 +172,23 @@ final TextEditingController _reasonController = TextEditingController();
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Vendor Enrollment', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Vendor Enrollment', style: TextStyle(fontWeight: FontWeight.bold)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         // Stream memantau tabel profiles dengan filter status pending
         stream: _supabase
-            // .from('profiles')
-            // .stream(primaryKey: ['id'])
-            // //.eq('role', 'vendor')
-            // .eq('status', 'pending')
-            // .order('created_at', ascending: false),
+            .from('profiles')
+            .stream(primaryKey: ['id'])
+            .eq('role', 'vendor')
+            .order('created_at', ascending: false),
 
-            .from('profiles_vendor') // Stream ke tabel yang punya kolom 'status'
-      .stream(primaryKey: ['profile_id'])
-      .eq('status', 'pending')
-      .order('nama_perusahaan', ascending: true),
+      //       .from('profiles') // Stream ke tabel yang punya kolom 'status'
+      // .stream(primaryKey: ['id'])
+      // .eq('status', 'pending')
+      // .order('nama_perusahaan', ascending: true),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -193,39 +198,64 @@ final TextEditingController _reasonController = TextEditingController();
             return const Center(child: Text('Belum ada pendaftaran vendor baru.'));
           }
 
-          final vendors = snapshot.data!;
+final vendors = snapshot.data!
+              .where((data) => data['status'] == 'pending')
+              .toList();
+
+          // Jika setelah difilter hasilnya kosong, tampilkan pesan kosong
+          if (vendors.isEmpty) {
+            return const Center(child: Text('Semua pendaftaran telah diproses.'));
+          }
+
+          //final vendors = snapshot.data!;
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: vendors.length,
             itemBuilder: (context, index) {
               final vendorProfile = vendors[index];
-              final String vendorId = vendorProfile['profile_id'];
+              final String vendorId = vendorProfile['id'];
 final String currentStatus = vendorProfile['status'] ?? 'pending';
-              return FutureBuilder<Map<String, dynamic>?>(
-                key: ValueKey(vendorId),
+final String registCode = vendorProfile['regist_code'] ?? '';
+              final String nameUser = vendorProfile['name'] ?? '-';
+              final String nik = vendorProfile['nik'] ?? '-';
+              final String email = vendorProfile['email'] ?? '-';
+                return FutureBuilder<Map<String, dynamic>?>(
+                  key: ValueKey(vendorId),
                 future: _supabase
-                    // .from('profiles_vendor')
-                    // .select()
-                    // .eq('profile_id', vendorId)
-                    // .maybeSingle(),
-                    .from('profiles')
-              .select()
-              .eq('id', vendorId)
-              .maybeSingle(),
-                builder: (context, detailSnapshot) {
-                  final String namaPT = vendorProfile['nama_perusahaan'] ?? 'Nama Tidak Ada';
-      final String alamat = vendorProfile['alamat'] ?? '-';
-      final String phone = vendorProfile['phone'] ?? '-';
+                    .from('master_vendor')
+                    .select('vendor_name')
+                    .eq('regist_code', registCode)
+                    .maybeSingle(),
+                builder: (context, masterSnapshot) {
+                  if (masterSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Card(child: Padding(padding: EdgeInsets.all(20), child: LinearProgressIndicator()));
+                  }
+                  final String vendorName = masterSnapshot.data?['vendor_name'] ?? 'Loading...';
+      //           key: ValueKey(vendorId),
+      //           future: _supabase
+      //               // .from('profiles_vendor')
+      //               // .select()
+      //               // .eq('profile_id', vendorId)
+      //               // .maybeSingle(),
+      //               .from('profiles')
+      //         .select()
+      //         .eq('id', vendorId)
+      //         .maybeSingle(),
+      //           builder: (context, detailSnapshot) {
+      //             final String namaPT = vendorProfile['nama_perusahaan'] ?? 'Nama Tidak Ada';
+      // final String alamat = vendorProfile['alamat'] ?? '-';
+      // final String phone = vendorProfile['phone'] ?? '-';
 
-      // 2. Ambil data dari tabel profiles (Future Snapshot)
-      final profile = detailSnapshot.data;
-      final String nik = profile?['nik'] ?? '-';
-      final String email = profile?['email'] ?? '-';
+      // // 2. Ambil data dari tabel profiles (Future Snapshot)
+      // final profile = detailSnapshot.data;
+      // final String nik = profile?['nik'] ?? '-';
+      // final String email = profile?['email'] ?? '-';
 
-      if (detailSnapshot.connectionState == ConnectionState.waiting) {
-        return const Card(child: Padding(padding: EdgeInsets.all(20), child: LinearProgressIndicator()));
-      }
+      // if (detailSnapshot.connectionState == ConnectionState.waiting) {
+      //   return const Card(child: Padding(padding: EdgeInsets.all(20), child: LinearProgressIndicator()));
+      // }
+    
                   // final detail = detailSnapshot.data;
                   // final String namaPT = detail?['nama_perusahaan'] ?? 
                   //                      (detailSnapshot.connectionState == ConnectionState.waiting ? 'Loading...' : 'Nama Tidak Ada');
@@ -244,7 +274,7 @@ final String currentStatus = vendorProfile['status'] ?? 'pending';
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
-                                child: Text(namaPT, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red)),
+                                child: Text(vendorName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red)),
                               ),
                               // _buildStatusChip('pending'),
                               _buildStatusChip(currentStatus),
@@ -258,18 +288,20 @@ final String currentStatus = vendorProfile['status'] ?? 'pending';
                           // _rowDetail(Icons.location_on, "Alamat", vendorProfile['alamat'] ?? '-'),
                           // _rowDetail(Icons.phone, "No. Telp", vendorProfile['phone'] ?? '-'),
                           const Divider(),
+              _rowDetail(Icons.badge, "Nama Pendaftar", nameUser), 
               _rowDetail(Icons.badge, "NIK", nik), // Pakai variabel nik hasil fetch
-              _rowDetail(Icons.email, "Email", email), // Pakai variabel email hasil fetch
-              const SizedBox(height: 8),
-              const Text("Detail Perusahaan:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
-              _rowDetail(Icons.location_on, "Alamat", alamat),
-              _rowDetail(Icons.phone, "No. Telp", phone),
+              _rowDetail(Icons.email, "Email", email),
+              _rowDetail(Icons.vpn_key, "Regist Code", registCode), // Pakai variabel email hasil fetch
+              //const SizedBox(height: 8),
+              //const Text("Detail Perusahaan:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+              // _rowDetail(Icons.location_on, "Alamat", alamat),
+              // _rowDetail(Icons.phone, "No. Telp", phone),
                           const SizedBox(height: 16),
                           Row(
                             children: [
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: () => _handleAction(vendorId, namaPT, 'rejected'),
+                                  onPressed: () => _handleAction(vendorId, vendorName, 'rejected'),
                                   icon: const Icon(Icons.close, size: 18),
                                   label: const Text("REJECT"),
                                   style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade700),
@@ -278,7 +310,7 @@ final String currentStatus = vendorProfile['status'] ?? 'pending';
                               const SizedBox(width: 12),
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: () => _handleAction(vendorId, namaPT, 'verified'),
+                                  onPressed: () => _handleAction(vendorId, vendorName, 'verified'),
                                   icon: const Icon(Icons.check, size: 18),
                                   label: const Text("VERIFY"),
                                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),

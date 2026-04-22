@@ -197,7 +197,7 @@ final Map<String, List<String>> roleTemplates = {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Manajemen User"), backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+      //appBar: AppBar(title: const Text("Manajemen User"), backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.red.shade700,
         onPressed: () => _showAddUserDialog(),

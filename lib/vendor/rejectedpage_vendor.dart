@@ -52,7 +52,7 @@ class _RejectedVendorPageState extends State<RejectedVendorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Pendaftaran Ditolak"), backgroundColor: Colors.red),
+      //appBar: AppBar(title: const Text("Pendaftaran Ditolak"), backgroundColor: Colors.red),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(

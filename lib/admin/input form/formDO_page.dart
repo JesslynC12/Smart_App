@@ -406,12 +406,12 @@ void _showErrorDialog(String message) {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Input DO', 
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Input DO', 
+      //       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -848,7 +848,7 @@ try {
             'rdd': _tanggalRDD?.toIso8601String(),
             'so': _soNumberController.text,
             'status': 'waiting approval', // Sesuai ENUM
-            'created_by': userDisplayName ?? 'Unknown', // Diambil dari profiles.name
+            'createdDO_by': userDisplayName ?? 'Unknown', // Diambil dari profiles.name
       // 'lokasi': userLokasi ?? 'Unknown',
           })
           .select()

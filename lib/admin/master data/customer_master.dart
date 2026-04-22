@@ -546,11 +546,11 @@ Future<void> _exportCustomerToExcel() async {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Master Customer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Master Customer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      //   backgroundColor: Colors.red.shade700,
+      //   foregroundColor: Colors.white,
+      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
