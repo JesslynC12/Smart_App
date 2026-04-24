@@ -60,8 +60,14 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
               do_number,
               customer(customer_id, customer_name),
               do_details(qty, material(material_id, material_name))
-            )
-          ''').eq('status', 'waiting assign vendor delivery');
+            ),
+            shipping_assignments(
+            status_assignment,
+            responded_at,
+            master_vendor(vendor_name)
+          )
+          ''').eq('status', 'waiting assign vendor delivery')
+          .eq('shipping_assignments.status_assignment', 'rejected'); // Ambil yang pernah direject
 // .filter('vendor_id', 'is', null);
       if (_selectedFilterLoc != "SEMUA") {
         query = query.eq('storage_location', _selectedFilterLoc.toLowerCase());
@@ -78,8 +84,45 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
       final response = await query.order('shipping_id', ascending: false);
       if (mounted) {
       setState(() {
-        _dataList = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
-        _isLoading = false;
+      //   _dataList = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
+      //   _isLoading = false;
+      // });
+      // }
+      // 1. Jalankan grouping data Anda seperti biasa
+    List<Map<String, dynamic>> rawGrouped = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
+
+    // 2. Loop setiap Card (baik grup maupun single) untuk membersihkan duplikasi vendor
+    for (var item in rawGrouped) {
+      Map<String, Map<String, dynamic>> uniqueRejects = {};
+      
+      // Ambil data dari key 'reject_history' (sesuai alias di query .select)
+      //final List rejects = item['shipping_assignments'] as List? ?? [];
+      
+      // Ambil ID yang ada di dalam grup ini (jika single, maka hanya contains dirinya sendiri)
+      List<int> groupShipIds = item['group_id'] != null 
+          ? List<int>.from(item['grouped_ids']) 
+          : [item['shipping_id']];
+
+          // 3. Cari di data asli (response) semua riwayat reject untuk ID-ID tersebut
+      for (var originalRow in (response as List)) {
+        if (groupShipIds.contains(originalRow['shipping_id'])) {
+          final List rejects = originalRow['shipping_assignments'] as List? ?? [];
+
+      for (var r in rejects) {
+        if (r['status_assignment'] == 'rejected') {
+          // Gunakan nama vendor sebagai KEY agar otomatis menimpa jika namanya sama (menjadi unik)
+          String vName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          uniqueRejects[vName] = r;
+        }
+      }
+        }
+      }
+      // Simpan list yang sudah unik ke dalam key baru 'unique_reject_list'
+      item['unique_reject_list'] = uniqueRejects.values.toList();
+    }
+
+    _dataList = rawGrouped;
+    _isLoading = false;
       });
       }
     } catch (e) {
@@ -312,7 +355,8 @@ Widget _buildFilterBar() {
     // Perbaikan akses detail (Menangani List dari inner join)
     // final List rawDetails = item['shipping_request_details'] ?? [];
     // final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
-
+//final List rejectHistory = item['shipping_assignments'] ?? [];
+final List rejectHistory = item['unique_reject_list'] ?? [];
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
@@ -361,7 +405,47 @@ const Divider(height: 40),
                 // const SizedBox(height: 4),
                 // _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
                 // const Divider(height: 20),
-
+// // --- BAGIAN RIWAYAT REJECT ---
+//               if (rejectHistory.isNotEmpty) ...[
+//                 const SizedBox(height: 12),
+//                 Container(
+//                   padding: const EdgeInsets.all(8),
+//                   width: double.infinity,
+//                   decoration: BoxDecoration(
+//                     color: Colors.orange.shade50,
+//                     borderRadius: BorderRadius.circular(8),
+//                     border: Border.all(color: Colors.orange.shade200),
+//                   ),
+//                   child: Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       Row(
+//                         children: [
+//                           Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
+//                           const SizedBox(width: 4),
+//                           Text("Direject Oleh:", 
+//                             style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+//                         ],
+//                       ),
+//                       const SizedBox(height: 4),
+//                       // Loop vendor yang reject
+//                       ...rejectHistory.map((rej) {
+//                         String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+//                         //String reason = rej['reason_rejected'] ?? "Tanpa alasan";
+//                         return Padding(
+//                           padding: const EdgeInsets.only(bottom: 2),
+//                           child: Text(
+//                             "• $vendorName",
+//                             style: const TextStyle(fontSize: 10, color: Colors.black87),
+//                           ),
+//                         );
+//                       }).toList(),
+//                     ],
+//                   ),
+//                 ),
+//               ],
+              
+//               const Divider(height: 30),
                 // List Table per DO
                 ...dos.map((doItem) {
                   final List doDetails = doItem['do_details'] ?? [];
@@ -424,19 +508,53 @@ const Divider(height: 40),
                               _tablePadding(det['qty']?.toString() ?? "0", isBold: true, align: TextAlign.right),
                             ],
                           )).toList(),
-                        ),
-                      ],
-                   
-       
-    ),
-    
-                  );
-                
-
-                }).toList(),
+                        ),]
+                        ,
+                  ),
+                );
+              }).toList(),
+                        // --- BAGIAN RIWAYAT REJECT (Diletakkan di bawah material) ---
+                        if (rejectHistory.isNotEmpty) ...[
+                          const Divider(height: 1, thickness: 1),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.yellow.shade200,
+                              borderRadius: const BorderRadius.only(
+                                bottomLeft: Radius.circular(8),
+                                bottomRight: Radius.circular(8),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
+                                    const SizedBox(width: 4),
+                                    Text("Direject Oleh:", 
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                ...rejectHistory.map((rej) {
+                                  String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 2),
+                                    child: Text(
+                                      "• $vendorName",
+                                      style: const TextStyle(fontSize: 10, color: Colors.black87),
+                                    ),
+                                  );
+                                }).toList(),
+                             ],
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
+        ),
 
           // Tombol Proses
           Padding(

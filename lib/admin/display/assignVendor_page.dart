@@ -82,6 +82,11 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
               qty,
               material:material_id (material_id, material_name, net_weight)
             )
+          ),
+          shipping_assignments(
+            status_assignment,
+            responded_at,
+            master_vendor(vendor_name)
           )
         ''')
         .eq('shipping_id', widget.shippingId)
@@ -123,13 +128,46 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
                 qty,
                 material:material_id (material_id, material_name, net_weight)
               )
-            )
+            ),
+            shipping_assignments(
+            status_assignment,
+            responded_at,
+            master_vendor(vendor_name)
+          )
           ''')
           .eq('group_id', groupId);
       shippingList = List<Map<String, dynamic>>.from(groupData);
     } else {
       shippingList = [response];
     }
+
+    // // --- Ambil Riwayat Reject Unik dari seluruh grup ---
+    // List<Map<String, dynamic>> combinedRejectHistory = [];
+    // for (var ship in shippingList) {
+    //   final rejects = ship['shipping_assignments'] as List? ?? [];
+    //   for (var r in rejects) {
+    //     if (r['status_assignment'] == 'rejected') {
+    //       combinedRejectHistory.add(r);
+    //     }
+    //   }
+    // }
+    // --- Ambil Riwayat Reject Unik dari seluruh grup ---
+    // Gunakan Map untuk memastikan vendor_name bersifat unik
+    Map<String, Map<String, dynamic>> uniqueRejects = {};
+    
+    for (var ship in shippingList) {
+      final rejects = ship['shipping_assignments'] as List? ?? [];
+      for (var r in rejects) {
+        if (r['status_assignment'] == 'rejected') {
+          String vendorName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          // Masukkan ke Map, jika nama sama maka akan tertimpa (menjadi unik)
+          uniqueRejects[vendorName] = r;
+        }
+      }
+    }
+
+    // Ubah kembali menjadi List untuk disimpan di state
+    List<Map<String, dynamic>> combinedRejectHistory = uniqueRejects.values.toList();
 
       // if (groupId != null) {
       //   rawData = await supabase
@@ -258,6 +296,7 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
           'stuffing_date': shippingList.first['stuffing_date'],
           'storage_location': storageLoc,
           'is_dedicated': shippingList.first['is_dedicated'],
+          'reject_list': combinedRejectHistory, // Simpan riwayat reject di sini
         };
         targetCities = cities;
         _qtyTotal = sumQty;
@@ -358,6 +397,7 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
     final data = _shippingData ?? {};
     final bool isGroup = data['group_id'] != null;
     final List dos = data['delivery_order'] ?? [];
+    final List rejectList = data['reject_list'] ?? [];
     //final List rawDetails = data['shipping_request_details'] ?? [];
     //final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
 
@@ -391,8 +431,41 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
                     _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
                   ],
                 ),
+                // --- BAGIAN RIWAYAT REJECT ---
+              if (rejectList.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
+                          const SizedBox(width: 6),
+                          Text("RIWAYAT REJECT VENDOR:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ...rejectList.map((rej) {
+                        String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text("• $vendorName", style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
               ],
-            ),
+            ],
+          ),
+              
           ),
           Container(
             width: double.infinity,

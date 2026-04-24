@@ -63,6 +63,30 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
     }
   }
 
+  // void _showSuccessDialog() {
+  //   showDialog(
+  //     context: context,
+  //     barrierDismissible: false,
+  //     builder: (context) => AlertDialog(
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //       title: const Text('Pendaftaran Berhasil'),
+  //       content: const Text(
+  //           'Akun Anda telah didaftarkan. Silakan cek email untuk verifikasi, lalu tunggu persetujuan admin untuk bisa login.'),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () {
+  //             Navigator.of(context).pop();
+  //             Navigator.of(context).pushReplacement(
+  //               MaterialPageRoute(builder: (context) => const LoginPage()),
+  //             );
+  //           },
+  //           child: const Text('SAYA MENGERTI',
+  //               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
   void _showSuccessDialog() {
     showDialog(
       context: context,
@@ -71,7 +95,7 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Pendaftaran Berhasil'),
         content: const Text(
-            'Akun Anda telah didaftarkan. Silakan cek email untuk verifikasi, lalu tunggu persetujuan admin untuk bisa login.'),
+            'Akun Anda telah dibuat. Silakan Login dengan menggunakan NIK yang sudah anda daftarkan.'),
         actions: [
           TextButton(
             onPressed: () {
@@ -80,7 +104,7 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                 MaterialPageRoute(builder: (context) => const LoginPage()),
               );
             },
-            child: const Text('SAYA MENGERTI',
+            child: const Text('Oke',
                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
           ),
         ],

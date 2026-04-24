@@ -282,10 +282,10 @@ static Future<User?> login(String identifier, String password) async {
         final role = user.role?.toLowerCase();
         final status = user.status?.toLowerCase();
 
-        if (role == 'vendor' && status == 'pending') {
-          await logout();
-          throw Exception('Akun vendor Anda sedang menunggu verifikasi.');
-        }
+        // if (role == 'vendor' && status == 'pending') {
+        //   await logout();
+        //   throw Exception('Akun vendor Anda sedang menunggu verifikasi.');
+        // }
 
         return user;
       }
@@ -560,7 +560,8 @@ try {
           'name': name,
           'nik_vendor': nikInput,
           'role': 'vendor',
-          'status': 'pending', // Menunggu verifikasi admin
+          //'status': 'pending', // Menunggu verifikasi admin
+          'status': 'verified',
           'is_active': true,
         });
       }

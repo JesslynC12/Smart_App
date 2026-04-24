@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/vendor/booking_antrian.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -75,25 +76,76 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
     }
   }
 
+  // // --- FUNGSI ACCEPT / REJECT ---
+  // Future<void> _updateAssignment(int assignmentId, String status, int shipId) async {
+  //   try {
+  //     setState(() => _isLoading = true);
+
+  //     // 1. Update tabel penugasan
+  //     await supabase.from('shipping_assignments').update({
+  //       'status_assignment': status,
+  //       'responded_at': DateTime.now().toIso8601String(),
+  //     }).eq('id_assignment', assignmentId);
+
+  //     // 2. Update tabel status pengiriman utama
+  //     String finalStatus = status == 'accepted' ? 'on process' : 'waiting assign vendor delivery';
+  //     await supabase.from('shipping_request').update({
+  //       'status': finalStatus,
+  //     }).eq('shipping_id', shipId);
+
+  //     _showSnackBar("Berhasil $status order", Colors.green);
+  //     _fetchVendorOrders();
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //     _showSnackBar("Gagal: $e", Colors.red);
+  //   }
+  // }
+
   // --- FUNGSI ACCEPT / REJECT ---
   Future<void> _updateAssignment(int assignmentId, String status, int shipId) async {
     try {
       setState(() => _isLoading = true);
 
-      // 1. Update tabel penugasan
+      // 1. Update tabel penugasan (shipping_assignments)
+      // Status berubah jadi 'accepted' atau 'rejected'
       await supabase.from('shipping_assignments').update({
         'status_assignment': status,
         'responded_at': DateTime.now().toIso8601String(),
       }).eq('id_assignment', assignmentId);
 
-      // 2. Update tabel status pengiriman utama
-      String finalStatus = status == 'accepted' ? 'on process' : 'waiting assign vendor delivery';
-      await supabase.from('shipping_request').update({
-        'status': finalStatus,
-      }).eq('shipping_id', shipId);
+      // 2. Tentukan status akhir untuk shipping_request
+      String finalStatusRequest;
+      if (status == 'accepted') {
+        finalStatusRequest = 'on process';
+      } else {
+        // Logika Reject Anda: Kembali ke antrian pencarian vendor
+        finalStatusRequest = 'waiting assign vendor delivery';
+      }
+
+      // 3. Update tabel status pengiriman utama (shipping_request)
+      // Kita cek dulu apakah ini bagian dari Group atau bukan
+      final currentData = _dataList.firstWhere((element) => 
+        (element['shipping_id'] == shipId) || 
+        (element['grouped_ids'] != null && (element['grouped_ids'] as List).contains(shipId))
+      );
+
+      if (currentData['group_id'] != null) {
+        // Jika Group, update semua shipping_id yang ada di dalam grup tersebut
+        List<int> allIds = List<int>.from(currentData['grouped_ids']);
+        await supabase.from('shipping_request').update({
+          'status': finalStatusRequest,
+          // Opsional: kosongkan vendor_id jika ingin benar-benar reset
+          // 'vendor_id': null 
+        }).inFilter('shipping_id', allIds);
+      } else {
+        // Jika bukan group, update satu ID saja
+        await supabase.from('shipping_request').update({
+          'status': finalStatusRequest,
+        }).eq('shipping_id', shipId);
+      }
 
       _showSnackBar("Berhasil $status order", Colors.green);
-      _fetchVendorOrders();
+      _fetchVendorOrders(); // Refresh daftar
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnackBar("Gagal: $e", Colors.red);
@@ -290,15 +342,39 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _updateAssignment(item['id_assignment'], 'rejected', item['shipping_id']), 
+                    //onPressed: () => _updateAssignment(item['id_assignment'], 'rejected', item['shipping_id']), 
+                    onPressed: () => _confirmReject(item), 
+    
+    style: OutlinedButton.styleFrom(
+      side: const BorderSide(color: Colors.red),
+      foregroundColor: Colors.red,
+    ),
                     child: const Text("REJECT")
                   )
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _updateAssignment(item['id_assignment'], 'accepted', item['shipping_id']), 
-                    child: const Text("ACCEPT")
+                    //onPressed: () => _updateAssignment(item['id_assignment'], 'accepted', item['shipping_id']), 
+                    //child: const Text("ACCEPT")
+                    onPressed: () {
+      // Navigasi ke halaman jadwal dengan membawa ID yang diperlukan
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ScheduleSelectionPage(
+            assignmentId: item['id_assignment'],
+            shippingId: item['shipping_id'],
+            onSuccess: () => _fetchVendorOrders(), // Refresh list setelah selesai
+          ),
+        ),
+      );
+    },
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.green,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+    child: const Text("ACCEPT", style: TextStyle(color: Colors.white)),
                   )
                 ),
               ],
@@ -309,6 +385,97 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
     );
   }
 
+// // --- FUNGSI KONFIRMASI REJECT ---
+//   Future<void> _confirmReject(Map<String, dynamic> item) async {
+//     // Ambil nama customer dari DO pertama (karena ini grup/single)
+//    // final List dos = item['delivery_order'] ?? [];
+//     // final String customerName = dos.isNotEmpty 
+//     //     ? (dos[0]['customer']?['customer_name'] ?? '-') 
+//     //     : '-';
+//     final int shipId = item['shipping_id'];
+
+//     return showDialog(
+//       context: context,
+//       builder: (BuildContext context) {
+//         return AlertDialog(
+//           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+//           title: const Text("Konfirmasi Reject", 
+//             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+//           content: Text(
+//             "Apakah Anda yakin ingin me-reject order ini?\n\n"
+//             "🚢 Ship ID: $shipId\n",
+//             // "👤 Tujuan: $customerName",
+//             style: const TextStyle(fontSize: 14),
+//           ),
+//           actions: [
+//             TextButton(
+//               onPressed: () => Navigator.pop(context),
+//               child: const Text("BATAL", style: TextStyle(color: Colors.grey)),
+//             ),
+//             ElevatedButton(
+//               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//               onPressed: () {
+//                 Navigator.pop(context); // Tutup dialog
+//                 _updateAssignment(item['id_assignment'], 'rejected', shipId);
+//               },
+//               child: const Text("YA, REJECT", style: TextStyle(color: Colors.white)),
+//             ),
+//           ],
+//         );
+//       },
+//     );
+//   }
+
+// --- FUNGSI KONFIRMASI REJECT ---
+  Future<void> _confirmReject(Map<String, dynamic> item) async {
+    final int shipId = item['shipping_id'];
+    final bool isGroup = item['group_id'] != null;
+    
+    // Ambil list customer unik dari DO
+    final List dos = item['delivery_order'] ?? [];
+    String customers = dos.map((d) => d['customer']?['customer_name'] ?? '-').toSet().join(", ");
+
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Text("Konfirmasi Reject", 
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Apakah Anda yakin ingin me-reject order ini?", style: TextStyle(fontSize: 14)),
+              const SizedBox(height: 15),
+              Text("🚢 ${isGroup ? 'Group ID' : 'Ship ID'}: ${isGroup ? item['group_id'] : shipId}", 
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 5),
+              Text("👤 Tujuan: $customers", style: const TextStyle(fontSize: 13, color: Colors.black54)),
+              const SizedBox(height: 10),
+              const Text("*Order ini akan dikembalikan ke Admin untuk di-assign ulang.", 
+                style: TextStyle(fontSize: 11, color: Colors.red, fontStyle: FontStyle.italic)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("BATAL", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                Navigator.pop(context);
+                _updateAssignment(item['id_assignment'], 'rejected', shipId);
+              },
+              child: const Text("YA, REJECT", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
   // --- HELPERS (TETAP SAMA) ---
   Widget _infoText(String label, String value) {
     return RichText(text: TextSpan(style: const TextStyle(fontSize: 11, color: Colors.black87), children: [TextSpan(text: "$label "), TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.bold))]));
