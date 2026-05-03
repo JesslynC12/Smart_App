@@ -4,6 +4,7 @@ import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class VendorRequestPage extends StatefulWidget {
   const VendorRequestPage({super.key});
@@ -15,19 +16,71 @@ class VendorRequestPage extends StatefulWidget {
 class _VendorRequestPageState extends State<VendorRequestPage> {
   final supabase = Supabase.instance.client;
   StreamSubscription? _realtimeSubscription;
+  StreamSubscription? _assignmentSubscription;
   bool _isLoading = false;
   List<Map<String, dynamic>> _dataList = [];
+
+  // 3. Inisialisasi Plugin Notifikasi
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   // Filter States
   String _selectedFilterLoc = "SEMUA";
   DateTimeRange? _selectedDateRange;
 String _dateFilterType = "RDD"; // Default filter ke RDD
+List<Map<String, dynamic>> _warehouseList = [];
 
   @override
   void initState() {
     super.initState();
+    _fetchWarehouse();
+    _initNotification();
     _fetchVendorTargetData();
     _setupRealtime();
+  }
+
+Future<void> _fetchWarehouse() async {
+  try {
+    final response = await supabase
+        .from('warehouse')
+        .select('warehouse_id, warehouse_name, lokasi')
+        .inFilter('warehouse_id', [1, 2, 3, 6]) // Membatasi pilihan gudang
+        .order('lokasi', ascending: true);
+
+    setState(() {
+      _warehouseList = List<Map<String, dynamic>>.from(response);
+    });
+  } catch (e) {
+    debugPrint("Error Fetch Warehouse: $e");
+  }
+}
+// 4. Fungsi Inisialisasi Notifikasi
+  void _initNotification() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  // 5. Fungsi Menampilkan Notifikasi Pop-up
+  Future<void> _showRejectNotification(String vendorName, int shipId) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'reject_channel', 'Reject Notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+      color: Colors.red,
+      playSound: true,
+    );
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await flutterLocalNotificationsPlugin.show(
+      shipId, // Menggunakan ID Shipping sebagai ID notifikasi
+      '🚨 Order Ditolak Vendor!',
+      'Vendor $vendorName menolak pesanan #$shipId. Segera cari vendor lain!',
+      platformChannelSpecifics,
+    );
   }
 
   void _setupRealtime() {
@@ -36,16 +89,31 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
     _realtimeSubscription = supabase
         .from('shipping_request')
         .stream(primaryKey: ['shipping_id'])
-        .listen((_) {
-          // Setiap ada data masuk (Insert) atau berubah (Update) di DB,
-          // kita panggil fungsi fetch untuk memperbarui UI secara otomatis.
-          _fetchVendorTargetData(); 
-        });
+        .listen((_) => _fetchVendorTargetData());
+          // 6. Listener Realtime KHUSUS untuk Notifikasi Reject
+    // Kita memantau tabel shipping_assignments untuk mendeteksi perubahan status ke 'rejected'
+    _assignmentSubscription = supabase
+        .from('shipping_assignments')
+        .stream(primaryKey: ['id']) // Pastikan ada PK 'id' di tabel assignments
+        .listen((List<Map<String, dynamic>> data) {
+      if (data.isNotEmpty) {
+        final lastUpdate = data.last;
+        if (lastUpdate['status_assignment'] == 'rejected') {
+          // Ambil nama vendor atau ID untuk notifikasi
+          // Catatan: Anda mungkin perlu query tambahan untuk nama vendor jika tidak ada di payload
+          _showRejectNotification(
+            "Transportasi", // Default name jika tidak ada di payload
+            lastUpdate['shipping_id'] ?? 0,
+          );
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat pindah halaman
+    _assignmentSubscription?.cancel();
     super.dispose();
   }
 
@@ -56,6 +124,7 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
       var query = supabase.from('shipping_request').select('''
             *,
             so,
+            warehouse(warehouse_id, warehouse_name, lokasi),
             delivery_order(
               do_number,
               customer(customer_id, customer_name),
@@ -67,10 +136,11 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
             master_vendor(vendor_name)
           )
           ''').eq('status', 'waiting assign vendor delivery')
+          //.eq('is_dedicated', 'dedicated') // Filter hanya yang DEDICATED
           .eq('shipping_assignments.status_assignment', 'rejected'); // Ambil yang pernah direject
 // .filter('vendor_id', 'is', null);
       if (_selectedFilterLoc != "SEMUA") {
-        query = query.eq('storage_location', _selectedFilterLoc.toLowerCase());
+        query = query.eq('warehouse_id',int.parse(_selectedFilterLoc));
       }
 
       if (_selectedDateRange != null) {
@@ -121,6 +191,15 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
       item['unique_reject_list'] = uniqueRejects.values.toList();
     }
 
+// RE-SORTING setelah unique_reject_list terisi
+  rawGrouped.sort((a, b) {
+    bool aHasReject = (a['unique_reject_list'] as List? ?? []).isNotEmpty;
+    bool bHasReject = (b['unique_reject_list'] as List? ?? []).isNotEmpty;
+    if (aHasReject && !bHasReject) return -1;
+    if (!aHasReject && bHasReject) return 1;
+    return (b['shipping_id'] as int).compareTo(a['shipping_id'] as int);
+  });
+
     _dataList = rawGrouped;
     _isLoading = false;
       });
@@ -167,7 +246,26 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
     }
   }
     finalResult.addAll(groupedMap.values);
-    finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
+    //finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
+    
+    // --- PERBAIKAN LOGIKA SORTING DISINI ---
+  finalResult.sort((a, b) {
+    // 1. Cek apakah ada riwayat reject (menggunakan unique_reject_list yang sudah kita buat sebelumnya)
+    // Catatan: Karena unique_reject_list diisi setelah grouping di _fetchVendorTargetData, 
+    // pastikan sorting ini dilakukan SETELAH list unik tersebut terisi.
+    
+    bool aIsRejected = (a['unique_reject_list'] as List? ?? []).isNotEmpty;
+    bool bIsRejected = (b['unique_reject_list'] as List? ?? []).isNotEmpty;
+
+    // 2. Jika A direject dan B tidak, A naik ke atas
+    if (aIsRejected && !bIsRejected) return -1;
+    // 3. Jika B direject dan A tidak, B naik ke atas
+    if (!aIsRejected && bIsRejected) return 1;
+
+    // 4. Jika keduanya sama-sama direject atau sama-sama bersih, 
+    // urutkan berdasarkan Shipping ID terbaru (descending)
+    return (b['shipping_id'] as int).compareTo(a['shipping_id'] as int);
+  });
     return finalResult;
   }
 
@@ -247,6 +345,7 @@ String _dateFilterType = "RDD"; // Default filter ke RDD
   // }
 
 Widget _buildFilterBar() {
+  bool isDateActive = _selectedDateRange != null;
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
     decoration: BoxDecoration(
@@ -268,9 +367,19 @@ Widget _buildFilterBar() {
             value: _selectedFilterLoc,
             decoration: _filterInputDecoration("Gudang"),
             style: const TextStyle(fontSize: 11, color: Colors.black),
-            items: ["SEMUA", "RUNGKUT", "TAMBAK LANGON"].map((e) => 
-              DropdownMenuItem(value: e, child: Text(e))
-            ).toList(),
+            // items: ["SEMUA", "RUNGKUT", "TAMBAK LANGON"].map((e) => 
+            //   DropdownMenuItem(value: e, child: Text(e))
+            // ).toList(),
+            items: [
+      const DropdownMenuItem(value: "SEMUA", child: Text("SEMUA GUDANG")),
+      ..._warehouseList.map((wh) {
+        String display = "${wh['lokasi']} - ${wh['warehouse_name']}";
+        return DropdownMenuItem(
+          value: wh['warehouse_id'].toString(), // Value ID untuk filter ke DB
+          child: Text(display, style: const TextStyle(fontSize: 10)),
+        );
+      }),
+    ],
             onChanged: (val) {
               setState(() => _selectedFilterLoc = val!);
               _fetchVendorTargetData();
@@ -281,73 +390,167 @@ Widget _buildFilterBar() {
 
         // 2. Dropdown Tipe Tanggal (Flex 2)
         
-        Expanded(
-          flex: 2,
-          child: DropdownButtonFormField<String>(
-            value: _dateFilterType,
-            decoration: _filterInputDecoration("Berdasarkan"),
-            style: const TextStyle(fontSize: 11, color: Colors.black),
-            items: ["RDD", "STUFFING"].map((e) => 
-              DropdownMenuItem(value: e, child: Text(e))
-            ).toList(),
-            onChanged: (val) {
-              setState(() => _dateFilterType = val!);
-              if (_selectedDateRange != null) _fetchVendorTargetData();
-            },
-          ),
-        ),
-        const SizedBox(width: 6),
+//         Expanded(
+//           flex: 5,
+//           child: DropdownButtonFormField<String>(
+//             value: _dateFilterType,
+//             decoration: _filterInputDecoration("Berdasarkan"),
+//             style: const TextStyle(fontSize: 11, color: Colors.black),
+//             items: ["RDD", "STUFFING"].map((e) => 
+//               DropdownMenuItem(value: e, child: Text(e))
+//             ).toList(),
+//             onChanged: (val) {
+//               setState(() => _dateFilterType = val!);
+//               if (_selectedDateRange != null) _fetchVendorTargetData();
+//             },
+//           ),
+//         ),
+//         const SizedBox(width: 6),
 
-        // 3. Tombol Pilih Rentang Tanggal (Flex 3)
+//         // 3. Tombol Pilih Rentang Tanggal (Flex 3)
+//         Expanded(
+//           flex: 3,
+//           child: InkWell(
+//             onTap: _pickDateRange,
+//             child: Container(
+//               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+//               decoration: BoxDecoration(
+//                 border: Border.all(color: Colors.grey.shade400),
+//                 borderRadius: BorderRadius.circular(8),
+//               ),
+//               child: Row(
+//                 mainAxisAlignment: MainAxisAlignment.center,
+//                 children: [
+//                   const Icon(Icons.calendar_month, size: 14, color: Colors.red),
+//                   const SizedBox(width: 4),
+//                   Flexible(
+//                     child: Text(
+//                       _selectedDateRange == null 
+//                           ? "Pilih Tgl" 
+//                           : "${DateFormat('dd/MM').format(_selectedDateRange!.start)}-${DateFormat('dd/MM').format(_selectedDateRange!.end)}",
+//                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+//                       overflow: TextOverflow.ellipsis,
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//           ),
+//         ),
+
+//         // 4. Tombol Reset (Kecil)
+//         IconButton(
+//           constraints: const BoxConstraints(),
+//           padding: const EdgeInsets.only(left: 4),
+//           onPressed: () { 
+//             setState(() { 
+//               _selectedFilterLoc = "SEMUA"; 
+//               _selectedDateRange = null; 
+//               _dateFilterType = "RDD";
+//             }); 
+//             _fetchVendorTargetData(); 
+//           }, 
+//           icon: const Icon(Icons.refresh, color: Colors.red, size: 20)
+//         )
+//       ],
+//     ),
+//   );
+// }
+
+// 2. Filter Tanggal Unified (Mirip List DO)
         Expanded(
-          flex: 3,
-          child: InkWell(
-            onTap: _pickDateRange,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.calendar_month, size: 14, color: Colors.red),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      _selectedDateRange == null 
-                          ? "Pilih Tgl" 
-                          : "${DateFormat('dd/MM').format(_selectedDateRange!.start)}-${DateFormat('dd/MM').format(_selectedDateRange!.end)}",
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
+          flex: 5,
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDateActive ? Colors.red.shade700 : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                // Bagian Dropdown Tipe (RDD/Stuffing)
+                Container(
+                  padding: const EdgeInsets.only(left: 8, right: 4),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(
+                        color: isDateActive ? Colors.white30 : Colors.grey.shade400,
+                        width: 1,
+                      ),
                     ),
                   ),
-                ],
-              ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _dateFilterType,
+                      isDense: true,
+                      dropdownColor: isDateActive ? Colors.red.shade800 : Colors.white,
+                      iconEnabledColor: isDateActive ? Colors.white : Colors.black87,
+                      style: TextStyle(
+                        fontSize: 10, 
+                        fontWeight: FontWeight.bold,
+                        color: isDateActive ? Colors.white : Colors.black87,
+                      ),
+                      items: ["RDD", "STUFFING"].map((String value) {
+                        return DropdownMenuItem<String>(value: value, child: Text(value));
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() => _dateFilterType = val!);
+                        if (isDateActive) _fetchVendorTargetData();
+                      },
+                    ),
+                  ),
+                ),
+                // Bagian Pilih Tanggal
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickDateRange,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.date_range, 
+                            size: 14, 
+                            color: isDateActive ? Colors.white : Colors.black87
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _selectedDateRange == null 
+                                ? "Pilih Tgl" 
+                                : "${DateFormat('dd/MM').format(_selectedDateRange!.start)} - ${DateFormat('dd/MM').format(_selectedDateRange!.end)}",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isDateActive ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
 
-        // 4. Tombol Reset (Kecil)
-        IconButton(
-          constraints: const BoxConstraints(),
-          padding: const EdgeInsets.only(left: 4),
-          onPressed: () { 
-            setState(() { 
-              _selectedFilterLoc = "SEMUA"; 
-              _selectedDateRange = null; 
-              _dateFilterType = "RDD";
-            }); 
-            _fetchVendorTargetData(); 
-          }, 
-          icon: const Icon(Icons.refresh, color: Colors.red, size: 20)
-        )
+        // 3. Tombol Refresh/Reset
+        if (isDateActive || _selectedFilterLoc != "SEMUA")
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.red, size: 20),
+            onPressed: () {
+              setState(() {
+                _selectedFilterLoc = "SEMUA";
+                _selectedDateRange = null;
+                _dateFilterType = "RDD";
+              });
+              _fetchVendorTargetData();
+            },
+          ),
       ],
     ),
   );
 }
-
   Widget _buildVendorCard(Map<String, dynamic> item) {
     final bool isGroup = item['group_id'] != null;
     final List dos = item['delivery_order'] ?? [];
@@ -357,7 +560,13 @@ Widget _buildFilterBar() {
     // final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
 //final List rejectHistory = item['shipping_assignments'] ?? [];
 final List rejectHistory = item['unique_reject_list'] ?? [];
+// 2. Ambil data warehouse dari hasil join
+    final warehouse = item['warehouse'];
+    final String warehouseDisplay = warehouse != null 
+        ? "${warehouse['lokasi']} - ${warehouse['warehouse_name']}"
+        : ("-");
     return Card(
+      
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -380,7 +589,7 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 const Spacer(),
-                _buildBadge(item['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                _buildBadge(warehouseDisplay, Colors.red.shade700),
               ],
             ),
           ),
@@ -397,7 +606,7 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                     const SizedBox(width: 20),
                     _infoText("🚛 Stuffing:", _formatDate(item['stuffing_date'],)),
                      const SizedBox(width: 20),
-                      _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
+//                       _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
 const Divider(height: 40),
                   ],
                   
@@ -663,10 +872,49 @@ const Divider(height: 40),
   //   }
   // }
 
+  // Future<void> _pickDateRange() async {
+  //   DateTimeRange? picked = await showDateRangePicker(context: context, firstDate: DateTime(2023), lastDate: DateTime(2100), builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: Colors.red.shade700)), child: child!));
+  //   if (picked != null) { setState(() => _selectedDateRange = picked); _fetchVendorTargetData(); }
+  // }
+
   Future<void> _pickDateRange() async {
-    DateTimeRange? picked = await showDateRangePicker(context: context, firstDate: DateTime(2023), lastDate: DateTime(2100), builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: Colors.red.shade700)), child: child!));
-    if (picked != null) { setState(() => _selectedDateRange = picked); _fetchVendorTargetData(); }
+  DateTimeRange? picked = await showDateRangePicker(
+    context: context,
+    firstDate: DateTime(2023),
+    lastDate: DateTime(2100),
+    initialDateRange: _selectedDateRange,
+    locale: const Locale('id', 'ID'), // Memastikan kalender menggunakan Bahasa Indonesia
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: Colors.red.shade700, // Warna tema utama (Header & Tombol)
+            onPrimary: Colors.white,
+            onSurface: Colors.black,
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+          ),
+        ),
+        // --- BAGIAN KUNCI: MENGATUR UKURAN DIALOG ---
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 400,  // Membatasi lebar maksimal agar tidak full screen
+              maxHeight: 550, // Membatasi tinggi maksimal
+            ),
+            child: child!,
+          ),
+        ),
+      );
+    },
+  );
+
+  if (picked != null) {
+    setState(() => _selectedDateRange = picked);
+    _fetchVendorTargetData();
   }
+}
 
   String _formatDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return "-";

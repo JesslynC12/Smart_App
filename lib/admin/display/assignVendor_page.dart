@@ -18,6 +18,8 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
   final supabase = Supabase.instance.client;
   StreamSubscription? _realtimeSubscription;
   bool _isLoading = true;
+  // Di dalam class _AssignVendorPageState
+String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-dedicated'
 
   List<Map<String, dynamic>> _recommendations = [];
   List<Map<String, dynamic>> _allVendors = [];
@@ -75,6 +77,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
         .from('shipping_request')
         .select('''
           *,
+          warehouse(warehouse_id, warehouse_name, lokasi),
           delivery_order(
             *,
             customer(*),
@@ -121,6 +124,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
           .from('shipping_request')
           .select('''
             *,
+            warehouse(warehouse_id, warehouse_name, lokasi),
             delivery_order(
               *,
               customer(*),
@@ -263,8 +267,12 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
       //   }
       // }
       // }
-
-String storageLoc = shippingList.first['storage_location']?.toString().trim() ?? "";
+      final whData = shippingList.first['warehouse'];
+      String storageLoc = whData != null ? whData['lokasi']?.toString() ?? "" : "";
+String storageLocDisplay = whData != null 
+    ? "${whData['lokasi']} - ${whData['warehouse_name']}" 
+    : "-";
+//String storageLoc = shippingList.first['storage_location']?.toString().trim() ?? "";
       double tnwCalculated = sumNW / 1000;
       String unitRequired = _determineUnitByWeight(tnwCalculated);
 
@@ -294,8 +302,8 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
           'delivery_order': allDOs,
           'rdd': shippingList.first['rdd'],
           'stuffing_date': shippingList.first['stuffing_date'],
-          'storage_location': storageLoc,
-          'is_dedicated': shippingList.first['is_dedicated'],
+          'warehouse': storageLocDisplay,
+          //'is_dedicated': shippingList.first['is_dedicated'],
           'reject_list': combinedRejectHistory, // Simpan riwayat reject di sini
         };
         targetCities = cities;
@@ -341,6 +349,39 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildDetailedSummary(),
+                  const Padding(
+  padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+  child: Text("📋 STATUS DEDICATED", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+),
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16),
+  child: Container(
+    decoration: BoxDecoration(
+      color: Colors.grey.shade50,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade300),
+    ),
+    child: Column(
+      children: [
+        RadioListTile<String>(
+          title: const Text("Dedicated", style: TextStyle(fontSize: 13)),
+          value: "dedicated",
+          groupValue: _selectedDedicated,
+          activeColor: Colors.red.shade700,
+          onChanged: (val) => setState(() => _selectedDedicated = val),
+        ),
+        Divider(height: 1, color: Colors.grey.shade300),
+        RadioListTile<String>(
+          title: const Text("Non-Dedicated", style: TextStyle(fontSize: 13)),
+          value: "non-dedicated",
+          groupValue: _selectedDedicated,
+          activeColor: Colors.red.shade700,
+          onChanged: (val) => setState(() => _selectedDedicated = val),
+        ),
+      ],
+    ),
+  ),
+),
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
                     child: Text("🏆 REKOMENDASI VENDOR (SISTEM)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13)),
@@ -418,7 +459,7 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-                    _buildBadge(data['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                    _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -428,7 +469,7 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
                   children: [
                     _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
-                    _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                   // _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
                   ],
                 ),
                 // --- BAGIAN RIWAYAT REJECT ---
@@ -803,6 +844,11 @@ String storageLoc = shippingList.first['storage_location']?.toString().trim() ??
 
 Future<void> _processToDatabase() async {
   if (_selectedVendor == null) return;
+  // 🔥 VALIDASI: Cek apakah status dedicated sudah dipilih
+  if (_selectedDedicated == null) {
+    _showSnackBar("Harap pilih status Dedicated atau Non-Dedicated!", Colors.orange);
+    return;
+  }
 
   try {
     setState(() => _isLoading = true);
@@ -879,7 +925,8 @@ Future<void> _processToDatabase() async {
 // B. Update status di shipping_request utama
     await supabase
         .from('shipping_request')
-        .update({'status': 'waiting vendor approval'}) // Status baru agar sinkron dengan 'offered'
+        .update({'status': 'waiting vendor approval', 
+        'is_dedicated': _selectedDedicated,}) // Status baru agar sinkron dengan 'offered'
         .inFilter('shipping_id', idsToAssign);
 
     if (mounted) {

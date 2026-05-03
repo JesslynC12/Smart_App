@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/vendor/booking_antrian.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -35,6 +36,8 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
             *,
             request:shipping_id (
               *,
+              is_dedicated,
+              warehouse:warehouse(warehouse_id,warehouse_name, lokasi),
               delivery_order(
                 do_number,
                 customer(customer_id, customer_name),
@@ -61,6 +64,7 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
           final List<Map<String, dynamic>> flattenedData = (response as List).map((e) {
             final Map<String, dynamic> req = e['request'] as Map<String, dynamic>;
             req['id_assignment'] = e['id_assignment']; // Simpan ID assignment untuk aksi Accept/Reject
+            req['warehouse_info'] = req['warehouse']; // Simpan info warehouse di level request
             return req;
           }).toList();
 
@@ -160,7 +164,17 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
     for (var req in source) {
       final dynamic rawGroupId = req['group_id'];
       if (rawGroupId == null) {
-        finalResult.add(Map<String, dynamic>.from(req));
+        //finalResult.add(Map<String, dynamic>.from(req));
+        // --- PERBAIKAN UNTUK DATA SINGLE ---
+        // Pastikan SO dari shipping_request induk ditempelkan ke setiap delivery_order
+        Map<String, dynamic> singleItem = Map<String, dynamic>.from(req);
+        if (singleItem['delivery_order'] != null) {
+          for (var doItem in singleItem['delivery_order']) {
+            doItem['parent_so'] = singleItem['so']?.toString() ?? "-";
+          }
+        }
+        finalResult.add(singleItem);
+        // -----------------------------------
       } else {
         int gId = rawGroupId is String ? int.parse(rawGroupId) : rawGroupId as int;
         if (!groupedMap.containsKey(gId)) {
@@ -263,6 +277,12 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
     final bool isGroup = item['group_id'] != null;
     final List dos = item['delivery_order'] ?? [];
 
+// LOGIKA BARU: Ambil data warehouse dari objek join
+  final Map<String, dynamic>? wh = item['warehouse_info'];
+  final String warehouseDisplay = wh != null 
+      ? "${wh['lokasi'] ?? ''} - ${wh['warehouse_name'] ?? ''}" 
+      : "-";
+
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
@@ -285,7 +305,7 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
                 ),
                 const Spacer(),
                 // Ambil langsung dari item (Flat Table)
-                _buildBadge(item['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
               ],
             ),
           ),
@@ -297,8 +317,10 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _infoText("📅 RDD:", _formatDate(item['rdd'])),
+                     _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
+
                     _infoText("🚛 Stuffing:", _formatDate(item['stuffing_date'])),
-                  ],
+                                   ],
                 ),
                 const Divider(height: 25),
                 ...dos.map((doItem) {
@@ -353,20 +375,50 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
                   )
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    //onPressed: () => _updateAssignment(item['id_assignment'], 'accepted', item['shipping_id']), 
-                    //child: const Text("ACCEPT")
-                    onPressed: () {
-      // Navigasi ke halaman jadwal dengan membawa ID yang diperlukan
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ScheduleSelectionPage(
-            assignmentId: item['id_assignment'],
-            shippingId: item['shipping_id'],
-            onSuccess: () => _fetchVendorOrders(), // Refresh list setelah selesai
-          ),
+    //             Expanded(
+    //               child: ElevatedButton(
+    //                 //onPressed: () => _updateAssignment(item['id_assignment'], 'accepted', item['shipping_id']), 
+    //                 //child: const Text("ACCEPT")
+    //                 onPressed: () {
+    //   // Navigasi ke halaman jadwal dengan membawa ID yang diperlukan
+    //   Navigator.push(
+    //     context,
+    //     MaterialPageRoute(
+    //       builder: (context) => ScheduleSelectionPage(
+    //         assignmentId: item['id_assignment'],
+    //         shippingId: item['shipping_id'],
+    //         onSuccess: () => _fetchVendorOrders(), // Refresh list setelah selesai
+    //       ),
+    //     ),
+    //   );
+    // },
+    // style: ElevatedButton.styleFrom(
+    //   backgroundColor: Colors.green,
+    //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    // ),
+    // child: const Text("ACCEPT", style: TextStyle(color: Colors.white)),
+    //               )
+    //             ),
+    Expanded(
+  child: ElevatedButton(
+    onPressed: () {
+      final groupId = item['group_id'];
+      final shipId = item['shipping_id'];
+      
+      // 1. Tentukan Judul Tab secara dinamis
+      String tabTitle = groupId != null 
+          ? "Detail Order & Pilih Jadwal Grup Shipping  #$groupId" 
+          : "Detail Order & Pilih Jadwal Shipping #$shipId";
+
+      // 2. Panggil DynamicTab untuk membuka ScheduleSelectionPage
+      DynamicTabPage.of(context)?.openTab(
+        tabTitle, 
+        ScheduleSelectionPage(
+          assignmentId: item['id_assignment'],
+          shippingId: shipId,
+          oldTime: item['jam_booking'],
+  vendorNik: widget.vendorNik,
+          onSuccess: () => _fetchVendorOrders(), // Refresh list saat tab selesai/konfirmasi
         ),
       );
     },
@@ -375,8 +427,8 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
     child: const Text("ACCEPT", style: TextStyle(color: Colors.white)),
-                  )
-                ),
+  ),
+),
               ],
             ),
           ),

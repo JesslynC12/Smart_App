@@ -1,216 +1,166 @@
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() => runApp(const MyApp());
+class VehicleControlFormState extends StatefulWidget {
+  final Map<String, dynamic> vehicleData; // Data dari tahap Transporter
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const VehicleControlFormState({super.key, required this.vehicleData});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const VehicleControlForm(),
-    );
+  State<VehicleControlFormState> createState() => _VehicleControlFormState();
+}
+
+class _VehicleControlFormState extends State<VehicleControlFormState> {
+  final _formKey = GlobalKey<FormState>();
+  final supabase = Supabase.instance.client;
+
+  // State untuk Checklist Safety
+  Map<String, bool> safetyChecklist = {
+    "KTP": false,
+    "SIM": false,
+    "STNK": false,
+    "Ganjal Roda": false,
+    "Rompi Safety": false,
+    "Sepatu Safety": false,
+  };
+
+  // State untuk Kondisi Unit
+  String kondisiLantai = "Baik";
+  String kondisiDinding = "Baik";
+  String kondisiAtap = "Baik";
+  
+  // Keputusan Akhir
+  String? decision; // LAYAK, LAYAK DENGAN TREATMENT, DITOLAK
+  final _catatanController = TextEditingController();
+
+  Future<void> _submitLogisticForm() async {
+    if (decision == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pilih Keputusan Kelayakan!"))
+      );
+      return;
+    }
+
+    try {
+      await supabase.from('vehicle_checks').update({
+        'safety_factors': safetyChecklist,
+        'container_check_result': {
+          'lantai': kondisiLantai,
+          'dinding': kondisiDinding,
+          'atap': kondisiAtap,
+        },
+        'decision_logistic': decision,
+        'catatan_logistic': _catatanController.text,
+        'current_step': 'gbj', // Lanjut ke bagian Gudang Barang Jadi
+        'jam_masuk_logistik': DateTime.now().toIso8601String(),
+      }).eq('id', widget.vehicleData['id']);
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint("Error: $e");
+    }
   }
-}
-
-class VehicleControlForm extends StatefulWidget {
-  const VehicleControlForm({super.key});
-
-  @override
-  _VehicleControlFormState createState() => _VehicleControlFormState();
-}
-
-class _VehicleControlFormState extends State<VehicleControlForm> {
-  // Contoh state untuk checkbox
-  bool isGudangRungkut = true;
-  bool isCde = false;
-  bool isWingbox = true;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(title: const Text('Vehicle Control Form')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 10),
-            _buildSectionTransporter(),
-            const SizedBox(height: 10),
-            _buildSectionLogistic(),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {}, 
-              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-              child: const Text('SIMPAN FORM'),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- WIDGET HELPER ---
-
-  Widget _buildHeader() {
-    return Container(
-      color: Colors.grey[300],
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          const Text("VEHICLE CONTROL FORM", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          const Divider(color: Colors.black),
-          Row(
+      //appBar: AppBar(title: const Text("Pemeriksaan Logistik")),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildTextField("TANGGAL", "03/10/25")),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildCheckboxTile("GUDANG RUNGKUT", isGudangRungkut),
-                    _buildCheckboxTile("LOCAL (SMART)", false),
-                  ],
+              _sectionTitle("Faktor Keselamatan (Safety)"),
+              ...safetyChecklist.keys.map((key) {
+                return CheckboxListTile(
+                  title: Text(key),
+                  value: safetyChecklist[key],
+                  onChanged: (val) => setState(() => safetyChecklist[key] = val!),
+                );
+              }).toList(),
+
+              const Divider(height: 30),
+              _sectionTitle("Kondisi Kontainer / Bak"),
+              _buildConditionPicker("Kondisi Lantai", (val) => kondisiLantai = val),
+              _buildConditionPicker("Kondisi Dinding", (val) => kondisiDinding = val),
+              _buildConditionPicker("Kondisi Atap (Bocor?)", (val) => kondisiAtap = val),
+
+              const Divider(height: 30),
+              _sectionTitle("Keputusan Logistik"),
+              _buildDecisionRadio("LAYAK", Colors.green),
+              _buildDecisionRadio("LAYAK DENGAN TREATMENT", Colors.orange),
+              _buildDecisionRadio("DITOLAK", Colors.red),
+
+              const SizedBox(height: 15),
+              TextField(
+                controller: _catatanController,
+                decoration: const InputDecoration(
+                  labelText: "Catatan Tambahan",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+                  onPressed: _submitLogisticForm,
+                  child: const Text("SIMPAN & TERUSKAN KE GBJ", style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTransporter() {
-    return _sectionWrapper(
-      title: "1. DIISI OLEH TRANSPORTER",
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: _buildTextField("NAMA TRANSPORTER", "TEKUN JAYA")),
-              Expanded(child: _buildTextField("NAMA SUPIR", "ABUS")),
-            ],
           ),
-          Row(
-            children: [
-              Expanded(child: _buildTextField("NO POLISI", "B 9763 POU")),
-              Expanded(child: _buildTextField("NO HP SUPIR", "081326403681")),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0),
-            child: Text("JENIS KENDARAAN:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-          ),
-          Wrap(
-            spacing: 10,
-            children: [
-              _buildCheckboxTile("CDE", false),
-              _buildCheckboxTile("CDD", false),
-              _buildCheckboxTile("WINGBOX", true),
-              _buildCheckboxTile("CONTAINER", false),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionLogistic() {
-    return _sectionWrapper(
-      title: "2. DIISI OLEH LOGISTIC SMART",
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildTextField("JAM MASUK", "15:08 WIB"),
-          const Divider(),
-          const Text("PENGECEKAN KELAYAKAN CONTAINER", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          // Menggunakan Table untuk layout checklist yang rapi seperti di gambar
-          Table(
-            border: TableBorder.all(color: Colors.grey),
-            children: [
-              TableRow(children: [
-
-                _tableHeader("Sisi Kanan"),
-                _tableHeader("Sisi Kiri"),
-                _tableHeader("Sisi Lantai"),
-                
-              ]),
-              TableRow(children: [
-                _checkListColumn(["Berkarat", "Kotor", "Basah"]),
-                _checkListColumn(["Berkarat", "Kotor", "Basah"]),
-                _checkListColumn(["Kotor", "Berlubang", "Bergelombang"]),
-              ]),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  // --- UI COMPONENTS ---
-
-  Widget _sectionWrapper({required String title, required Widget child}) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(border: Border.all(color: Colors.black)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            color: Colors.blueGrey[900],
-            padding: const EdgeInsets.all(4),
-            child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-          ),
-          Padding(padding: const EdgeInsets.all(8.0), child: child),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextField(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
-      child: TextField(
-        controller: TextEditingController(text: value),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontSize: 10),
-          border: const OutlineInputBorder(),
-          isDense: true,
-          contentPadding: const EdgeInsets.all(8),
         ),
       ),
     );
   }
 
-  Widget _buildCheckboxTile(String label, bool value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildConditionPicker(String label, Function(String) onSelected) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Checkbox(value: value, onChanged: (v) {}, visualDensity: VisualDensity.compact),
-        Text(label, style: const TextStyle(fontSize: 10)),
+        Text(label, style: const TextStyle(fontSize: 14)),
+        Row(
+          children: ["Baik", "Rusak/Kotor", "Tajam"].map((choice) {
+            return Row(
+              children: [
+                Radio<String>(
+                  value: choice,
+                  groupValue: label == "Kondisi Lantai" ? kondisiLantai : (label == "Kondisi Dinding" ? kondisiDinding : kondisiAtap),
+                  onChanged: (val) => setState(() {
+                    if (label == "Kondisi Lantai") kondisiLantai = val!;
+                    if (label == "Kondisi Dinding") kondisiDinding = val!;
+                    if (label == "Kondisi Atap (Bocor?)") kondisiAtap = val!;
+                  }),
+                ),
+                Text(choice),
+              ],
+            );
+          }).toList(),
+        ),
       ],
     );
   }
 
-  static Widget _tableHeader(String text) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      color: Colors.grey[200],
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-    );
-  }
-
-  Widget _checkListColumn(List<String> items) {
-    return Padding(
-      padding: const EdgeInsets.all(4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: items.map((item) => _buildCheckboxTile(item, false)).toList(),
-      ),
+  Widget _buildDecisionRadio(String value, Color color) {
+    return RadioListTile<String>(
+      title: Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      value: value,
+      groupValue: decision,
+      onChanged: (val) => setState(() => decision = val),
     );
   }
 }

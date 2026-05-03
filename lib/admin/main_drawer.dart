@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/admin/display/listppic_page.dart';
+import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
+import 'package:project_app/admin/input%20form/Formppic.dart';
 import 'package:project_app/dynamic_tab_page.dart';
+import 'package:project_app/vendor/ListPengirimanOnProses.dart';
+import 'package:project_app/vendor/historyorder_page.dart';
 import 'package:project_app/vendor/listOrderVendor_page.dart';
 import '../auth/auth_service.dart';
 import '../login.dart';
@@ -92,15 +97,20 @@ class MainDrawer extends StatelessWidget {
               }),
             if (_hasAccess('Loading'))
               _menuItem(context, Icons.unarchive_rounded, "Loading Barang", Colors.orange),
-            if (_hasAccess('Occupancy'))
+              if (_hasAccess('PPICForm'))
+              _menuItem(context, Icons.edit_rounded, "PPIC Form", Colors.orange, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("PPIC Form", PPICFormPage());
+              }),
+            if (_hasAccess('OccupancyForm'))
               _menuItem(context, Icons.fact_check_rounded, "Occupancy Form", Colors.orange, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Occupancy", WarehouseOccupancyForm());
+                DynamicTabPage.of(context)?.openTab("Occupancy Form", WarehouseOccupancyForm());
               }),
             if (_hasAccess('KelayakanUnit'))
               _menuItem(context, Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Kelayakan Unit", VehicleControlForm());
+                DynamicTabPage.of(context)?.openTab("Kelayakan Unit", VehicleControlFormState(vehicleData: {})); // Pass empty vehicleData for now
               }),
             if (_hasAccess('InputDO'))
               _menuItem(context, Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
@@ -135,9 +145,25 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Permintaan Pengiriman ", const VendorRequestPage());
               }),
-            _menuItem(context, Icons.list_alt_rounded, "List Planning", Colors.indigo),
-            _menuItem(context, Icons.confirmation_number_rounded, "Booking Antrian", Colors.amber.shade800),
+           // _menuItem(context, Icons.list_alt_rounded, "List Planning", Colors.indigo),
+           // _menuItem(context, Icons.confirmation_number_rounded, "List Planning Booking Antrian", Colors.amber.shade800),
+             if (_hasAccess('planningAntrian'))
+               _menuItem(context, Icons.confirmation_number_rounded, "List Planning Booking Antrian", Colors.amber.shade800, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("List Planning Booking Antrian", BookingPlanningListPage());
+              }),
+              // _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
+              //   Navigator.pop(context);
+              //   DynamicTabPage.of(context)?.openTab("List Complain", const ComplainPage());
+              // }),
             _menuItem(context, Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
+            
+             if (_hasAccess('ListPPIC'))
+              _menuItem(context, Icons.view_agenda, "List PPIC", Colors.redAccent, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("List PPIC", const PPICListPage());
+              }),
+
             if (_hasAccess('ListComplain'))
               _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
                 Navigator.pop(context);
@@ -224,16 +250,29 @@ class MainDrawer extends StatelessWidget {
         ),
       ),
 
-      _menuItem(
+      // _menuItem(
+      //   context,
+      //   Icons.list_alt_rounded,
+      //   "List Order Saya",
+      //   Colors.redAccent,
+      //   onTap: () {
+      //     Navigator.pop(context);
+      //     DynamicTabPage.of(context)?.openTab(
+      //       "List Order Saya",
+      //       VendorOrderListPage(vendorNik :currentUser?.nikVendor ?? ''),
+      //     );
+      //   },
+      // ),
+       _menuItem(
         context,
         Icons.list_alt_rounded,
-        "List Order Saya",
+        "Pengiriman On Proses",
         Colors.redAccent,
         onTap: () {
           Navigator.pop(context);
           DynamicTabPage.of(context)?.openTab(
-            "List Order Saya",
-            VendorOrderListPage(vendorNik :currentUser?.nikVendor ?? ''),
+            "Pengiriman On Proses",
+            VendorOnProcessPage(vendorNik :currentUser?.nikVendor ?? ''),
           );
         },
       ),
@@ -247,7 +286,7 @@ class MainDrawer extends StatelessWidget {
           Navigator.pop(context);
           DynamicTabPage.of(context)?.openTab(
             "Riwayat Order",
-            const ListDOPage(),
+            VendorOrderHistoryPage(vendorNik: currentUser?.nikVendor ?? ''),
           );
         },
       ),

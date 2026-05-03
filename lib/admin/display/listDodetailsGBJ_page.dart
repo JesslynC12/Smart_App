@@ -17,6 +17,9 @@ class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
   StreamSubscription? _realtimeSubscription;
   bool _isLoading = true;
   List<Map<String, dynamic>> _dataList = [];
+  List<Map<String, dynamic>> _warehouseList = [];
+
+  
 
 
   // Variabel untuk melacak baris mana yang sedang dibuka (berdasarkan shipping_id)
@@ -24,8 +27,8 @@ class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
 
 
   // State input sementara
-  String? _selectedSLoc;
-  String? _selectedDedicated;
+  int? _selectedSLoc;
+  //String? _selectedDedicated;
 String? _currentUserName; // Untuk menyimpan nama dari public.profiles
 
   @override
@@ -33,6 +36,7 @@ String? _currentUserName; // Untuk menyimpan nama dari public.profiles
     super.initState();
     _fetchUserProfile();
     _fetchData();
+    _fetchWarehouse();
     _setupRealtime();
   }
 
@@ -107,6 +111,22 @@ String? _currentUserName; // Untuk menyimpan nama dari public.profiles
 //   }
 // }
 
+Future<void> _fetchWarehouse() async {
+  try {
+    final response = await supabase
+        .from('warehouse')
+        .select('warehouse_id, warehouse_name, lokasi')
+        .inFilter('warehouse_id', [1, 2, 3, 6])
+        .eq('status', 'active') // Opsional: hanya ambil yang aktif
+        .order('warehouse_name');
+
+    setState(() {
+      _warehouseList = List<Map<String, dynamic>>.from(response);
+    });
+  } catch (e) {
+    debugPrint("Error fetch warehouse: $e");
+  }
+}
 
 Future<void> _fetchData() async {
   try {
@@ -366,37 +386,42 @@ Widget _buildActionForm(Map<String, dynamic> item) {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLabel("Storage Location"),
-                  DropdownButtonFormField<String>(
+                  _buildLabel("Storage & Loading Location"),
+                  DropdownButtonFormField<int>(
                     decoration: _inputDecoration("Pilih Lokasi"),
                     value: _selectedSLoc,
-                    items: const [
-                      DropdownMenuItem(value: "rungkut", child: Text("Rungkut", style: TextStyle(fontSize: 13))),
-                      DropdownMenuItem(value: "tambak langon", child: Text("Tambak Langon", style: TextStyle(fontSize: 13))),
-                    ],
-                    onChanged: (val) => setState(() => _selectedSLoc = val),
+                    items: _warehouseList.map((wh) {
+          return DropdownMenuItem<int>(
+            value: wh['warehouse_id'] as int,
+            child: Text(
+              "${wh['lokasi']} - ${wh['warehouse_name']}", 
+              style: const TextStyle(fontSize: 13)
+            ),
+          );
+        }).toList(),
+        onChanged: (val) => setState(() => _selectedSLoc = val),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildLabel("Dedicated Status"),
-                  DropdownButtonFormField<String>(
-                    decoration: _inputDecoration("Pilih Status"),
-                    value: _selectedDedicated,
-                    items: const [
-                      DropdownMenuItem(value: "dedicated", child: Text("Dedicated", style: TextStyle(fontSize: 13))),
-                      DropdownMenuItem(value: "non-dedicated", child: Text("Non-Dedicated", style: TextStyle(fontSize: 13))),
-                    ],
-                    onChanged: (val) => setState(() => _selectedDedicated = val),
-                  ),
-                ],
-              ),
-            ),
+            // const SizedBox(width: 12),
+            // Expanded(
+            //   child: Column(
+            //     crossAxisAlignment: CrossAxisAlignment.start,
+            //     children: [
+            //       _buildLabel("Dedicated Status"),
+            //       DropdownButtonFormField<String>(
+            //         decoration: _inputDecoration("Pilih Status"),
+            //         value: _selectedDedicated,
+            //         items: const [
+            //           DropdownMenuItem(value: "dedicated", child: Text("Dedicated", style: TextStyle(fontSize: 13))),
+            //           DropdownMenuItem(value: "non-dedicated", child: Text("Non-Dedicated", style: TextStyle(fontSize: 13))),
+            //         ],
+            //         onChanged: (val) => setState(() => _selectedDedicated = val),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
        
@@ -435,7 +460,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                 icon: const Icon(Icons.send_rounded, size: 18),
                 label: Text(
                   item['group_id'] != null
-                    ? "PROSES SEMUA (${(item['grouped_ids'] as List).length})"
+                    ? "PROSES"
                     : "PROSES",
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
@@ -451,8 +476,8 @@ Widget _buildActionForm(Map<String, dynamic> item) {
 
 // 2. Fungsi Bulk Action (Optimasi Request)
 Future<void> _processShippingRequest(Map<String, dynamic> item, String actionType) async {
-  if (_selectedSLoc == null || _selectedDedicated == null) {
-    _showSnackBar("Harap isi lokasi dan status", Colors.orange);
+  if (_selectedSLoc == null) {
+    _showSnackBar("Harap pilih lokasi warehouse", Colors.orange);
     return;
   }
 
@@ -477,8 +502,9 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
     //   'status': 'waiting assign vendor delivery'
     // }).inFilter('shipping_id', idsToProcess);
     await supabase.from('shipping_request').update({
-        'storage_location': _selectedSLoc,
-        'is_dedicated': _selectedDedicated,
+        //'storage_location': _selectedSLoc,
+        //'is_dedicated': _selectedDedicated,
+        'warehouse_id': _selectedSLoc,
         'status': 'waiting assign vendor delivery',
         'createdDODetail_at': DateTime.now().toIso8601String(),
         'createdDODetail_by': _currentUserName ?? 'Unknown Admin', // Sesuaikan dengan user login Anda
@@ -498,7 +524,7 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
     setState(() {
       _expandedId = null;
       _selectedSLoc = null;
-      _selectedDedicated = null;
+      //_selectedDedicated = null;
     });
     await _fetchData();
   } catch (e) {
@@ -525,7 +551,7 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
               setState(() {
                 _expandedId = isExpanded ? null : sid;
                 _selectedSLoc = null;
-                _selectedDedicated = null;
+                //_selectedDedicated = null;
               });
             },
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -771,13 +797,13 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
     //     .delete()
     //     .inFilter('shipping_id', idsToCancel);
 
-    _showSnackBar("Berhasil membatalkan dan membersihkan data", Colors.grey.shade800);
+    _showSnackBar("Pending Berhasil", Colors.grey.shade800);
     
     // Reset state UI
     setState(() {
       _expandedId = null;
       _selectedSLoc = null;
-      _selectedDedicated = null;
+      //_selectedDedicated = null;
     });
     
     // Refresh data agar list terupdate
