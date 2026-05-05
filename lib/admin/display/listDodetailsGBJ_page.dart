@@ -773,7 +773,7 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
             subtitle: Text("🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black54)),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black)),
             trailing: Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
           ),
         ),
@@ -787,67 +787,104 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
           final String rddSpesifik = _formatDate(doItem['rdd_origin'] ?? item['rdd']);
 // Format No Cust - Nama Cust
   final String customerInfo = "${doItem['customer']?['customer_id'] ?? '-'} - ${(doItem['customer']?['customer_name'] ?? '-').toString().toUpperCase()}";
-  
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // RDD di atas masing-masing DO
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-                      const SizedBox(width: 6),
-                      Text("RDD: $rddSpesifik",
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red.shade900)),
-                    ],
-                  ),
+return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. RDD Text (Di luar kotak, tepat di atas Header)
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 4),
+          child: Row(
+            children: [
+              Icon(Icons.calendar_month, size: 13, color: Colors.red.shade700),
+              const SizedBox(width: 6),
+              Text(
+                "RDD: $rddSpesifik",
+                style: TextStyle(
+                  fontSize: 11, 
+                  fontWeight: FontWeight.bold, 
+                  color: Colors.red.shade900
                 ),
-                // Header DO & SO
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade100.withOpacity(0.5),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                      Text("SO: $soPerItem", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                    ],
-                  ),
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Kontainer Utama (Header Pink + Tabel Putih)
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            children: [
+              // HEADER WARNA PINK (DO - SO - CUSTOMER)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  // Warna pink muda sesuai gambar
+                  color: const Color(0xFFFCE4EC), 
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                 ),
-                // Tabel Detail Barang
-                Table(
-                  border: TableBorder.all(color: Colors.grey.shade200, width: 0.5),
-                  columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(4), 2: FlexColumnWidth(1)},
-                  children: details.map((det) => TableRow(
-                    children: [
-                      Padding(padding: const EdgeInsets.all(8), child: Text(det['material_id']?.toString() ?? "-", style: const TextStyle(fontSize: 11))),
-                      Padding(padding: const EdgeInsets.all(8), child: Text(det['material']?['material_name'] ?? "-", style: const TextStyle(fontSize: 11))),
-                      Padding(padding: const EdgeInsets.all(8), child: Text(det['qty']?.toString() ?? "0", textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                    ],
-                  )).toList(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // DO di Kiri
+                    Text(
+                      "DO: ${doItem['do_number']}", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)
+                    ),
+                    // SO di Tengah
+                    Text(
+                      "SO: $soPerItem", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)
+                    ),
+                    // Customer di Kanan
+                    Text(
+                      customerInfo, 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)
+                    ),
+                  ],
                 ),
-                // Lokasi Customer
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
-                    border: Border.all(color: Colors.grey.shade200, width: 0.5),
-                  ),
-                  child: Text("📍 ${doItem['customer']?['customer_id'] ?? '-'} - ${(doItem['customer']?['customer_name'] ?? '-').toString().toUpperCase()}",
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.black54)),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+              ),
+              
+              // TABEL DETAIL MATERIAL (Background Putih)
+              Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1.2), 
+                  1: FlexColumnWidth(4), 
+                  2: FlexColumnWidth(1)
+                },
+                children: details.map((det) => TableRow(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(10), 
+                      child: Text(det['material_id']?.toString() ?? "-", style: const TextStyle(fontSize: 11))
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(10), 
+                      child: Text(det['material']?['material_name'] ?? "-", style: const TextStyle(fontSize: 11))
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(10), 
+                      child: Text(
+                        det['qty']?.toString() ?? "0", 
+                        textAlign: TextAlign.right, 
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)
+                      )
+                    ),
+                  ],
+                )).toList(),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}).toList(),
 
         // --- BAGIAN FORM INPUT: HANYA TAMPIL JIKA DIKLIK ---
         if (isExpanded) 

@@ -72,115 +72,222 @@ Timer? _timer;
     }
   }
 
+  // List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
+  //   Map<int, Map<String, dynamic>> groupedMap = {};
+  //   List<Map<String, dynamic>> finalResult = [];
+  //   for (var req in source) {
+  //     final dynamic rawGroupId = req['group_id'];
+  //     if (rawGroupId == null) {
+  //       Map<String, dynamic> singleItem = Map<String, dynamic>.from(req);
+  //       if (singleItem['delivery_order'] != null) {
+  //         for (var doItem in singleItem['delivery_order']) {
+  //           doItem['parent_so'] = singleItem['so']?.toString() ?? "-";
+  //         }
+  //       }
+  //       finalResult.add(singleItem);
+  //     } else {
+  //       int gId = rawGroupId is String ? int.parse(rawGroupId) : rawGroupId as int;
+  //       if (!groupedMap.containsKey(gId)) {
+  //         groupedMap[gId] = Map<String, dynamic>.from(req);
+  //         groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
+  //         if (groupedMap[gId]!['delivery_order'] != null) {
+  //           for (var doItem in groupedMap[gId]!['delivery_order']) {
+  //             doItem['parent_so'] = req['so']?.toString(); 
+  //           }
+  //         }
+  //       } else {
+  //         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
+  //         List newDos = List.from(req['delivery_order'] ?? []);
+  //         for (var ndo in newDos) { ndo['parent_so'] = req['so']?.toString(); }
+  //         List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
+  //         currentDos.addAll(newDos);
+  //         groupedMap[gId]!['delivery_order'] = currentDos;
+  //       }
+  //     }
+  //   }
+  //   finalResult.addAll(groupedMap.values);
+  //   finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
+  //   return finalResult;
+  // }
   List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
-    Map<int, Map<String, dynamic>> groupedMap = {};
-    List<Map<String, dynamic>> finalResult = [];
-    for (var req in source) {
-      final dynamic rawGroupId = req['group_id'];
-      if (rawGroupId == null) {
-        Map<String, dynamic> singleItem = Map<String, dynamic>.from(req);
-        if (singleItem['delivery_order'] != null) {
-          for (var doItem in singleItem['delivery_order']) {
-            doItem['parent_so'] = singleItem['so']?.toString() ?? "-";
-          }
-        }
-        finalResult.add(singleItem);
-      } else {
-        int gId = rawGroupId is String ? int.parse(rawGroupId) : rawGroupId as int;
-        if (!groupedMap.containsKey(gId)) {
-          groupedMap[gId] = Map<String, dynamic>.from(req);
-          groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
-          if (groupedMap[gId]!['delivery_order'] != null) {
-            for (var doItem in groupedMap[gId]!['delivery_order']) {
-              doItem['parent_so'] = req['so']?.toString(); 
-            }
-          }
-        } else {
-          groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
-          List newDos = List.from(req['delivery_order'] ?? []);
-          for (var ndo in newDos) { ndo['parent_so'] = req['so']?.toString(); }
-          List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
-          currentDos.addAll(newDos);
-          groupedMap[gId]!['delivery_order'] = currentDos;
-        }
+  Map<int, Map<String, dynamic>> groupedMap = {};
+  List<Map<String, dynamic>> finalResult = [];
+
+  for (var req in source) {
+    // Suntik RDD origin ke tiap DO
+    if (req['delivery_order'] != null) {
+      for (var doItem in req['delivery_order']) {
+        doItem['rdd_origin'] = req['rdd'];
       }
     }
-    finalResult.addAll(groupedMap.values);
-    finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
-    return finalResult;
+
+    final dynamic rawGroupId = req['group_id'];
+
+    if (rawGroupId == null) {
+      Map<String, dynamic> singleItem = Map<String, dynamic>.from(req);
+      // Simpan ID assignment tunggal dalam list agar seragam dengan grup
+      singleItem['grouped_assignment_ids'] = [req['id_assignment']];
+      
+      if (singleItem['delivery_order'] != null) {
+        for (var doItem in singleItem['delivery_order']) {
+          doItem['parent_so'] = singleItem['so']?.toString() ?? "-";
+        }
+      }
+      finalResult.add(singleItem);
+    } else {
+      int gId = rawGroupId is String ? int.parse(rawGroupId) : rawGroupId as int;
+      
+      if (!groupedMap.containsKey(gId)) {
+        groupedMap[gId] = Map<String, dynamic>.from(req);
+        groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
+        groupedMap[gId]!['grouped_assignment_ids'] = [req['id_assignment']]; // Mulai kumpulkan ID assignment
+        
+        if (groupedMap[gId]!['delivery_order'] != null) {
+          for (var doItem in groupedMap[gId]!['delivery_order']) {
+            doItem['parent_so'] = req['so']?.toString(); 
+          }
+        }
+      } else {
+        groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
+        groupedMap[gId]!['grouped_assignment_ids'].add(req['id_assignment']); // Tambah ID assignment anggota grup lain
+        
+        List newDos = List.from(req['delivery_order'] ?? []);
+        for (var ndo in newDos) { 
+          ndo['parent_so'] = req['so']?.toString(); 
+        }
+        List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
+        currentDos.addAll(newDos);
+        groupedMap[gId]!['delivery_order'] = currentDos;
+      }
+    }
   }
+  finalResult.addAll(groupedMap.values);
+  finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
+  return finalResult;
+}
+Future<void> _updateAssignment(List<int> assignmentIds, String status, List<int> shipIds, String reason) async {
+  try {
+    setState(() => isLoading = true);
 
-  // --- REJECT LOGIC ---
-  Future<void> _updateAssignment(int assignmentId, String status, int shipId) async {
-    try {
-      await supabase.from('shipping_assignments').update({
-        'status_assignment': status,
-        'responded_at': DateTime.now().toIso8601String(),
-      }).eq('id_assignment', assignmentId);
+    // 1. Update tabel shipping_assignments (Massal menggunakan .inFilter)
+    await supabase.from('shipping_assignments').update({
+      'status_assignment': status,
+      'reason_rejected': status == 'rejected' ? reason : null,
+      'responded_at': DateTime.now().toIso8601String(),
+    }).inFilter('id_assignment', assignmentIds);
 
-      String finalStatusRequest = status == 'accepted' ? 'on process' : 'waiting assign vendor delivery';
+    // 2. Tentukan status untuk shipping_request
+    String finalStatusRequest = status == 'accepted' ? 'on process' : 'waiting assign vendor delivery';
 
-      final currentData = _newOrdersList.firstWhere((element) => 
-        (element['shipping_id'] == shipId) || 
-        (element['grouped_ids'] != null && (element['grouped_ids'] as List).contains(shipId))
+    // 3. Update tabel shipping_request (Massal menggunakan .inFilter)
+    await supabase.from('shipping_request').update({
+      'status': finalStatusRequest
+    }).inFilter('shipping_id', shipIds);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Berhasil $status order"), 
+          backgroundColor: status == 'accepted' ? Colors.green : Colors.orange
+        )
       );
-
-      if (currentData['group_id'] != null) {
-        List<int> allIds = List<int>.from(currentData['grouped_ids']);
-        await supabase.from('shipping_request').update({'status': finalStatusRequest}).inFilter('shipping_id', allIds);
-      } else {
-        await supabase.from('shipping_request').update({'status': finalStatusRequest}).eq('shipping_id', shipId);
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Berhasil $status order"), backgroundColor: Colors.green));
-      _loadInitialData(); 
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal: $e"), backgroundColor: Colors.red));
+      _loadInitialData(); // Refresh data statistik dan list
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Gagal update: $e"), backgroundColor: Colors.red)
+      );
     }
   }
+}
+// // --- FETCH ORDER BARU (Pindahan & Modifikasi) ---
+//   Future<void> _fetchNewOrders() async {
+//     try {
+//       final nik = currentUser?.nikVendor;
+//       if (nik == null) return;
 
-// --- FETCH ORDER BARU (Pindahan & Modifikasi) ---
-  Future<void> _fetchNewOrders() async {
-    try {
-      final nik = currentUser?.nikVendor;
-      if (nik == null) return;
+//       setState(() => _isOrderLoading = true);
 
-      setState(() => _isOrderLoading = true);
+//       final response = await supabase.from('shipping_assignments').select('''
+//             *,
+//             request:shipping_id (
+//               *,
+//               warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+//               delivery_order(
+//                 do_number,
+//                 customer(customer_id, customer_name),
+//                 do_details(qty, material:material_id (material_id, material_name))
+//               )
+//             )
+//           ''')
+//           .eq('nik', nik)
+//           .eq('status_assignment', 'offered')
+//           .order('assigned_at', ascending: false);
 
-      final response = await supabase.from('shipping_assignments').select('''
+//       if (mounted) {
+//         final List<Map<String, dynamic>> flattenedData = (response as List).map((e) {
+//           final Map<String, dynamic> req = Map<String, dynamic>.from(e['request']);
+//           req['id_assignment'] = e['id_assignment'];
+//           req['assigned_at'] = e['assigned_at'];
+//           req['jam_booking'] = e['jam_booking'];
+//           return req;
+//         }).toList();
+
+//         setState(() {
+//           _newOrdersList = _getGroupedDisplayData(flattenedData);
+//           _isOrderLoading = false;
+//         });
+//       }
+//     } catch (e) {
+//       if (mounted) setState(() => _isOrderLoading = false);
+//     }
+//   }
+Future<void> _fetchNewOrders() async {
+  try {
+    final nik = currentUser?.nikVendor;
+    if (nik == null) return;
+
+    setState(() => _isOrderLoading = true);
+
+    // Ambil data assignment
+    final response = await supabase.from('shipping_assignments').select('''
+          *,
+          request:shipping_id (
             *,
-            request:shipping_id (
-              *,
-              warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
-              delivery_order(
-                do_number,
-                customer(customer_id, customer_name),
-                do_details(qty, material:material_id (material_id, material_name))
-              )
+            warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+            delivery_order(
+              do_number,
+              customer(customer_id, customer_name),
+              do_details(qty, material:material_id (material_id, material_name))
             )
-          ''')
-          .eq('nik', nik)
-          .eq('status_assignment', 'offered')
-          .order('assigned_at', ascending: false);
+          )
+        ''')
+        .eq('nik', nik)
+        .eq('status_assignment', 'offered')
+        .order('assigned_at', ascending: false);
 
-      if (mounted) {
-        final List<Map<String, dynamic>> flattenedData = (response as List).map((e) {
-          final Map<String, dynamic> req = Map<String, dynamic>.from(e['request']);
-          req['id_assignment'] = e['id_assignment'];
-          req['assigned_at'] = e['assigned_at'];
-          req['jam_booking'] = e['jam_booking'];
-          return req;
-        }).toList();
-
-        setState(() {
-          _newOrdersList = _getGroupedDisplayData(flattenedData);
-          _isOrderLoading = false;
-        });
+    if (mounted) {
+      List<Map<String, dynamic>> rawList = [];
+      for (var e in (response as List)) {
+        final Map<String, dynamic> req = Map<String, dynamic>.from(e['request']);
+        // Simpan assignment_id asli ke dalam request untuk tracking
+        req['id_assignment'] = e['id_assignment'];
+        req['assigned_at'] = e['assigned_at'];
+        rawList.add(req);
       }
-    } catch (e) {
-      if (mounted) setState(() => _isOrderLoading = false);
+
+      setState(() {
+        // Gunakan fungsi grouping yang sudah diperbaiki di bawah
+        _newOrdersList = _getGroupedDisplayData(rawList);
+        _isOrderLoading = false;
+      });
     }
+  } catch (e) {
+    if (mounted) setState(() => _isOrderLoading = false);
   }
+}
 
   Future<void> _fetchStatistics() async {
     try {
@@ -600,7 +707,7 @@ Widget _buildOrderCard(Map<String, dynamic> item) {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _infoBox("RDD", _formatDate(item['rdd'])),
+                   // _infoBox("RDD", _formatDate(item['rdd'])),
                     _infoBox("STUFFING", _formatDate(item['stuffing_date'])),
                     _infoBox("STATUS", (item['is_dedicated'] ?? "-").toString().toUpperCase()),
                     _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase(), color: Colors.red.shade700),
@@ -657,6 +764,68 @@ Widget _buildOrderCard(Map<String, dynamic> item) {
       ),
     );
   }
+void _showRejectDialog(Map<String, dynamic> item) {
+  final List<String> rejectReasons = [
+    "Tidak Ada Supir",
+    "Tidak Ada Unit",
+    "Unit Rusak",
+    "Jalan Macet",
+    "Dokumen Expired",
+    "Other"
+  ];
+
+  String? selectedReason;
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return AlertDialog(
+          title: const Text("Pilih Alasan Penolakan", 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: rejectReasons.map((reason) => RadioListTile<String>(
+              title: Text(reason, style: const TextStyle(fontSize: 13)),
+              value: reason,
+              groupValue: selectedReason,
+              activeColor: Colors.red,
+              onChanged: (val) {
+                setDialogState(() => selectedReason = val);
+              },
+            )).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), 
+              child: const Text("BATAL")
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: selectedReason == null 
+                ? null 
+                : () {
+                    Navigator.pop(context);
+                    
+                    // --- PERBAIKAN DI SINI: Panggil Nama Fungsinya ---
+                    _updateAssignment(
+                      List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]), 
+                      'rejected', 
+                      item['group_id'] != null 
+                          ? List<int>.from(item['grouped_ids']) 
+                          : [item['shipping_id']], 
+                      selectedReason!
+                    );
+                  },
+              child: const Text("REJECT ORDER", 
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      }
+    ),
+  );
+}
 
   // Tambahkan widget _infoBox agar seragam (jika belum ada di HomepageVendor)
   Widget _infoBox(String label, String value, {Color? color}) {
@@ -889,106 +1058,116 @@ Widget _infoText(String label, String value) {
   //     ),
   //   );
   // }
-
-  Widget _buildDoMiniCard(Map<String, dynamic> doItem, dynamic parentSo) {
-  // Ambil data customer
+Widget _buildDoMiniCard(Map<String, dynamic> doItem, dynamic parentSo) {
+  // Ambil data customer dan RDD yang sudah disuntikkan tadi
   final customer = doItem['customer'] ?? {};
   final String customerDisplay = "${customer['customer_id'] ?? ''} - ${customer['customer_name'] ?? ''}";
   final List details = doItem['do_details'] ?? [];
+  final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 
-  return Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: Colors.grey.shade200),
-    ),
-    
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        
-        // Baris Atas: Nomor DO (Kiri) dan Nomor SO (Kanan)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // --- 1. Teks RDD (Muncul di atas header kotak DO) ---
+      Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 4),
+        child: Row(
           children: [
-            Text(
-              "DO: ${doItem['do_number']}",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-                fontSize: 11,
-              ),
-            ),
-            Text(
-              "SO: ${doItem['parent_so'] ?? parentSo ?? '-'}",
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        
-        // Baris Kedua: Nama Customer dengan Ikon User
-        Row(
-          children: [
-            const Icon(Icons.person, size: 14, color: Colors.blue),
+            Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
             const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                customerDisplay.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
+            Text(
+              "RDD: $rddSpesifik",
+              style: const TextStyle(
+                fontSize: 11, 
+                fontWeight: FontWeight.bold, 
+                color: Color(0xFFB71C1C)
               ),
             ),
           ],
         ),
-        
-        const Divider(height: 20, thickness: 0.5),
+      ),
 
-        // Baris Ketiga: List Material (No Mat - Nama Mat (Kiri) & QTY (Kanan))
-        ...details.map((det) {
-          final mat = det['material'] ?? {};
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
+      // --- 2. Kontainer Box (DO, SO, Customer, & Tabel) ---
+      Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            // Header: DO & SO (Style Pink Muda)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFCE4EC), // Pink Muda konsisten
+                borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "DO: ${doItem['do_number']}",
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.blue),
+                  ),
+                  Text(
+                    "SO: ${doItem['parent_so'] ?? parentSo ?? '-'}",
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Detail Customer & Tabel Material
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      const Icon(Icons.circle, size: 6, color: Colors.grey),
-                      const SizedBox(width: 8),
+                      const Icon(Icons.person, size: 14, color: Colors.blue),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          "${mat['material_id'] ?? '-'} - ${mat['material_name'] ?? '-'}",
-                          style: const TextStyle(fontSize: 10, color: Colors.black87),
+                          customerDisplay.toUpperCase(),
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                ),
-                Text(
-                  "${det['qty']}",
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
+                  const Divider(height: 16, thickness: 0.5),
+                  ...details.map((det) {
+                    final mat = det['material'] ?? {};
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              "${mat['material_id'] ?? '-'} - ${mat['material_name'] ?? '-'}",
+                              style: const TextStyle(fontSize: 9),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            "${det['qty']}",
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
             ),
-          );
-        }).toList(),
-      ],
-    ),
+          ],
+        ),
+      ),
+    ],
   );
 }
 
@@ -1011,26 +1190,26 @@ Widget _infoText(String label, String value) {
   }
 
   // --- DIALOGS & HELPERS ---
-  void _showRejectDialog(Map<String, dynamic> item) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Konfirmasi Reject"),
-        content: const Text("Anda yakin ingin menolak order ini? Order akan dikembalikan ke Admin."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(context);
-              _updateAssignment(item['id_assignment'], 'rejected', item['shipping_id']);
-            },
-            child: const Text("YA, REJECT", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+  // void _showRejectDialog(Map<String, dynamic> item) {
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       title: const Text("Konfirmasi Reject"),
+  //       content: const Text("Anda yakin ingin menolak order ini? Order akan dikembalikan ke Admin."),
+  //       actions: [
+  //         TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
+  //         ElevatedButton(
+  //           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+  //           onPressed: () {
+  //             Navigator.pop(context);
+  //             _updateAssignment(item['id_assignment'], 'rejected', item['shipping_id']);
+  //           },
+  //           child: const Text("YA, REJECT", style: TextStyle(color: Colors.white)),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _infoLabel(String label, String value) {
     return Column(

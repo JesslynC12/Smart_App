@@ -200,9 +200,14 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
 
       // 4. Loop data untuk mengumpulkan DO, Kota, dan Berat
       for (var ship in shippingList) {
-        allDOs.addAll(ship['delivery_order'] ?? []);
+        // allDOs.addAll(ship['delivery_order'] ?? []);
         
-        for (var doItem in ship['delivery_order'] ?? []) {
+        // for (var doItem in ship['delivery_order'] ?? []) {
+        List currentShipDOs = List.from(ship['delivery_order'] ?? []);
+      
+      for (var doItem in currentShipDOs) {
+        // SUNTIK RDD ASAL KE TIAP DO AGAR TAMPIL SPESIFIK DI UI
+        doItem['rdd_origin'] = ship['rdd'];
           var cust = doItem['customer'];
           // Ambil Kota Tujuan
           String city = doItem['customer']?['city']?.toString().trim().toUpperCase() ?? "";
@@ -225,6 +230,7 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
             sumQty += qty;
           }
         }
+        allDOs.addAll(currentShipDOs);
       }
       
 
@@ -497,7 +503,7 @@ Padding(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-                    _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                    // _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -505,8 +511,10 @@ Padding(
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _infoBox("RDD", _formatDate(data['rdd'])),
+                   // _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
+                    const Spacer(),
+                     _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
                    // _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
                   ],
                 ),
@@ -555,11 +563,30 @@ Padding(
           ...dos.map((doItem) {
             final List doDetails = doItem['do_details'] ?? [];
             final String soNum = data['so']?.toString() ?? "-";
+            final String rddSpesifik = _formatDate(doItem['rdd_origin']);
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+          //         Padding(
+          // padding: const EdgeInsets.only(left: 4, bottom: 4),
+          Row(
+            children: [
+              Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
+              const SizedBox(width: 6),
+              Text(
+                "RDD: $rddSpesifik",
+                style: TextStyle(
+                  fontSize: 12, 
+                  fontWeight: FontWeight.bold, 
+                  color: Colors.black
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
                   Row(
                     children: [
                       const Icon(Icons.description_outlined, size: 16, color: Colors.blue),

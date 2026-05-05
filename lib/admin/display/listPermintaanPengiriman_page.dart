@@ -218,7 +218,15 @@ Future<void> _fetchWarehouse() async {
 
     for (var req in source) {
       if (req['group_id'] == null) {
-        finalResult.add(Map<String, dynamic>.from(req));
+       // finalResult.add(Map<String, dynamic>.from(req));
+       // Untuk single data, tetap tempelkan rdd ke DO-nya agar konsisten saat looping di UI
+        final Map<String, dynamic> singleData = Map<String, dynamic>.from(req);
+        if (singleData['delivery_order'] != null) {
+          for (var d in singleData['delivery_order']) {
+            d['rdd_origin'] = req['rdd'];
+          }
+        }
+        finalResult.add(singleData);
       } else {
         int gId = req['group_id'];
         if (!groupedMap.containsKey(gId)) {
@@ -228,6 +236,7 @@ Future<void> _fetchWarehouse() async {
         if (groupedMap[gId]!['delivery_order'] != null) {
           for (var doItem in groupedMap[gId]!['delivery_order']) {
             doItem['parent_so'] = req['so']; 
+            doItem['rdd_origin'] = req['rdd']; // Simpan RDD asli
           }
         }
       } else {
@@ -237,6 +246,7 @@ Future<void> _fetchWarehouse() async {
         List newDos = List.from(req['delivery_order'] ?? []);
         for (var ndo in newDos) {
           ndo['parent_so'] = req['so']; // Menandai SO asal untuk tiap DO
+          ndo['rdd_origin'] = req['rdd'];
         }
 
         List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
@@ -588,8 +598,8 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                   isGroup ? "GROUP ID: ${item['group_id']}" : "SHIP ID: ${item['shipping_id']}",
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
-                const Spacer(),
-                _buildBadge(warehouseDisplay, Colors.red.shade700),
+                // const Spacer(),
+                // _buildBadge(warehouseDisplay, Colors.red.shade700),
               ],
             ),
           ),
@@ -602,15 +612,18 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                 // Info Tanggal
                 Row(
                   children: [
-                    _infoText("📅 RDD:", _formatDate(item['rdd'])),
-                    const SizedBox(width: 20),
+                    // _infoText("📅 RDD:", _formatDate(item['rdd'])),
+                     //const SizedBox(width: 565),
+                     
                     _infoText("🚛 Stuffing:", _formatDate(item['stuffing_date'],)),
-                     const SizedBox(width: 20),
+                     const SizedBox(width: 60),
+                     const Spacer(),
+                _buildBadge(warehouseDisplay, Colors.red.shade700),
 //                       _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
-const Divider(height: 40),
                   ],
                   
                 ),
+  //              const Divider(height: 40),
                 // const SizedBox(height: 4),
                 // _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
                 // const Divider(height: 20),
@@ -654,10 +667,11 @@ const Divider(height: 40),
 //                 ),
 //               ],
               
-//               const Divider(height: 30),
+              const Divider(height: 30),
                 // List Table per DO
                 ...dos.map((doItem) {
                   final List doDetails = doItem['do_details'] ?? [];
+                  final String rddSpesifik = _formatDate(doItem['rdd_origin'] ?? item['rdd']);
                   final String custName = doItem['customer']?['customer_name'] ?? "-";
                   final String custId = doItem['customer']?['customer_id']?.toString() ?? "-";
 
@@ -667,61 +681,125 @@ const Divider(height: 40),
                   //     border: Border.all(color: Colors.grey.shade200),
                   //     borderRadius: BorderRadius.circular(8),
                   //   ),
-                  return Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.grey[300]!), // Border abu tipis
-    ),
-    child: Column(
-      children: [
-        // HEADER BOX (DO - SO - CUSTOMER)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.pink.shade50, // Background abu sangat muda sesuai gambar
-            borderRadius: const BorderRadius.only(
+    //               return Container(
+    // margin: const EdgeInsets.only(bottom: 12),
+    // decoration: BoxDecoration(
+    //   color: Colors.white,
+    //   borderRadius: BorderRadius.circular(8),
+    //   border: Border.all(color: Colors.grey[300]!), // Border abu tipis
+    // ),
+    // child: Column(
+    //   children: [
+    //     // HEADER BOX (DO - SO - CUSTOMER)
+    //     Container(
+    //       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    //       decoration: BoxDecoration(
+    //         color: Colors.pink.shade50, // Background abu sangat muda sesuai gambar
+    //         borderRadius: const BorderRadius.only(
              
-            ),
-          ),
-                    child: Row(
-                      children: [
-                        // Container(
-                        //   padding: const EdgeInsets.all(8),
-                        //   color: Colors.grey.shade50,
-                        //   child: Row(
-                        //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        //     children: [
-                              Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black)),
-                              const Spacer(),
-                              Text(
-                  "SO: ${doItem['parent_so'] ?? item['so'] ?? '-'}", // Pastikan key 'so_number' sesuai data Anda
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                              Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
+    //         ),
+    //       ),
+    //                 child: Row(
+    //                   children: [
+    //                     // Container(
+    //                     //   padding: const EdgeInsets.all(8),
+    //                     //   color: Colors.grey.shade50,
+    //                     //   child: Row(
+    //                     //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    //                     //     children: [
+    //                           Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black)),
+    //                           const Spacer(),
+    //                           Text(
+    //               "SO: ${doItem['parent_so'] ?? item['so'] ?? '-'}", // Pastikan key 'so_number' sesuai data Anda
+    //               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+    //             ),
+    //             const Spacer(),
+    //                           Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+    //                         ],
+    //                       ),
+    //                     ),
+    //                     Table(
+    //                       columnWidths: const {
+    //                         0: FlexColumnWidth(1.2), // No Mat
+    //                         1: FlexColumnWidth(4),   // Nama Mat
+    //                         2: FlexColumnWidth(1),   // Qty
+    //                       },
+    //                       children: doDetails.map((det) => TableRow(
+    //                         children: [
+    //                           _tablePadding(det['material']?['material_id']?.toString() ?? "-"),
+    //                           _tablePadding(det['material']?['material_name'] ?? "-"),
+    //                           _tablePadding(det['qty']?.toString() ?? "0", isBold: true, align: TextAlign.right),
+    //                         ],
+    //                       )).toList(),
+    //                     ),]
+    //                     ,
+    //               ),
+    //             );
+    //           }).toList(),
+    return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. Teks RDD Milik DO Ini
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
+                            const SizedBox(width: 6),
+                            Text(
+                              "RDD: $rddSpesifik",
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade900),
+                            ),
+                          ],
                         ),
-                        Table(
-                          columnWidths: const {
-                            0: FlexColumnWidth(1.2), // No Mat
-                            1: FlexColumnWidth(4),   // Nama Mat
-                            2: FlexColumnWidth(1),   // Qty
-                          },
-                          children: doDetails.map((det) => TableRow(
-                            children: [
-                              _tablePadding(det['material']?['material_id']?.toString() ?? "-"),
-                              _tablePadding(det['material']?['material_name'] ?? "-"),
-                              _tablePadding(det['qty']?.toString() ?? "0", isBold: true, align: TextAlign.right),
-                            ],
-                          )).toList(),
-                        ),]
-                        ,
-                  ),
-                );
-              }).toList(),
+                      ),
+
+                      // 2. Kontainer Detail DO
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFCE4EC), // Pink sesuai permintaan
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                                  Text("SO: ${doItem['parent_so'] ?? item['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                  Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            Table(
+                              columnWidths: const {
+                                0: FlexColumnWidth(1.2),
+                                1: FlexColumnWidth(4),
+                                2: FlexColumnWidth(1),
+                              },
+                              children: doDetails.map((det) => TableRow(
+                                children: [
+                                  _tablePadding(det['material']?['material_id']?.toString() ?? "-"),
+                                  _tablePadding(det['material']?['material_name'] ?? "-"),
+                                  _tablePadding(det['qty']?.toString() ?? "0", isBold: true, align: TextAlign.right),
+                                ],
+                              )).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
                         // --- BAGIAN RIWAYAT REJECT (Diletakkan di bawah material) ---
                         if (rejectHistory.isNotEmpty) ...[
                           const Divider(height: 1, thickness: 1),

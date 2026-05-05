@@ -108,7 +108,82 @@ Map<String, int> _bookedCounts = {};
   //   }
   // }
 
-  Future<void> _loadData() async {
+//   Future<void> _loadData() async {
+//   try {
+//     setState(() => _isLoading = true);
+    
+//     final initialRes = await supabase
+//         .from('shipping_request')
+//         .select('group_id')
+//         .eq('shipping_id', widget.shippingId)
+//         .single();
+
+//     final int? groupId = initialRes['group_id'];
+    
+//     // Pastikan kita select kolom 'so' juga
+//     PostgrestFilterBuilder query = supabase.from('shipping_request').select('''
+//           *,
+//           so, 
+//           warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+//           delivery_order(
+//             *,
+//             customer(*),
+//             do_details(
+//               qty,
+//               material:material_id (material_id, material_name, net_weight)
+//             )
+//           )
+//         ''');
+
+//     dynamic response;
+//     if (groupId != null) {
+//       response = await query.eq('group_id', groupId).order('shipping_id');
+//     } else {
+//       response = await query.eq('shipping_id', widget.shippingId);
+//     }
+
+//     setState(() {
+//       if (groupId != null) {
+//         List list = response as List;
+//         _shippingData = Map<String, dynamic>.from(list[0]);
+//         _shippingData!['all_shipping_ids'] = list.map((e) => e['shipping_id']).toList();
+        
+//         List allDos = [];
+//         for (var item in list) {
+//           // --- PERBAIKAN DI SINI ---
+//           // Ambil semua DO dari baris ini
+//           List currentDos = List.from(item['delivery_order'] ?? []);
+          
+//           // Sisipkan nomor SO dari baris ini ke dalam setiap DO-nya
+//           for (var doItem in currentDos) {
+//             doItem['parent_so'] = item['so']; 
+//           }
+          
+//           allDos.addAll(currentDos);
+//         }
+//         _shippingData!['delivery_order'] = allDos;
+//       } else {
+//         final singleData = (response as List).first;
+//         _shippingData = Map<String, dynamic>.from(singleData);
+        
+//         // Untuk data single juga kita set agar konsisten
+//         if (_shippingData!['delivery_order'] != null) {
+//           for (var doItem in _shippingData!['delivery_order']) {
+//             doItem['parent_so'] = _shippingData!['so'];
+//           }
+//         }
+//       }
+//       _isLoading = false;
+//     });
+//   } catch (e) {
+//     setState(() => _isLoading = false);
+//     ScaffoldMessenger.of(context).showSnackBar(
+//       SnackBar(content: Text("Gagal memuat detail: $e"), backgroundColor: Colors.red),
+//     );
+//   }
+// }
+
+Future<void> _loadData() async {
   try {
     setState(() => _isLoading = true);
     
@@ -120,7 +195,6 @@ Map<String, int> _bookedCounts = {};
 
     final int? groupId = initialRes['group_id'];
     
-    // Pastikan kita select kolom 'so' juga
     PostgrestFilterBuilder query = supabase.from('shipping_request').select('''
           *,
           so, 
@@ -143,35 +217,21 @@ Map<String, int> _bookedCounts = {};
     }
 
     setState(() {
-      if (groupId != null) {
-        List list = response as List;
-        _shippingData = Map<String, dynamic>.from(list[0]);
-        
-        List allDos = [];
-        for (var item in list) {
-          // --- PERBAIKAN DI SINI ---
-          // Ambil semua DO dari baris ini
-          List currentDos = List.from(item['delivery_order'] ?? []);
-          
-          // Sisipkan nomor SO dari baris ini ke dalam setiap DO-nya
-          for (var doItem in currentDos) {
-            doItem['parent_so'] = item['so']; 
-          }
-          
-          allDos.addAll(currentDos);
+      List list = response as List;
+      // Simpan semua ID dalam grup untuk proses update nanti
+      _shippingData = Map<String, dynamic>.from(list[0]);
+      _shippingData!['all_shipping_ids'] = list.map((e) => e['shipping_id']).toList();
+      
+      List allDos = [];
+      for (var item in list) {
+        List currentDos = List.from(item['delivery_order'] ?? []);
+        for (var doItem in currentDos) {
+          doItem['parent_so'] = item['so']; 
+          doItem['rdd_origin'] = item['rdd']; // SUNTIK RDD ASAL DI SINI
         }
-        _shippingData!['delivery_order'] = allDos;
-      } else {
-        final singleData = (response as List).first;
-        _shippingData = Map<String, dynamic>.from(singleData);
-        
-        // Untuk data single juga kita set agar konsisten
-        if (_shippingData!['delivery_order'] != null) {
-          for (var doItem in _shippingData!['delivery_order']) {
-            doItem['parent_so'] = _shippingData!['so'];
-          }
-        }
+        allDos.addAll(currentDos);
       }
+      _shippingData!['delivery_order'] = allDos;
       _isLoading = false;
     });
   } catch (e) {
@@ -198,71 +258,130 @@ int _getMaxCapacity(String timeSlot) {
 }
 
 
-  Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
-    if (_selectedTime == null) return;
-    // Validasi Keamanan: Pastikan jam baru tidak sama dengan jam lama
+//   Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
+//     if (_selectedTime == null) return;
+//     // Validasi Keamanan: Pastikan jam baru tidak sama dengan jam lama
+//   if (widget.oldTime != null && _selectedTime == widget.oldTime) {
+//     ScaffoldMessenger.of(context).showSnackBar(
+//       const SnackBar(
+//         content: Text("Anda harus memilih jam yang berbeda untuk reschedule!"), 
+//         backgroundColor: Colors.orange
+//       ),
+//     );
+//     return;
+//   }
+//     setState(() => _isSaving = true);
+// //String actionType = widget.oldTime == null ? 'INITIAL_BOOKING' : 'RESCHEDULE';
+//     try {
+//       if (widget.oldTime != null && widget.oldTime != _selectedTime) {
+//         await supabase.from('booking_history').insert({
+//           'id_assignment': widget.assignmentId,
+//           'jam_lama': widget.oldTime,     // Pindahkan jam dari shipping_assignment
+//           'jam_baru': _selectedTime,    // Catat tujuan jam barunya
+//           'changed_by': widget.vendorNik,
+//           //'keterangan': actionType,
+//           'reason_reschedule': rescheduleReasons,
+//           'created_at': DateTime.now().toIso8601String(),
+//         });
+//       }
+//     // 1. Update tabel penugasan vendor
+//       // Kita simpan status 'accepted' dan 'jam_booking' di sini
+//       await supabase.from('shipping_assignments').update({
+//         'status_assignment': 'accepted',
+//         'responded_at': DateTime.now().toIso8601String(),
+//         'jam_booking': _selectedTime, // Disimpan ke tabel assignments
+//       }).eq('id_assignment', widget.assignmentId);
+
+//       // 2. Update tabel request utama
+//       // HANYA update status menjadi 'on process'. 
+//       // Kita hapus baris 'arrival_time' agar tidak menyebabkan error.
+//       await supabase.from('shipping_request').update({
+//         'status': 'on process',
+//       }).eq('shipping_id', widget.shippingId);
+//       if (mounted) {
+//         widget.onSuccess();
+//         // Navigator.pop(context);
+//         // --- PERUBAHAN DI SINI ---
+//         // Ambil instance DynamicTabPage dan tutup tab saat ini
+//         final dynamicTab = DynamicTabPage.of(context);
+//         if (dynamicTab != null) {
+//           dynamicTab.closeCurrentTab();
+//         } else {
+//           // Fallback jika dibuka tidak melalui dynamic tab
+//           Navigator.pop(context);
+//         }
+//         // --------------------------
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           const SnackBar(content: Text("Berhasil! Jadwal telah disimpan."), backgroundColor: Colors.green),
+//         );
+//       }
+//     } catch (e) {
+//       setState(() => _isSaving = false);
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red),
+//       );
+//     }
+//   }
+Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
+  if (_selectedTime == null) return;
   if (widget.oldTime != null && _selectedTime == widget.oldTime) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Anda harus memilih jam yang berbeda untuk reschedule!"), 
-        backgroundColor: Colors.orange
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pilih jam yang berbeda!"), backgroundColor: Colors.orange));
     return;
   }
-    setState(() => _isSaving = true);
-//String actionType = widget.oldTime == null ? 'INITIAL_BOOKING' : 'RESCHEDULE';
-    try {
-      if (widget.oldTime != null && widget.oldTime != _selectedTime) {
-        await supabase.from('booking_history').insert({
-          'id_assignment': widget.assignmentId,
-          'jam_lama': widget.oldTime,     // Pindahkan jam dari shipping_assignment
-          'jam_baru': _selectedTime,    // Catat tujuan jam barunya
-          'changed_by': widget.vendorNik,
-          //'keterangan': actionType,
-          'reason_reschedule': rescheduleReasons,
-          'created_at': DateTime.now().toIso8601String(),
-        });
-      }
-    // 1. Update tabel penugasan vendor
-      // Kita simpan status 'accepted' dan 'jam_booking' di sini
-      await supabase.from('shipping_assignments').update({
-        'status_assignment': 'accepted',
-        'responded_at': DateTime.now().toIso8601String(),
-        'jam_booking': _selectedTime, // Disimpan ke tabel assignments
-      }).eq('id_assignment', widget.assignmentId);
 
-      // 2. Update tabel request utama
-      // HANYA update status menjadi 'on process'. 
-      // Kita hapus baris 'arrival_time' agar tidak menyebabkan error.
-      await supabase.from('shipping_request').update({
-        'status': 'on process',
-      }).eq('shipping_id', widget.shippingId);
-      if (mounted) {
-        widget.onSuccess();
-        // Navigator.pop(context);
-        // --- PERUBAHAN DI SINI ---
-        // Ambil instance DynamicTabPage dan tutup tab saat ini
-        final dynamicTab = DynamicTabPage.of(context);
-        if (dynamicTab != null) {
-          dynamicTab.closeCurrentTab();
-        } else {
-          // Fallback jika dibuka tidak melalui dynamic tab
-          Navigator.pop(context);
-        }
-        // --------------------------
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Berhasil! Jadwal telah disimpan."), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red),
-      );
+  setState(() => _isSaving = true);
+  try {
+    final List<int> shipIds = List<int>.from(_shippingData!['all_shipping_ids']);
+
+    // 1. Ambil semua assignment ID yang terkait dengan shipping IDs ini
+    final assignmentRes = await supabase
+        .from('shipping_assignments')
+        .select('id_assignment')
+        .inFilter('shipping_id', shipIds)
+        .eq('nik', widget.vendorNik);
+
+    final List<int> assignmentIds = (assignmentRes as List).map((e) => e['id_assignment'] as int).toList();
+
+    // 2. Insert ke history jika Reschedule
+    if (widget.oldTime != null) {
+      final List<Map<String, dynamic>> historyInserts = assignmentIds.map((id) => {
+        'id_assignment': id,
+        'jam_lama': widget.oldTime,
+        'jam_baru': _selectedTime,
+        'changed_by': widget.vendorNik,
+        'reason_reschedule': rescheduleReasons,
+        'created_at': DateTime.now().toIso8601String(),
+      }).toList();
+      await supabase.from('booking_history').insert(historyInserts);
     }
-  }
 
+    // 3. Update tabel penugasan vendor (Massal)
+    await supabase.from('shipping_assignments').update({
+      'status_assignment': 'accepted',
+      'responded_at': DateTime.now().toIso8601String(),
+      'jam_booking': _selectedTime,
+    }).inFilter('id_assignment', assignmentIds);
+
+    // 4. Update tabel request utama (Massal)
+    await supabase.from('shipping_request').update({
+      'status': 'on process',
+    }).inFilter('shipping_id', shipIds);
+
+    if (mounted) {
+      widget.onSuccess();
+      final dynamicTab = DynamicTabPage.of(context);
+      if (dynamicTab != null) {
+        dynamicTab.closeCurrentTab();
+      } else {
+        Navigator.pop(context);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Berhasil! Jadwal grup telah disimpan."), backgroundColor: Colors.green));
+    }
+  } catch (e) {
+    setState(() => _isSaving = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red));
+  }
+}
   
 
   @override
@@ -348,7 +467,7 @@ Widget _buildDetailedSummary() {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _infoBox("RDD", _formatDate(data['rdd'])),
+                   // _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
                     _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
                   ],
@@ -402,12 +521,22 @@ Widget _buildDetailedSummary() {
             final List doDetails = doItem['do_details'] ?? [];
             // PERBAIKAN: Ambil SO dari parent_so (untuk grup) atau fallback ke data['so']
             final String soNum = doItem['parent_so']?.toString() ?? data['so']?.toString() ?? "-";
-            
+            final String rddSpesifik = _formatDate(doItem['rdd_origin']);
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+          children: [
+            Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
+            const SizedBox(width: 6),
+            Text("RDD: $rddSpesifik",
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB71C1C))),
+          ],
+        ),
+        const SizedBox(height: 6),
                   Row(
                     children: [
                       const Icon(Icons.description_outlined, size: 16, color: Colors.blue),
@@ -415,7 +544,7 @@ Widget _buildDetailedSummary() {
                       Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(width: 20),
                       // SO Sekarang akan dinamis sesuai masing-masing shipment
-                      Text("SO: $soNum", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                      Text("SO: $soNum", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
                     ],
                   ),
                   const SizedBox(height: 8),

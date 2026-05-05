@@ -103,14 +103,13 @@ class _VendorOnProcessPageState extends State<VendorOnProcessPage> {
 //     _showSnackBar("Error: $e", Colors.red);
 //   }
 // }
-
 Future<void> _fetchOngoingOrders() async {
   try {
     setState(() => _isLoading = true);
     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-    // 1. Ambil data assignment vendor terlebih dahulu
-    final assignmentRes = await supabase.from('shipping_assignments').select('''
+    // 1. Ambil data assignment vendor
+    final response = await supabase.from('shipping_assignments').select('''
           *,
           shipping_request:shipping_id!inner (
             *,
@@ -131,48 +130,46 @@ Future<void> _fetchOngoingOrders() async {
         .eq('shipping_request.$_dateFilterType', formattedDate)
         .order('jam_booking', ascending: true);
 
-    List<Map<String, dynamic>> finalData = [];
+    // 2. PROSES GROUPING MANUAL AGAR TIDAK DUPLIKAT
+    Map<String, Map<String, dynamic>> groupedMap = {};
 
-    for (var item in assignmentRes) {
-      Map<String, dynamic> mutableItem = Map<String, dynamic>.from(item);
-      final req = mutableItem['shipping_request'];
-      
-      // 2. LOGIKA GROUP SHIP: Jika ada group_id, ambil semua DO dari shipping lain dalam grup
-      if (req['group_id'] != null) {
-        final allGroupMembers = await supabase.from('shipping_request').select('''
-              *,
-              delivery_order(
-                do_number,
-                customer(customer_id, customer_name),
-                do_details(
-                  qty, 
-                  material:material_id (material_id, material_name)
-                )
-              )
-            ''')
-            .eq('group_id', req['group_id'])
-            .order('shipping_id');
+    for (var item in response) {
+      final req = item['shipping_request'];
+      if (req == null) continue;
 
-        // Gabungkan semua delivery_order dari semua member grup ke dalam satu list
-        List allDos = [];
-        for (var member in allGroupMembers) {
-          List dos = List.from(member['delivery_order'] ?? []);
-          // Tambahkan info SO dari shipping request induk ke tiap DO agar jelas
-          for (var d in dos) {
-            d['parent_so'] = member['so'];
-          }
-          allDos.addAll(dos);
-        }
+      // Buat key unik (Pakai group_id jika ada, jika tidak pakai shipping_id)
+      String key = req['group_id'] != null 
+          ? "GROUP_${req['group_id']}" 
+          : "SINGLE_${req['shipping_id']}";
+
+      if (!groupedMap.containsKey(key)) {
+        // Masukkan data pertama
+        Map<String, dynamic> mutableItem = Map<String, dynamic>.from(item);
         
-        // Update data request dengan semua DO yang sudah digabung
-        mutableItem['shipping_request']['delivery_order'] = allDos;
+        // Suntik RDD origin ke tiap DO di item pertama
+        List dos = List.from(mutableItem['shipping_request']['delivery_order'] ?? []);
+        for (var d in dos) {
+          d['rdd_origin'] = req['rdd'];
+          d['parent_so'] = req['so'];
+        }
+        mutableItem['shipping_request']['delivery_order'] = dos;
+        groupedMap[key] = mutableItem;
+      } else {
+        // Jika sudah ada, gabungkan Delivery Order-nya saja
+        List existingDos = List.from(groupedMap[key]!['shipping_request']['delivery_order'] ?? []);
+        List newDos = List.from(req['delivery_order'] ?? []);
+
+        for (var ndo in newDos) {
+          ndo['rdd_origin'] = req['rdd']; // Simpan RDD spesifik member grup ini
+          ndo['parent_so'] = req['so'];
+          existingDos.add(ndo);
+        }
+        groupedMap[key]!['shipping_request']['delivery_order'] = existingDos;
       }
-      
-      finalData.add(mutableItem);
     }
 
     setState(() {
-      _dataList = finalData;
+      _dataList = groupedMap.values.toList();
       _isLoading = false;
     });
   } catch (e) {
@@ -633,13 +630,245 @@ Future<void> _fetchOngoingOrders() async {
   // ); 
   // }
 
-  Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
-  // Mengambil data request (menggunakan alias shipping_request dari query)
-  final request = item['shipping_request'] ?? {}; 
+//   Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
+//   // Mengambil data request (menggunakan alias shipping_request dari query)
+//   final request = item['shipping_request'] ?? {}; 
   
-  if (request.isEmpty) {
-    return const SizedBox.shrink(); 
-  }
+//   if (request.isEmpty) {
+//     return const SizedBox.shrink(); 
+//   }
+
+//   final bool isGroup = request['group_id'] != null;
+//   final List dos = request['delivery_order'] ?? [];
+//   final warehouse = request['warehouse'];
+  
+//   String warehouseDisplay = warehouse != null 
+//       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
+//       : "-";
+
+//   // Cek apakah vendor masih boleh reschedule (Maks 2 jam sebelum jam_booking)
+//   bool isAllowed = _canReschedule(item['jam_booking'], request['stuffing_date']);
+
+//   return Card(
+//     margin: const EdgeInsets.only(bottom: 16),
+//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+//     elevation: 3,
+//     child: Column(
+//       children: [
+//         // HEADER CARD: Ungu untuk Group, Biru untuk Single
+//         Container(
+//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+//           decoration: BoxDecoration(
+//             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
+//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+//           ),
+//           child: Row(
+//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//             children: [
+//               Row(
+//                 children: [
+//                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
+//                   const SizedBox(width: 8),
+//                   Text(
+//                     item['jam_booking'] ?? "-",
+//                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+//                   ),
+//                 ],
+//               ),
+//               Container(
+//                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+//                 decoration: BoxDecoration(
+//                   color: Colors.white24,
+//                   borderRadius: BorderRadius.circular(20),
+//                   border: Border.all(color: Colors.white, width: 0.5),
+//                 ),
+//                 child: Text(
+//                   isGroup ? "GROUP SHIP ${request['group_id']}" : "SHIP ID ${request['shipping_id']}",
+//                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+
+//         Padding(
+//           padding: const EdgeInsets.all(16),
+//           child: Column(
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               // BARIS INFO: RDD, STUFFING, DEDICATED, WAREHOUSE
+//               Row(
+//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                 children: [
+//                   _infoBox("RDD", _formatDate(request['rdd'])),
+//                   _infoBox("STUFFING", _formatDate(request['stuffing_date'])),
+//                   _infoBox("STATUS", (request['is_dedicated'] ?? "-").toString().toUpperCase()),
+//                   _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase(), color: Colors.red.shade700),
+//                 ],
+//               ),
+              
+//               const Divider(height: 32),
+
+//               // RINCIAN MUATAN (DO)
+//               const Text("RINCIAN MUATAN", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+//               const SizedBox(height: 10),
+              
+//               ...dos.map((doItem) {
+//                 final List details = doItem['do_details'] ?? [];
+//                 return Container(
+//                   margin: const EdgeInsets.only(bottom: 12),
+//                   padding: const EdgeInsets.all(12),
+//                   decoration: BoxDecoration(
+//                     color: Colors.grey.shade50,
+//                     borderRadius: BorderRadius.circular(10),
+//                     border: Border.all(color: Colors.grey.shade200),
+//                   ),
+//                   child: Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       Row(
+//                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                         children: [
+//                           Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 11)),
+//                           Text("SO: ${doItem['parent_so'] ?? request['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+//                         ],
+//                       ),
+//                       const SizedBox(height: 6),
+//                       Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}",
+//                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+//                       const Divider(height: 20),
+//                       ...details.map((det) {
+//                         final mat = det['material'] ?? {};
+//                         return Padding(
+//                           padding: const EdgeInsets.only(bottom: 6),
+//                           child: Row(
+//                             children: [
+//                               const Icon(Icons.circle, size: 6, color: Colors.grey),
+//                               const SizedBox(width: 8),
+//                               Expanded(
+//                                 child: Text(
+//                                   "${mat['material_id'] ?? '-'} - ${mat['material_name'] ?? '-'}",
+//                                   style: const TextStyle(fontSize: 10),
+//                                 ),
+//                               ),
+//                               Text("${det['qty']}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
+//                             ],
+//                           ),
+//                         );
+//                       }).toList(),
+//                     ],
+//                   ),
+//                 );
+//               }).toList(),
+
+//               const SizedBox(height: 10),
+
+//               // TOMBOL AKSI: CANCEL & RESCHEDULE
+//               Row(
+//                 children: [
+//                   Expanded(
+//                     child: OutlinedButton.icon(
+//                       onPressed: () => _showCancelDialog(item),
+//                       icon: const Icon(Icons.cancel, size: 16),
+//                       label: const Text("CANCEL", style: TextStyle(fontSize: 11)),
+//                       style: OutlinedButton.styleFrom(
+//                         foregroundColor: Colors.red, 
+//                         side: const BorderSide(color: Colors.red),
+//                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+//                       ),
+//                     ),
+//                   ),
+//                   const SizedBox(width: 10),
+//                   Expanded(
+//                     child: ElevatedButton.icon(
+//                       onPressed: isAllowed ? () {
+//                         DynamicTabPage.of(context)?.openTab(
+//                           "Reschedule #${request['shipping_id']}", 
+//                           ScheduleSelectionPage(
+//                             assignmentId: item['id_assignment'],
+//                             shippingId: item['shipping_id'],
+//                             oldTime: item['jam_booking'],
+//                             vendorNik: widget.vendorNik,
+//                             onSuccess: () => _fetchOngoingOrders(),
+//                           ),
+//                         );
+//                       } : null, // Disabled jika sudah lewat batas 2 jam
+//                       icon: Icon(
+//                         isAllowed ? Icons.edit_calendar : Icons.lock_clock, 
+//                         size: 16, 
+//                         color: Colors.white
+//                       ),
+//                       label: Text(
+//                         isAllowed ? "RESCHEDULE" : "TERKUNCI", 
+//                         style: const TextStyle(color: Colors.white, fontSize: 11)
+//                       ),
+//                       style: ElevatedButton.styleFrom(
+//                         backgroundColor: isAllowed ? Colors.red.shade700 : Colors.grey,
+//                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+//                       ),
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//               // --- TULISAN PERINGATAN (SEKARANG DI LUAR IF AGAR MUNCUL TERUS) ---
+//               // Padding(
+//               //   padding: const EdgeInsets.only(top: 12.0),
+//               //   child: Container(
+//               //     padding: const EdgeInsets.all(8),
+//               //     decoration: BoxDecoration(
+//               //       color: isAllowed ? Colors.blue.shade50 : Colors.red.shade50,
+//               //       borderRadius: BorderRadius.circular(6),
+//               //     ),
+//               //     child: Row(
+//               //       children: [
+//               //         Icon(
+//               //           Icons.info_outline, 
+//               //           size: 14, 
+//               //           color: isAllowed ? Colors.blue.shade900 : Colors.red.shade900
+//               //         ),
+//               //         const SizedBox(width: 8),
+//               //         Expanded(
+//               //           child: Text(
+//               //             "Batas reschedule berakhir (Maks. 2 jam sebelum jam booking).",
+//               //             style: TextStyle(
+//               //               fontSize: 10, 
+//               //               color: isAllowed ? Colors.blue.shade900 : Colors.red.shade900, 
+//               //               fontWeight: isAllowed ? FontWeight.normal : FontWeight.bold,
+//               //               fontStyle: FontStyle.italic
+//               //             ),
+//               //           ),
+//               //         ),
+//               //       ],
+//               //     ),
+//               //   ),
+//               // ),
+//               // // Peringatan jika tombol terkunci
+//               // if (!isAllowed)
+//                 Padding(
+//                   padding: const EdgeInsets.only(top: 8.0),
+//                   child: Row(
+//                     children: [
+//                       const Icon(Icons.info_outline, size: 12, color: Colors.red),
+//                       const SizedBox(width: 4),
+//                       Expanded(
+//                         child: Text(
+//                           "Batas reschedule berakhir (Maks 2 jam sebelum jam booking).",
+//                           style: TextStyle(fontSize: 10, color: Colors.red.shade900, fontStyle: FontStyle.italic),
+//                         ),
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//             ],
+//           ),
+//         ),
+//       ],
+//     ),
+//   );
+// }
+Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
+  final request = item['shipping_request'] ?? {}; 
+  if (request.isEmpty) return const SizedBox.shrink(); 
 
   final bool isGroup = request['group_id'] != null;
   final List dos = request['delivery_order'] ?? [];
@@ -649,7 +878,6 @@ Future<void> _fetchOngoingOrders() async {
       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
       : "-";
 
-  // Cek apakah vendor masih boleh reschedule (Maks 2 jam sebelum jam_booking)
   bool isAllowed = _canReschedule(item['jam_booking'], request['stuffing_date']);
 
   return Card(
@@ -658,7 +886,7 @@ Future<void> _fetchOngoingOrders() async {
     elevation: 3,
     child: Column(
       children: [
-        // HEADER CARD: Ungu untuk Group, Biru untuk Single
+        // HEADER CARD
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -672,10 +900,8 @@ Future<void> _fetchOngoingOrders() async {
                 children: [
                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
                   const SizedBox(width: 8),
-                  Text(
-                    item['jam_booking'] ?? "-",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
+                  Text(item['jam_booking'] ?? "-",
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ],
               ),
               Container(
@@ -699,11 +925,22 @@ Future<void> _fetchOngoingOrders() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // BARIS INFO: RDD, STUFFING, DEDICATED, WAREHOUSE
+              // INFO LOGS (Assigned & Responded)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _infoBox("RDD", _formatDate(request['rdd'])),
+                  Text("Assigned: ${_formatDateTime(item['assigned_at'])}",
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+                  Text("Responded: ${_formatDateTime(item['responded_at'])}",
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // INFO SUMMARY
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   _infoBox("STUFFING", _formatDate(request['stuffing_date'])),
                   _infoBox("STATUS", (request['is_dedicated'] ?? "-").toString().toUpperCase()),
                   _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase(), color: Colors.red.shade700),
@@ -712,61 +949,78 @@ Future<void> _fetchOngoingOrders() async {
               
               const Divider(height: 32),
 
-              // RINCIAN MUATAN (DO)
-              const Text("RINCIAN MUATAN", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-              const SizedBox(height: 10),
-              
+              // --- LIST DO & RDD (DIUBAH KE DESAIN KONSISTEN) ---
               ...dos.map((doItem) {
                 final List details = doItem['do_details'] ?? [];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                final String rddSpesifik = _formatDate(doItem['rdd_origin']);
+                final String custInfo = "${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}";
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1. Teks RDD di luar kotak pink
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Row(
                         children: [
-                          Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 11)),
-                          Text("SO: ${doItem['parent_so'] ?? request['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
+                          const SizedBox(width: 6),
+                          Text("RDD: $rddSpesifik",
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB71C1C))),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}",
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                      const Divider(height: 20),
-                      ...details.map((det) {
-                        final mat = det['material'] ?? {};
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.circle, size: 6, color: Colors.grey),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  "${mat['material_id'] ?? '-'} - ${mat['material_name'] ?? '-'}",
-                                  style: const TextStyle(fontSize: 10),
-                                ),
-                              ),
-                              Text("${det['qty']}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
-                            ],
+                    ),
+
+                    // 2. Kontainer Detail DO
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        children: [
+                          // Header Pink DO
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFCE4EC),
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                                Text("SO: ${doItem['parent_so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                Text(custInfo, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
                           ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
+                          // Tabel Material
+                          Table(
+                            columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(4), 2: FlexColumnWidth(1)},
+                            children: details.map((det) {
+                              final mat = det['material'] ?? {};
+                              return TableRow(
+                                children: [
+                                  _tableCell(mat['material_id']?.toString() ?? "-"),
+                                  _tableCell(mat['material_name'] ?? "-"),
+                                  _tableCell(det['qty']?.toString() ?? "0", align: TextAlign.right, isBold: true),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 );
               }).toList(),
 
               const SizedBox(height: 10),
 
-              // TOMBOL AKSI: CANCEL & RESCHEDULE
+              // TOMBOL AKSI
               Row(
                 children: [
                   Expanded(
@@ -774,92 +1028,29 @@ Future<void> _fetchOngoingOrders() async {
                       onPressed: () => _showCancelDialog(item),
                       icon: const Icon(Icons.cancel, size: 16),
                       label: const Text("CANCEL", style: TextStyle(fontSize: 11)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red, 
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: isAllowed ? () {
-                        DynamicTabPage.of(context)?.openTab(
-                          "Reschedule #${request['shipping_id']}", 
-                          ScheduleSelectionPage(
-                            assignmentId: item['id_assignment'],
-                            shippingId: item['shipping_id'],
-                            oldTime: item['jam_booking'],
-                            vendorNik: widget.vendorNik,
-                            onSuccess: () => _fetchOngoingOrders(),
-                          ),
-                        );
-                      } : null, // Disabled jika sudah lewat batas 2 jam
-                      icon: Icon(
-                        isAllowed ? Icons.edit_calendar : Icons.lock_clock, 
-                        size: 16, 
-                        color: Colors.white
-                      ),
-                      label: Text(
-                        isAllowed ? "RESCHEDULE" : "TERKUNCI", 
-                        style: const TextStyle(color: Colors.white, fontSize: 11)
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isAllowed ? Colors.red.shade700 : Colors.grey,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                         // Navigasi Reschedule...
+                      } : null,
+                      icon: Icon(isAllowed ? Icons.edit_calendar : Icons.lock_clock, size: 16),
+                      label: Text(isAllowed ? "RESCHEDULE" : "TERKUNCI", style: const TextStyle(fontSize: 11)),
+                      style: ElevatedButton.styleFrom(backgroundColor: isAllowed ? Colors.red.shade700 : Colors.grey),
                     ),
                   ),
                 ],
               ),
-              // --- TULISAN PERINGATAN (SEKARANG DI LUAR IF AGAR MUNCUL TERUS) ---
-              // Padding(
-              //   padding: const EdgeInsets.only(top: 12.0),
-              //   child: Container(
-              //     padding: const EdgeInsets.all(8),
-              //     decoration: BoxDecoration(
-              //       color: isAllowed ? Colors.blue.shade50 : Colors.red.shade50,
-              //       borderRadius: BorderRadius.circular(6),
-              //     ),
-              //     child: Row(
-              //       children: [
-              //         Icon(
-              //           Icons.info_outline, 
-              //           size: 14, 
-              //           color: isAllowed ? Colors.blue.shade900 : Colors.red.shade900
-              //         ),
-              //         const SizedBox(width: 8),
-              //         Expanded(
-              //           child: Text(
-              //             "Batas reschedule berakhir (Maks. 2 jam sebelum jam booking).",
-              //             style: TextStyle(
-              //               fontSize: 10, 
-              //               color: isAllowed ? Colors.blue.shade900 : Colors.red.shade900, 
-              //               fontWeight: isAllowed ? FontWeight.normal : FontWeight.bold,
-              //               fontStyle: FontStyle.italic
-              //             ),
-              //           ),
-              //         ),
-              //       ],
-              //     ),
-              //   ),
-              // ),
-              // // Peringatan jika tombol terkunci
-              // if (!isAllowed)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, size: 12, color: Colors.red),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          "Batas reschedule berakhir (Maks 2 jam sebelum jam booking).",
-                          style: TextStyle(fontSize: 10, color: Colors.red.shade900, fontStyle: FontStyle.italic),
-                        ),
-                      ),
-                    ],
+              
+              if (!isAllowed)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    "* Batas reschedule berakhir (Maks 2 jam sebelum jam booking).",
+                    style: TextStyle(fontSize: 10, color: Colors.red, fontStyle: FontStyle.italic),
                   ),
                 ),
             ],
@@ -870,7 +1061,22 @@ Future<void> _fetchOngoingOrders() async {
   );
 }
 
-
+// Tambahkan Helper TableCell jika belum ada
+Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left}) {
+  return Padding(
+    padding: const EdgeInsets.all(8),
+    child: Text(
+      text,
+      textAlign: align,
+      style: TextStyle(fontSize: 10, fontWeight: isBold ? FontWeight.bold : FontWeight.normal),
+    ),
+  );
+}
+String _formatDateTime(String? dateStr) {
+  if (dateStr == null) return "-";
+  DateTime dt = DateTime.parse(dateStr).toLocal();
+  return DateFormat('dd/MM/yy HH:mm').format(dt);
+}
   // // --- HELPERS ---
   // void _showCancelDialog(Map<String, dynamic> item) {
   //   final TextEditingController reasonController = TextEditingController();
