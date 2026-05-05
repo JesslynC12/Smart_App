@@ -367,10 +367,10 @@ void _showErrorDialog(String message) {
       // userLokasi = profileResponse['lokasi'];
       userDisplayName = profileResponse['name'];
     }
-      final customerResponse = await supabase
-          .from('customer')
-          .select('customer_id, customer_name')
-          .order('customer_id', ascending: true);
+      // final customerResponse = await supabase
+      //     .from('customer')
+      //     .select('customer_id, customer_name,data_log')
+      //     .order('customer_id', ascending: true);
 
       final materialResponse = await supabase
           .from('material')
@@ -384,7 +384,7 @@ void _showErrorDialog(String message) {
 
       if (mounted) {
         setState(() {
-          customers = List<Map<String, dynamic>>.from(customerResponse);
+          //customers = List<Map<String, dynamic>>.from(customerResponse);
           materialList = List<Map<String, dynamic>>.from(materialResponse);
           // warehouseList = List<Map<String, dynamic>>.from(warehouseResponse); // Simpan hasil
           isLoading = false;
@@ -571,42 +571,134 @@ void _showErrorDialog(String message) {
   );
 }
 
+// Widget _buildCustomerPickerForInputRow() {
+//   return Column(
+//     crossAxisAlignment: CrossAxisAlignment.start,
+//     children: [
+//       const Text("Customer Tujuan *", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+//       const SizedBox(height: 4),
+//       DropdownSearch<Map<String, dynamic>>(
+//         items: (f, l) => customers,
+//         // itemAsString: (i) => "${i['customer_name']}",
+//         itemAsString: (i) => "${i['customer_id']} - ${i['customer_name']}",
+//         // TAMBAHKAN KODE INI:
+//         compareFn: (item, selectedItem) => 
+//             item['customer_id'].toString() == selectedItem['customer_id'].toString(),
+//         filterFn: (item, filter) {
+//           final search = filter.toLowerCase();
+//           final id = item['customer_id'].toString().toLowerCase();
+//           final name = (item['customer_name'] ?? "").toString().toLowerCase();
+//           final log = (item['data_log'] ?? "").toString().toLowerCase();
+          
+//           return id.contains(search) || name.contains(search) || log.contains(search);
+//         },
+//         onChanged: (v) => setState(() => selectedCustomerId = v?['customer_id']?.toString()),
+//         selectedItem: selectedCustomerId == null 
+//             ? null 
+//             : customers.cast<Map<String, dynamic>?>().firstWhere(
+//                 (c) => c?['customer_id'].toString() == selectedCustomerId, 
+//                 orElse: () => null,
+//               ),
+//         decoratorProps: DropDownDecoratorProps(
+//           decoration: InputDecoration(
+//             isDense: true, 
+//             filled: true, 
+//             fillColor: Colors.white,
+//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+//             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+//             hintText: "Cari ID, Nama, atau Log...",
+//           ),
+//         ),
+//        popupProps: PopupProps.menu(
+//           showSearchBox: true,
+//           searchFieldProps: const TextFieldProps(
+//             decoration: InputDecoration(
+//               hintText: "Ketik ID / Nama / Data Log...",
+//               prefixIcon: Icon(Icons.search),
+//             ),
+//           ),
+//           // --- CUSTOM TAMPILAN LIST (Agar Data Log terlihat saat dicari) ---
+//           itemBuilder: (context, item, isSelected, isHovered) {
+//             return ListTile(
+//               selected: isSelected,
+//               title: Text("${item['customer_id']} - ${item['customer_name']}"),
+//               subtitle: item['data_log'] != null && item['data_log'].toString().isNotEmpty
+//                   ? Text(item['data_log'], style: const TextStyle(fontSize: 11, color: Colors.grey))
+//                   : null,
+//             );
+//           },
+//         ),
+//       ),
+//     ],
+//   );
+// }
+
 Widget _buildCustomerPickerForInputRow() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text("Customer Tujuan *", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 4),
-      DropdownSearch<Map<String, dynamic>>(
-        items: (f, l) => customers,
-        // itemAsString: (i) => "${i['customer_name']}",
-        itemAsString: (i) => "${i['customer_id']} - ${i['customer_name']}",
-        // TAMBAHKAN KODE INI:
-        compareFn: (item, selectedItem) => 
-            item['customer_id'].toString() == selectedItem['customer_id'].toString(),
-        
-        onChanged: (v) => setState(() => selectedCustomerId = v?['customer_id']?.toString()),
-        selectedItem: selectedCustomerId == null 
-            ? null 
-            : customers.cast<Map<String, dynamic>?>().firstWhere(
-                (c) => c?['customer_id'].toString() == selectedCustomerId, 
-                orElse: () => null,
-              ),
-        decoratorProps: DropDownDecoratorProps(
-          decoration: InputDecoration(
-            isDense: true, 
-            filled: true, 
-            fillColor: Colors.white,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            hintText: "Pilih Customer",
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Customer Tujuan *", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        DropdownSearch<Map<String, dynamic>>(
+          // Fungsi pencarian langsung ke database
+          items: (String filter, LoadProps? loadProps) async {
+            var query = supabase.from('customer').select('customer_id, customer_name, data_log');
+            
+            if (filter.isNotEmpty) {
+              final isNumber = int.tryParse(filter) != null;
+              if (isNumber) {
+                // Perbaikan error PGRST100: Gunakan .eq untuk ID angka
+                query = query.or('customer_id.eq.$filter, customer_name.ilike.%$filter%, data_log.ilike.%$filter%');
+              } else {
+                query = query.or('customer_name.ilike.%$filter%, data_log.ilike.%$filter%');
+              }
+            }
+            
+            final response = await query.limit(50).order('customer_id');
+            return List<Map<String, dynamic>>.from(response);
+          },
+
+          itemAsString: (i) => "${i['customer_id']} - ${i['customer_name']}",
+          compareFn: (item, selectedItem) => item['customer_id'].toString() == selectedItem['customer_id'].toString(),
+          
+          onChanged: (v) {
+            setState(() {
+              selectedCustomerId = v?['customer_id']?.toString();
+              // Simpan data customer terpilih ke objek sementara untuk digunakan saat Add to Table
+              _tempSelectedCustomerData = v;
+            });
+          },
+
+          decoratorProps: DropDownDecoratorProps(
+            decoration: InputDecoration(
+              isDense: true,
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              hintText: "Cari ID/Nama/Log...",
+            ),
+          ),
+
+          popupProps: PopupProps.menu(
+            showSearchBox: true,
+            searchFieldProps: const TextFieldProps(
+              decoration: InputDecoration(hintText: "Ketik untuk mencari...", prefixIcon: Icon(Icons.search)),
+            ),
+            itemBuilder: (context, item, isSelected, isHovered) {
+              return ListTile(
+                selected: isSelected,
+                title: Text("${item['customer_id']} - ${item['customer_name']}"),
+                subtitle: Text(item['data_log'] ?? "-", style: const TextStyle(fontSize: 11)),
+              );
+            },
           ),
         ),
-        popupProps: const PopupProps.menu(showSearchBox: true),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
+
+Map<String, dynamic>? _tempSelectedCustomerData;
 
 void _addItemToTable() async {
   // Validasi input dasar
@@ -619,6 +711,7 @@ void _addItemToTable() async {
   }
 
   final String currentDo = _tempDoController.text.trim();
+  
   // --- PENGECEKAN DATABASE (BARU) ---
   //setState(() => isLoading = true); // Tampilkan loading sebentar
   String? usedDate = await _checkDoExistence(currentDo);
@@ -631,9 +724,9 @@ void _addItemToTable() async {
   //final String currentCustId = selectedCustomerId!;
   // final String currentCustName = customers.firstWhere((c) => c['customer_id'].toString() == currentCustId)['customer_name'];
 
-final customerData = customers.firstWhere(
-    (c) => c['customer_id'].toString() == selectedCustomerId.toString()
-  );
+// final customerData = customers.firstWhere(
+//     (c) => c['customer_id'].toString() == selectedCustomerId.toString()
+//   );
 
   // VALIDASI: Jika No DO sama sudah ada di tabel, tujuannya (Customer) HARUS sama
   // bool isDoExistWithDifferentCust = selectedMaterials.any((item) => 
@@ -660,11 +753,14 @@ final customerData = customers.firstWhere(
   setState(() {
     selectedMaterials.add({
       "do_number": currentDo,
-      "customer_id": customerData['customer_id'].toString(), // Pastikan ID tersimpan
-      "customer_name": customerData['customer_name'] ?? "",
-      // "customer_id": currentCustId,
-      // "customer_name": currentCustName, // Simpan nama untuk ditampilkan di tabel
-      "material_id": currentMatId,
+      // "customer_id": customerData['customer_id'].toString(), // Pastikan ID tersimpan
+      // "customer_name": customerData['customer_name'] ?? "",
+      // // "customer_id": currentCustId,
+      // // "customer_name": currentCustName, // Simpan nama untuk ditampilkan di tabel
+      // "material_id": currentMatId,
+      "customer_id": selectedCustomerId,
+        "customer_name": _tempSelectedCustomerData?['customer_name'] ?? "Unknown",
+        "material_id": _tempSelectedMaterial!['material_id'].toString(),
       "material_name": _tempSelectedMaterial!['material_name'] ?? "",
       "qty": _tempQtyController.text,
     });

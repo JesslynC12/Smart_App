@@ -194,6 +194,7 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
      // 3. Inisialisasi variabel perhitungan
       List allDOs = [];
       List<String> cities = [];
+      List<String> areas = [];
       double sumQty = 0;
       double sumNW = 0;
 
@@ -202,10 +203,16 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
         allDOs.addAll(ship['delivery_order'] ?? []);
         
         for (var doItem in ship['delivery_order'] ?? []) {
+          var cust = doItem['customer'];
           // Ambil Kota Tujuan
-          String city = doItem['customer']?['city']?.toString().trim() ?? "";
+          String city = doItem['customer']?['city']?.toString().trim().toUpperCase() ?? "";
           if (city.isNotEmpty && !cities.contains(city)) {
             cities.add(city);
+
+            // Ambil Area (Sesuai kolom area di tabel customer Anda)
+            String area = cust['area']?.toString().trim().toUpperCase() ?? "";
+            if (area.isNotEmpty && !areas.contains(area)) areas.add(area);
+          
           }
 
           // Hitung Berat (Logika tidak berubah)
@@ -274,8 +281,9 @@ String storageLocDisplay = whData != null
     : "-";
 //String storageLoc = shippingList.first['storage_location']?.toString().trim() ?? "";
       double tnwCalculated = sumNW / 1000;
-      String unitRequired = _determineUnitByWeight(tnwCalculated);
-
+      //String unitRequired = _determineUnitByWeight(tnwCalculated);
+// Panggil fungsi penentu unit dengan parameter lengkap
+      String unitRequired = _determineUnitByWeight(tnwCalculated, cities, areas);
       // 5. Ambil vendor
       final responses = await Future.wait([
         supabase
@@ -283,6 +291,7 @@ String storageLocDisplay = whData != null
             .select()
             .eq('type_unit', unitRequired)
             .filter('city', 'in', '(${cities.map((e) => '"$e"').join(',')})')
+            .filter('area', 'in', '(${areas.map((e) => '"$e"').join(',')})')
             .ilike('lokasi_gudang', '%$storageLoc%')
             .order('winner_rank', ascending: true)
             .order('alokasi_persen', ascending: false)
@@ -321,12 +330,41 @@ String storageLocDisplay = whData != null
     }
   }
 
-  String _determineUnitByWeight(double ton) {
-    if (ton <= 2.0) return "CDE";
-    if (ton <= 4.0) return "CDD";
-    if (ton <= 10.0) return "FUSO";
-    return "WB";
+  // String _determineUnitByWeight(double ton) {
+  //   if (ton <= 2.0) return "CDE";
+  //   if (ton <= 4.0) return "CDD";
+  //   if (ton <= 10.0) return "FUSO";
+  //   return "WB";
+  // }
+  String _determineUnitByWeight(double ton, List<String> cities, List<String> areas) {
+  bool isToMarunda = cities.any((c) => c.toUpperCase().contains("MARUNDA"));
+  
+  // Daftar area khusus Container (berdasarkan gambar Anda)
+  const contAreas = [
+    'GORONTALO', 'KALIMANTAN BARAT', 'KALIMANTAN SELATAN', 'KALIMANTAN TENGAH',
+    'KALIMANTAN TIMUR', 'KALIMANTAN UTARA', 'KEPULAUAN RIAU', 'MALUKU',
+    'MALUKU UTARA', 'NTB', 'NTT', 'P. BANGKA & BELITUNG', 'PAPUA',
+    'PAPUA BARAT', 'RIAU', 'SULAWESI SELATAN', 'SULAWESI TENGAH',
+    'SULAWESI TENGGARA', 'SULAWESI UTARA', 'SUMATERA BARAT',
+    'SUMATERA SELATAN', 'SUMATERA UTARA'
+  ];
+
+  // Cek apakah ada salah satu area tujuan yang masuk dalam daftar di atas
+  bool isContArea = areas.any((a) => contAreas.contains(a.toUpperCase().trim()));
+
+  if (ton <= 2.8) return "CDE";
+  if (ton <= 5.5) return "CDD";
+  if (ton <= 12.0) return "FUSO";
+  
+  // LOGIKA BERAT > 12 TON
+  if (isToMarunda) {
+    return "CONT (KA)";
+  } else if (isContArea) {
+    return "CONT"; // Menggunakan Container jika area sesuai gambar
+  } else {
+    return "WB"; // Default menggunakan Wingbox untuk area lainnya (Jawa/Lokal)
   }
+}
 
   @override
   Widget build(BuildContext context) {

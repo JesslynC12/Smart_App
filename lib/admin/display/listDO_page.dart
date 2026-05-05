@@ -1,4 +1,3 @@
-// ignore: file_names
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io' as io; // Gunakan prefix io untuk Mobile
@@ -54,6 +53,7 @@ void _setupRealtime() {
           _fetchShippingRequests(); 
         });
   }
+
 // Future<void> _importMassalTigaTabel() async {
 //     try {
 //       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -258,13 +258,17 @@ Future<void> _fetchShippingRequests() async {
         .from('shipping_request')
         .select('''
           *,
-          pending_reason,
           group_id,
           delivery_order (
             do_number,
             customer (customer_id, customer_name),
             do_details (details_id, qty, material (material_id, material_name, material_type, net_weight))
-          )
+          ),
+      shipping_pending_history (
+      shipping_id,
+        reason,
+        pending_at
+      )
         ''')
         // .eq('status', 'waiting approval',) 
         .inFilter('status', ['waiting approval', 'pending'])
@@ -600,12 +604,55 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
       if (!groupedMap.containsKey(gId)) {
         groupedMap[gId] = Map<String, dynamic>.from(req);
         groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
-        
+        groupedMap[gId]!['all_rdds'] = [req['rdd']];
         // Pastikan so di simpan di dalam list delivery_order pendukungnya
         // (Biasanya sudah ada di level shipping_request)
+        // Inisialisasi koleksi riwayat pending dengan menyertakan Ship ID
+        // List historyWithId = [];
+        // if (req['shipping_pending_history'] != null) {
+        //   for (var h in req['shipping_pending_history']) {
+        //     historyWithId.add({...h, 'origin_ship_id': req['shipping_id']});
+        //   }
+        // }
+        // groupedMap[gId]!['collective_history'] = historyWithId;
+        // Ambil history dan paksa masukkan Ship ID jika datanya belum punya key 'shipping_id'
+  List historyRaw = req['shipping_pending_history'] ?? [];
+  List historyWithId = historyRaw.map((h) => {
+    ...h, 
+    'origin_ship_id': req['shipping_id'] // Suntik ID asli ke tiap baris history
+  }).toList();
+  
+  groupedMap[gId]!['collective_history'] = historyWithId;
       } else {
         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
         
+        // // Gabungkan riwayat pending dari anggota grup baru
+        // if (req['shipping_pending_history'] != null) {
+        //   List currentHistory = groupedMap[gId]!['collective_history'];
+        //   for (var h in req['shipping_pending_history']) {
+        //     currentHistory.add({...h, 'origin_ship_id': req['shipping_id']});
+        //   }
+        //   groupedMap[gId]!['collective_history'] = currentHistory;
+        // }
+
+        // Gabungkan history dari anggota grup berikutnya
+  List currentHistory = List.from(groupedMap[gId]!['collective_history'] ?? []);
+  List newHistoryRaw = req['shipping_pending_history'] ?? [];
+  
+  for (var h in newHistoryRaw) {
+    currentHistory.add({
+      ...h, 
+      'origin_ship_id': req['shipping_id'] // Suntik ID asli di sini juga
+    });
+  }
+  groupedMap[gId]!['collective_history'] = currentHistory;
+
+        // Tambahkan RDD ke dalam list jika belum ada (unik)
+        List<String?> rdds = List<String?>.from(groupedMap[gId]!['all_rdds']);
+        if (!rdds.contains(req['rdd'])) {
+          rdds.add(req['rdd']);
+        }
+        groupedMap[gId]!['all_rdds'] = rdds;
         // Ambil list DO yang sudah ada
         List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
         
@@ -1215,233 +1262,6 @@ double get _totalSelectedTNW {
   return total / 1000; // Kembalikan dalam satuan Kg
 }
 
-// Widget _buildTableArea() {
-//     if (_filteredRequests.isEmpty) {
-//       return const Center(child: Text("Tidak ada data ditemukan"));
-//     }
-
-//     return LayoutBuilder(
-//       builder: (context, constraints) {
-//         return SingleChildScrollView(
-//           //scrollDirection: Axis.vertical,
-//           child: SingleChildScrollView(
-//             scrollDirection: Axis.horizontal,
-//             child: Container(
-//               constraints: BoxConstraints(minWidth: constraints.maxWidth),
-//               child: DataTable(
-//                 headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
-//                 headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-//                 dataRowMaxHeight: double.infinity,
-//                 dataRowMinHeight: 70,
-//                 columnSpacing: 15,
-//                 columns: const [
-//                   DataColumn(label: Text('Pilih')),      // 1
-//                   DataColumn(label: Text('Ship ID')),    // 2
-//                   DataColumn(label: Text('No DO')),      // 3
-//                   DataColumn(label: Text('SO Number')),  // 4
-//                   DataColumn(label: Text('No Cust')),    // 5
-//                   DataColumn(label: Text('Customer Tujuan')),   // 6
-//                   DataColumn(label: Text('No Mat')),     // 7
-//                   DataColumn(label: Text('Nama Material')),   // 8
-//                   DataColumn(label: Text('Type')),       // 9
-//                   DataColumn(label: Text('Qty')),        // 10
-//                   DataColumn(label: Text('NW')),         // 11
-//                   DataColumn(label: Text('TNW')),        // 12
-//                   DataColumn(label: Text('RDD')),        // 13
-//                   DataColumn(label: Text('Stuffing')),   // 14
-//                   DataColumn(label: Text('Aksi')),       // 15
-//                 ],
-//                 // rows: _filteredRequests.map((req) {
-//                 rows: _getGroupedDisplayData(_filteredRequests).map((req) {
-//                   final isGroupRow = req['group_id'] != null;
-//   final List<int> idsInRow = isGroupRow 
-//       ? List<int>.from(req['grouped_ids']) 
-//       : [req['shipping_id'] as int];
-      
-//   // Checkbox aktif jika SALAH SATU atau SEMUA id di baris ini terpilih
-//   final bool isSelected = idsInRow.any((id) => _selectedIds.contains(id));
-
-//                   final int shippingId = req['shipping_id'];
-//                   //final bool isSelected = _selectedIds.contains(shippingId);
-//                   final List dos = req['delivery_order'] ?? [];
-
-//                   List<Widget> doNumW = [], soW = [], custIdW = [], custW = [], matIdW = [], matW = [], matTypeW = [], qtyW = [], nwW = [];
-//                   double totalNetWeight = 0;
-
-//                   for (var d in dos) {
-//                     String currentSo = d['parent_so']?.toString() ?? req['so']?.toString() ?? "-";
-//                     String custId = d['customer']?['customer_id']?.toString() ?? "-";
-//                     for (var det in d['do_details']) {
-//                       double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-//                       double nwValue = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-//                       double rowNw = qty * nwValue;
-//                       totalNetWeight += rowNw;
-
-// // Tambahkan SO ke dalam list widget
-//     soW.add(_buildTextItem(currentSo, width: 100)); // Sesuaikan lebar
-
-//                       doNumW.add(_buildTextItem(d['do_number'] ?? "-", isBold: true, width: 80));
-//                       custIdW.add(_buildTextItem(custId, width: 60));
-//                       custW.add(_buildTextItem(d['customer']?['customer_name'] ?? "-", width: 140));
-//                       matIdW.add(_buildTextItem(det['material']?['material_id']?.toString() ?? "-", width: 80));
-//                       matW.add(_buildTextItem(det['material']?['material_name'] ?? "-", width: 180));
-//                       matTypeW.add(_buildTextItem(det['material']?['material_type'] ?? "-", width: 60));
-//                       qtyW.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true));
-//                       nwW.add(_buildTextItem(formatSmart(rowNw), width: 60));
-//                     }
-//                   }
-
-//                   return DataRow(
-//                     selected: isSelected,
-//                     color: WidgetStateProperty.resolveWith<Color?>((states) {
-//                       if (states.contains(WidgetState.selected)) return Colors.grey.shade400.withOpacity(0.5);
-//                       // WARNA BARIS BERDASARKAN STATUS
-//     final String currentStatus = (req['status'] ?? "").toString().toLowerCase();
-//     if (currentStatus == 'pending') {
-//       return Colors.red.shade100; // Warna kemerahan lembut untuk data cancel
-//     }
-//                       if (req['group_id'] != null) return Colors.blue.shade100.withOpacity(0.5);
-//                       return null;
-//                     }),
-//                     cells: [
-//                       DataCell(Checkbox(
-//                         value: isSelected,
-//                        onChanged: (v) {
-//       setState(() {
-//         if (v == true) {
-//           _selectedIds.addAll(idsInRow);
-//         } else {
-//           _selectedIds.removeAll(idsInRow);
-//         }
-//       });
-//     },
-//   )), // 1
-//   DataCell(Column(
-//     mainAxisAlignment: MainAxisAlignment.center,
-//     crossAxisAlignment: CrossAxisAlignment.start,
-   
-//    children: [
-//           // Jika Grup, tampilkan semua ID (misal: 20, 30), jika tidak tampilkan 1 ID
-//           Text(isGroupRow ? idsInRow.join(", ") : shippingId.toString(), 
-//                style: TextStyle(fontWeight: isGroupRow ? FontWeight.bold : FontWeight.normal, fontSize: 11)),
-//           // TAMPILKAN STATUS BADGE DI SINI
-//        _buildStatusBadge(req['status'], req['pending_reason']),
-
-//         // TAMPILKAN ALASAN CANCEL (Hanya jika statusnya cancel)
-//     // if (req['status']?.toString().toLowerCase() == 'cancel' && req['cancel_reason'] != null)
-//     //   Padding(
-//     //     padding: const EdgeInsets.only(top: 4),
-//     //     child: SizedBox(
-//     //       width: 100, // Batasi lebar agar tidak merusak tabel
-//     //       child: Text(
-//     //         "Ket: ${req['cancel_reason']}",
-//     //         style: TextStyle(
-//     //           fontSize: 9, 
-//     //           color: Colors.red.shade900, 
-//     //           fontStyle: FontStyle.italic
-//     //         ),
-//     //         maxLines: 2,
-//     //         overflow: TextOverflow.ellipsis,
-//     //       ),
-//     //     ),
-//     //   ),
-
-//           if (isGroupRow)
-//             Container(
-//               margin: const EdgeInsets.only(top: 2),
-//               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-//               decoration: BoxDecoration(color: Colors.blue.shade700, borderRadius: BorderRadius.circular(4)),
-//               child: Text("GROUP ID: ${req['group_id']}", style: const TextStyle(color: Colors.white, fontSize: 9)),
-//             ),
-//         ],
-//                       )), // 2
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: doNumW)), // 3
-//                      DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: soW)), // 4. SO Number
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: custIdW)), // 5
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: custW)), // 6
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matIdW)), // 7
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matW)), // 8
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: matTypeW)), // 9
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: qtyW)), // 10
-//                       DataCell(Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: nwW)), // 11
-//                       DataCell(Text(formatSmart(totalNetWeight / 1000), style: const TextStyle(fontWeight: FontWeight.bold))), // 12
-//                       DataCell(Text(_formatDate(req['rdd']))), // 13
-//                       DataCell(Text(_formatDate(req['stuffing_date']))), // 14
-//                       DataCell(Row(
-//                         children: [
-//                           IconButton(
-//                             icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-//                             onPressed: () => _editShippingRequest(req),
-//                             constraints: const BoxConstraints(),
-//                             padding: const EdgeInsets.symmetric(horizontal: 4),
-//                           ),
-//                           IconButton(
-//                             icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-//                             onPressed: () => _deleteShippingRequest(req),
-//                             constraints: const BoxConstraints(),
-//                             padding: const EdgeInsets.symmetric(horizontal: 4),
-//                           ),
-//                         ],
-//                       )), // 15
-//                     ],
-//                   );
-//                 }).toList(),
-//               ),
-//             ),
-//           ),
-//         );
-//       },
-//     );
-//   }
-
-// Widget _buildTableArea() {
-//   if (_filteredRequests.isEmpty) {
-//     return const Center(child: Text("Tidak ada data ditemukan"));
-//   }
-
-//   return LayoutBuilder(
-//     builder: (context, constraints) {
-//       return Column(
-//         children: [
-//           // --- BAGIAN 1: HEADER (TETAP DI ATAS) ---
-//           SingleChildScrollView(
-//             scrollDirection: Axis.horizontal,
-//             child: DataTable(
-//               headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
-//               headingTextStyle: const TextStyle(
-//                   color: Colors.white,
-//                   fontWeight: FontWeight.bold,
-//                   fontSize: 12),
-//               columnSpacing: 15,
-//               columns: _buildColumns(),
-//               rows: const [], // Baris kosong karena ini hanya untuk header
-//             ),
-//           ),
-
-//           // --- BAGIAN 2: BODY (BISA DI-SCROLL VERTIKAL) ---
-//           Expanded(
-//             child: SingleChildScrollView(
-//               scrollDirection: Axis.vertical,
-//               child: SingleChildScrollView(
-//                 scrollDirection: Axis.horizontal,
-//                 child: DataTable(
-//                   headingRowHeight: 0, // Sembunyikan header tabel body
-//                   dataRowMaxHeight: double.infinity,
-//                   dataRowMinHeight: 70,
-//                   columnSpacing: 15,
-//                   columns: _buildColumns(), // Harus identik dengan header
-//                   rows: _getGroupedDisplayData(_filteredRequests).map((req) {
-//                     return _buildDataRow(req); // Fungsi helper untuk merender baris
-//                   }).toList(),
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       );
-//     },
-//   );
-// }
 Widget _buildTableArea() {
   if (_filteredRequests.isEmpty) {
     return const Center(child: Text("Tidak ada data ditemukan"));
@@ -1572,7 +1392,7 @@ DataRow _buildDataRow(Map<String, dynamic> req) {
               style: TextStyle(
                   fontWeight: isGroupRow ? FontWeight.bold : FontWeight.normal,
                   fontSize: 11)),
-          _buildStatusBadge(req['status'], req['pending_reason']),
+          _buildStatusBadge(req['status'],isGroupRow ? req['collective_history'] : req['shipping_pending_history']),
           if (isGroupRow)
             Container(
               margin: const EdgeInsets.only(top: 2),
@@ -1602,15 +1422,29 @@ DataRow _buildDataRow(Map<String, dynamic> req) {
       DataCell(
         InkWell(
           onTap: () => _selectDate(context, req, 'rdd'),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_formatDate(req['rdd']), style: const TextStyle(color: Colors.black)),
-              // const Icon(Icons.calendar_month, size: 14, color: Colors.blue),
-            ],
-          ),
-        ),
+          child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Builder(
+        builder: (context) {
+          // Jika ini adalah grup, tampilkan semua RDD yang dikumpulkan
+          if (req['all_rdds'] != null) {
+            List<String?> rdds = List<String?>.from(req['all_rdds']);
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: rdds.map((r) => Text(
+                _formatDate(r), 
+                style: const TextStyle(fontSize: 12, color: Colors.black)
+              )).toList(),
+            );
+          }
+          // Jika bukan grup, tampilkan satu tanggal seperti biasa
+          return Text(_formatDate(req['rdd']), style: const TextStyle(color: Colors.black));
+        }
       ),
+    ),
+  ),
+),
 
       // KOLOM STUFFING INTERAKTIF
       DataCell(
@@ -1732,6 +1566,55 @@ Future<void> _selectDate(BuildContext context, Map<String, dynamic> req, String 
   }
 }
 
+Future<void> _setPending(int shippingId, String reason) async {
+  try {
+    // 1. INPUT KE TABEL BARU (Riwayat Pending)
+    await supabase.from('shipping_pending_history').insert({
+      'shipping_id': shippingId,
+      'reason': reason,
+      'pending_by': userDisplayName ?? 'System', // Pastikan userDisplayName terisi
+    });
+
+    // 2. UPDATE TABEL UTAMA (Status)
+    await supabase.from('shipping_request').update({
+      'status': 'pending',
+    }).eq('shipping_id', shippingId);
+
+    _showSnackBar("Data berhasil dipending", Colors.orange);
+    
+    // 3. REFRESH DATA
+    _fetchShippingRequests();
+    
+  } catch (e) {
+    debugPrint("Error Pending: $e");
+    _showSnackBar("Gagal simpan pending: $e", Colors.red);
+  }
+}
+
+Future<void> _setPendingGroup(List<int> shippingIds, String reason) async {
+  try {
+    // Siapkan list riwayat untuk bulk insert
+    final List<Map<String, dynamic>> historyData = shippingIds.map((id) => {
+      'shipping_id': id,
+      'reason': reason,
+      'pending_by': userDisplayName ?? 'System',
+    }).toList();
+
+    // 1. Insert ke riwayat secara massal
+    await supabase.from('shipping_pending_history').insert(historyData);
+
+    // 2. Update status semua ID tersebut
+    await supabase.from('shipping_request')
+        .update({'status': 'pending'})
+        .inFilter('shipping_id', shippingIds);
+
+    _showSnackBar("Grup berhasil dipending", Colors.orange);
+    _fetchShippingRequests();
+  } catch (e) {
+    _showSnackBar("Gagal pending grup: $e", Colors.red);
+  }
+}
+
 Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
   final int shippingId = req['shipping_id'];
   final int? groupId = req['group_id'];
@@ -1793,182 +1676,6 @@ Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
   }
 }
 
-// void _editShippingRequest(Map<String, dynamic> req) async {
-//   final bool isGroup = req['group_id'] != null;
-//   final List<int> idsToUpdate = isGroup 
-//       ? List<int>.from(req['grouped_ids']) 
-//       : [req['shipping_id'] as int];
-
-//   final TextEditingController soController = TextEditingController(text: req['so']?.toString() ?? "");
-//   DateTime? selectedRDD = req['rdd'] != null ? DateTime.tryParse(req['rdd'].toString()) : null;
-//   DateTime? selectedStuffing = req['stuffing_date'] != null ? DateTime.tryParse(req['stuffing_date'].toString()) : null;
-
-//   showModalBottomSheet(
-//     context: context,
-//     isScrollControlled: true,
-//     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-//     builder: (context) => StatefulBuilder(
-//       builder: (context, setModalState) => Padding(
-//         padding: EdgeInsets.only(
-//           bottom: MediaQuery.of(context).viewInsets.bottom, 
-//           left: 20, right: 20, top: 20
-//         ),
-//         child: SingleChildScrollView(
-//           child: Column(
-//             mainAxisSize: MainAxisSize.min,
-//             children: [
-//               Text(
-//                 isGroup ? "Update Logistik Grup (ID: ${req['group_id']})" : "Edit Detail Shipping", 
-//                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
-//               ),
-//               const Divider(),
-              
-//               // LOGIKA HAPUS FIELD: Hanya muncul jika BUKAN grup
-//               if (!isGroup) ...[
-//                 const SizedBox(height: 10),
-//                 TextField(
-//                   controller: soController, 
-//                   decoration: const InputDecoration(
-//                     labelText: "Nomor SO",
-//                     border: OutlineInputBorder(),
-//                     prefixIcon: Icon(Icons.assignment),
-//                   ),
-//                 ),
-//               ] else ...[
-//                 // Info pengganti jika sedang gruping
-//                 // Container(
-//                 //   padding: const EdgeInsets.all(12),
-//                 //   decoration: BoxDecoration(
-//                 //     color: Colors.orange.shade50,
-//                 //     borderRadius: BorderRadius.circular(8),
-//                 //     border: Border.all(color: Colors.orange.shade200),
-//                 //   ),
-//                   // child: const Row(
-//                   //   children: [
-//                   //     Icon(Icons.info_outline, color: Colors.orange),
-//                   //     SizedBox(width: 10),
-//                   //     Expanded(
-//                   //       child: Text(
-//                   //         "Mode Grup: Nomor SO tidak dapat diubah secara massal. Silakan split grup untuk mengedit SO.",
-//                   //         style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.bold),
-//                   //       ),
-//                   //     ),
-//                   //   ],
-//                   // ),
-//                // ),
-//               ],
-              
-//               const SizedBox(height: 20),
-//               const Align(
-//                 alignment: Alignment.centerLeft,
-//                 child: Text("Atur Tanggal Pengiriman:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-//               ),
-//               const SizedBox(height: 8),
-//               Row(
-//                 children: [
-//                   Expanded(
-//                     child: InkWell(
-//                       onTap: () async {
-//                         DateTime? picked = await showDatePicker(
-//                           context: context, 
-//                           initialDate: selectedRDD ?? DateTime.now(), 
-//                           firstDate: DateTime(2020), lastDate: DateTime(2100)
-//                         );
-//                         if (picked != null) setModalState(() => selectedRDD = picked);
-//                       },
-//                       child: Container(
-//                         padding: const EdgeInsets.all(12),
-//                         decoration: BoxDecoration(
-//                           color: Colors.red.shade100,
-//                           borderRadius: BorderRadius.circular(10),
-//                         ),
-//                         child: Column(
-//                           crossAxisAlignment: CrossAxisAlignment.start,
-//                           children: [
-//                             const Text("RDD", style: TextStyle(fontSize: 11)),
-//                             Text(selectedRDD == null ? "-" : DateFormat('dd/MM/yy').format(selectedRDD!),
-//                                 style: const TextStyle(fontWeight: FontWeight.bold)),
-//                           ],
-//                         ),
-//                       ),
-//                     ),
-//                   ),
-//                   const SizedBox(width: 10),
-//                   Expanded(
-//                     child: InkWell(
-//                       onTap: () async {
-//                         DateTime? picked = await showDatePicker(
-//                           context: context, 
-//                           initialDate: selectedStuffing ?? DateTime.now(), 
-//                           firstDate: DateTime(2020), lastDate: DateTime(2100)
-//                         );
-//                         if (picked != null) setModalState(() => selectedStuffing = picked);
-//                       },
-//                       child: Container(
-//                         padding: const EdgeInsets.all(12),
-//                         decoration: BoxDecoration(
-//                           color: Colors.red.shade100,
-//                           borderRadius: BorderRadius.circular(10),
-//                         ),
-//                         child: Column(
-//                           crossAxisAlignment: CrossAxisAlignment.start,
-//                           children: [
-//                             const Text("Stuffing", style: TextStyle(fontSize: 11, color: Colors.black)),
-//                             Text(selectedStuffing == null ? "-" : DateFormat('dd/MM/yy').format(selectedStuffing!),
-//                                 style: const TextStyle(fontWeight: FontWeight.bold)),
-//                           ],
-//                         ),
-//                       ),
-//                     ),
-//                   ),
-//                 ],
-//               ),
-
-//               const SizedBox(height: 30),
-//               ElevatedButton(
-//                 style: ElevatedButton.styleFrom(
-//                   minimumSize: const Size(double.infinity, 50), 
-//                   backgroundColor: isGroup ? Colors.red.shade700 : Colors.blue.shade700,
-//                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-//                 ),
-//                 onPressed: () async {
-//                   try {
-//                     Map<String, dynamic> updateData = {
-//                       'rdd': selectedRDD?.toIso8601String(),
-//                       'stuffing_date': selectedStuffing?.toIso8601String(),
-//                     };
-
-//                     // Hanya sertakan SO jika bukan grup
-//                     if (!isGroup) {
-//                       updateData['so'] = soController.text;
-//                     }
-
-//                     await supabase
-//                         .from('shipping_request')
-//                         .update(updateData)
-//                         .inFilter('shipping_id', idsToUpdate);
-
-//                     Navigator.pop(context);
-//                     _showSnackBar("Update berhasil!", Colors.green);
-//                     _fetchShippingRequests();
-//                   } catch (e) {
-//                     _showSnackBar("Gagal simpan: $e", Colors.red);
-//                   }
-//                 },
-//                 child: Text(
-//                   isGroup ? "TERAPKAN KE SEMUA ANGGOTA" : "SIMPAN PERUBAHAN",
-//                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                 ),
-//               ),
-//               const SizedBox(height: 30),
-//             ],
-//           ),
-//         ),
-//       ),
-//     ),
-//   );
-// }
-
   Widget _buildTextItem(String text, {bool isBold = false, double? width}) {
     return Container(
       width: width,
@@ -1981,7 +1688,15 @@ Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
     );
   }
 
-void _showReasonDialog(String reason) {
+void _showReasonDialog(List history) {
+  // Urutkan dari yang terbaru ke terlama
+  final sortedHistory = List.from(history);
+  //sortedHistory.sort((a, b) => b['pending_at'].compareTo(a['pending_at']));
+  sortedHistory.sort((a, b) {
+    DateTime dtA = DateTime.tryParse(a['pending_at']?.toString() ?? "") ?? DateTime(2000);
+    DateTime dtB = DateTime.tryParse(b['pending_at']?.toString() ?? "") ?? DateTime(2000);
+    return dtB.compareTo(dtA);
+  });
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -1993,32 +1708,84 @@ void _showReasonDialog(String reason) {
           const Text("Alasan Pending", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
-      content: Text(
-        reason,
-        style: const TextStyle(fontSize: 14, color: Colors.black87),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: sortedHistory.length,
+          separatorBuilder: (_, __) => const Divider(),
+          itemBuilder: (context, index) {
+            final item = sortedHistory[index];
+          //   DateTime date = DateTime.parse(item['pending_at']);
+
+          //   // Ambil ID asal (jika grup) atau gunakan ID utama
+          //  String originId = item['origin_ship_id']?? item['shipping_id'] ?? item['id'] ?? "-";
+
+DateTime date = DateTime.tryParse(item['pending_at']?.toString() ?? "") ?? DateTime.now();
+
+            // PERBAIKAN DI SINI: Gunakan .toString() untuk ID agar tidak error 'int' is not 'String'
+            String originId = (item['origin_ship_id'] ?? item['shipping_id'] ?? item['id'] ?? "-").toString();
+            
+            return ListTile(
+      //         leading: CircleAvatar(
+      //           backgroundColor: Colors.red.shade50,
+      //           child: Text("${sortedHistory.length - index}", style: TextStyle(fontSize: 12, color: Colors.red.shade900)),
+      //         ),
+      //         title: Text(item['reason'] ?? "-", style: const TextStyle(fontSize: 14)),
+      //         subtitle: Text(
+      //           DateFormat('dd MMM yyyy, HH:mm').format(date.toLocal()),
+      //           style: const TextStyle(fontSize: 11),
+      //         ),
+      //       );
+      //     },
+      //   ),
+      // ),
+      contentPadding: EdgeInsets.zero,
+              title: Text(item['reason'] ?? "-", style: const TextStyle(fontSize: 14)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Ship ID: $originId", 
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
+                  Text(DateFormat('dd MMM yyyy, HH:mm').format(date.toLocal()),
+                    style: const TextStyle(fontSize: 11)),
+                ],
+              ),
+            );
+          },
+        ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Tutup", style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Tutup")),
       ],
     ),
   );
 }
 
-Widget _buildStatusBadge(String? status, String? reason) {
+Widget _buildStatusBadge(String? status, dynamic historyData) {
   // Jika status null atau BUKAN 'cancel', jangan tampilkan apa-apa (SizedBox kosong)
   if (status == null || status.toLowerCase() != 'pending') {
     return const SizedBox.shrink();
   }
+
+  // 2. Pastikan historyData adalah List dan tidak kosong
+  if (historyData == null || historyData is! List || historyData.isEmpty) {
+    return const SizedBox.shrink();
+  }
+
+List history = List.from(historyData);
   
+  // 3. Urutkan manual berdasarkan pending_at untuk memastikan .last adalah yang terbaru
+  history.sort((a, b) => (a['pending_at'] ?? "").compareTo(b['pending_at'] ?? ""));
+  final latestPending = history.last;
+  //final latestPending = history.last; 
+  String reason = latestPending['reason'] ?? "Tidak ada alasan.";
   // Karena sudah pasti 'pending' di titik ini, kita langsung set warnanya
   Color color = Colors.red.shade800;
   String label = "PENDING";
 
   return InkWell(
-    onTap: () => _showReasonDialog(reason ?? "Tidak ada alasan spesifik."),
+    onTap: () => _showReasonDialog(history),
     child: Container(
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2045,311 +1812,6 @@ Widget _buildStatusBadge(String? status, String? reason) {
     ),
   );
 }
-
-//   Widget _buildActionBottomBar() {
-//     return Container(
-//       padding: const EdgeInsets.all(16),
-//       decoration: BoxDecoration(
-//         color: Colors.white,
-//         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, -2))]
-//       ),
-//   //     child: ElevatedButton.icon(
-//   //       style: ElevatedButton.styleFrom(
-//   //         backgroundColor: Colors.green.shade700, 
-//   //         foregroundColor: Colors.white,
-//   //         minimumSize: const Size(double.infinity, 45)
-//   //       ),
-//   //       onPressed: _prosesKePermintaan, 
-//   //       icon: const Icon(Icons.check_circle),
-//   //       label: Text("Proses ${_selectedIds.length} Delivery Order"),
-//   //       //label: Text("Approve ${_selectedIds.length} Shipping Request"),
-//   //     ),
-//   //   );
-//   // }
-//   child: SafeArea(
-//       child: Row(
-//         children: [
-//           // TOMBOL SPLIT (Ungroup)
-//           Expanded(
-//             flex: 2,
-//             child: OutlinedButton.icon(
-//               style: OutlinedButton.styleFrom(
-//                 foregroundColor: Colors.red.shade700,
-//                 side: BorderSide(color: Colors.red.shade300),
-//                 padding: const EdgeInsets.symmetric(vertical: 12),
-//               ),
-//               onPressed: _splitGroup,
-//               icon: const Icon(Icons.link_off, size: 18),
-//               label: const Text("Split", style: TextStyle(fontSize: 12)),
-//             ),
-//           ),
-//           const SizedBox(width: 8),
-          
-//           // TOMBOL GROUP
-//           Expanded(
-//             flex: 2,
-//             child: OutlinedButton.icon(
-//               style: OutlinedButton.styleFrom(
-//                 foregroundColor: Colors.blue.shade700,
-//                 side: BorderSide(color: Colors.blue.shade300),
-//                 padding: const EdgeInsets.symmetric(vertical: 12),
-//               ),
-//               onPressed: _createAndAssignGroup,
-//               icon: const Icon(Icons.link, size: 18),
-//               label: const Text("Group", style: TextStyle(fontSize: 12)),
-//             ),
-//           ),
-//           const SizedBox(width: 8),
-          
-//           // TOMBOL PROSES
-//           Expanded(
-//             flex: 3,
-//             child: ElevatedButton.icon(
-//               style: ElevatedButton.styleFrom(
-//                 backgroundColor: Colors.green.shade700,
-//                 foregroundColor: Colors.white,
-//                 padding: const EdgeInsets.symmetric(vertical: 12),
-//               ),
-//               onPressed: _prosesKePermintaan,
-//               icon: const Icon(Icons.check_circle, size: 18),
-//               label: Text("Proses (${_selectedIds.length})", style: const TextStyle(fontSize: 12)),
-//             ),
-//           ),
-//         ],
-//       ),
-//     ),
-//   );
-// }
-
-// Widget _buildActionBottomBar() {
-//   double totalBerat = _totalSelectedTNW; // Memanggil getter hitung berat
-
-//   return Container(
-//     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-//     decoration: BoxDecoration(
-//       color: Colors.white,
-//       boxShadow: [
-//         BoxShadow(
-//           color: Colors.black.withOpacity(0.05),
-//           blurRadius: 10,
-//           offset: const Offset(0, -4),
-//         )
-//       ],
-//     ),
-//     child: SafeArea(
-//       child: Column(
-//         mainAxisSize: MainAxisSize.min,
-//         children: [
-//           // --- PANEL INFORMASI BERAT ---
-//           Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   Text(
-//                     "${_selectedIds.length} Data Terpilih",
-//                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-//                   ),
-//                   const Text(
-//                     "Total Estimasi Berat Muatan:",
-//                     style: TextStyle(color: Colors.grey, fontSize: 11),
-//                   ),
-//                 ],
-//               ),
-//               Container(
-//                 padding: const EdgeInsets.all(10),
-//                 decoration: BoxDecoration(
-//                   color: Colors.blue.shade50,
-//                   borderRadius: BorderRadius.circular(8),
-//                   border: Border.all(color: Colors.blue.shade200),
-//                 ),
-//                 child: Text(
-//                   "${formatSmart(totalBerat)} Ton",
-//                   style: TextStyle(
-//                     color: Colors.blue.shade900,
-//                     fontWeight: FontWeight.bold,
-//                     fontSize: 15,
-//                   ),
-//                 ),
-//               ),
-//             ],
-//           ),
-//           const SizedBox(height: 16),
-
-//           // --- TOMBOL AKSI (3 BUTTON) ---
-//           Row(
-//             children: [
-//               // Tombol Split (Hanya aktif jika ada Group yang terpilih)
-//               Expanded(
-//                 flex: 2,
-//                 child: OutlinedButton.icon(
-//                   style: OutlinedButton.styleFrom(
-//                     foregroundColor: Colors.red,
-//                     side: const BorderSide(color: Colors.red),
-//                     padding: const EdgeInsets.symmetric(vertical: 12),
-//                   ),
-//                   onPressed: _splitGroup, 
-//                   icon: const Icon(Icons.call_split, size: 18),
-//                   label: const Text("Split"),
-//                 ),
-//               ),
-//               const SizedBox(width: 8),
-
-//               // Tombol Group (Untuk menggabungkan beberapa ship)
-//               Expanded(
-//                 flex: 2,
-//                 child: ElevatedButton.icon(
-//                   style: ElevatedButton.styleFrom(
-//                     backgroundColor: Colors.orange.shade700,
-//                     foregroundColor: Colors.white,
-//                     padding: const EdgeInsets.symmetric(vertical: 12),
-//                   ),
-//                   onPressed: _selectedIds.length < 2 ? null : _createAndAssignGroup,
-//                   icon: const Icon(Icons.group_work, size: 18),
-//                   label: const Text("Group"),
-//                 ),
-//               ),
-//               const SizedBox(width: 8),
-
-//               // Tombol Proses (Aksi Final ke Tahap Selanjutnya)
-//               Expanded(
-//                 flex: 3,
-//                 child: ElevatedButton.icon(
-//                   style: ElevatedButton.styleFrom(
-//                     backgroundColor: Colors.green.shade700,
-//                     foregroundColor: Colors.white,
-//                     padding: const EdgeInsets.symmetric(vertical: 12),
-//                   ),
-//                   onPressed: () => _prosesNextStage(), // Fungsi proses Anda
-//                   icon: const Icon(Icons.check_circle, size: 18),
-//                   label: const Text("Proses", style: TextStyle(fontWeight: FontWeight.bold)),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ],
-//       ),
-//     ),
-//   );
-// }
-
-// Widget _buildActionBottomBar() {
-//   // Menghitung total berat dari item yang dicentang
-//   double totalBerat = _totalSelectedTNW; 
-
-//   return Container(
-//     padding: const EdgeInsets.all(16),
-//     decoration: BoxDecoration(
-//       color: Colors.white,
-//       boxShadow: [
-//         BoxShadow(
-//           color: Colors.black12, 
-//           blurRadius: 10, 
-//           offset: const Offset(0, -2)
-//         )
-//       ],
-//     ),
-//     child: SafeArea(
-//       child: Column(
-//         mainAxisSize: MainAxisSize.min,
-//         children: [
-//           // --- PANEL INFORMASI BERAT (TNW) ---
-//           Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   Text(
-//                     "${_selectedIds.length} Ship Terpilih",
-//                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-//                   ),
-//                   Text(
-//                     "Total Estimasi Muatan:",
-//                     style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
-//                   ),
-//                 ],
-//               ),
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//                 decoration: BoxDecoration(
-//                   color: Colors.blue.shade50,
-//                   borderRadius: BorderRadius.circular(8),
-//                   border: Border.all(color: Colors.blue.shade200),
-//                 ),
-//                 child: Text(
-//                   "${formatSmart(totalBerat)} Kg",
-//                   style: TextStyle(
-//                     color: Colors.blue.shade900,
-//                     fontWeight: FontWeight.bold,
-//                     fontSize: 18,
-//                   ),
-//                 ),
-//               ),
-//             ],
-//           ),
-//           const SizedBox(height: 16),
-
-//           // --- TOMBOL AKSI (SPLIT, GROUP, PROSES) ---
-//           Row(
-//             children: [
-//               // TOMBOL SPLIT (Ungroup)
-//               Expanded(
-//                 flex: 2,
-//                 child: OutlinedButton.icon(
-//                   style: OutlinedButton.styleFrom(
-//                     foregroundColor: Colors.red.shade700,
-//                     side: BorderSide(color: Colors.red.shade300),
-//                     padding: const EdgeInsets.symmetric(vertical: 12),
-//                   ),
-//                   onPressed: _splitGroup,
-//                   icon: const Icon(Icons.link_off, size: 18),
-//                   label: const Text("Split", style: TextStyle(fontSize: 12)),
-//                 ),
-//               ),
-//               const SizedBox(width: 8),
-              
-//               // TOMBOL GROUP
-//               Expanded(
-//                 flex: 2,
-//                 child: OutlinedButton.icon(
-//                   style: OutlinedButton.styleFrom(
-//                     foregroundColor: Colors.blue.shade700,
-//                     side: BorderSide(color: Colors.blue.shade300),
-//                     padding: const EdgeInsets.symmetric(vertical: 12),
-//                   ),
-//                   onPressed: _selectedIds.length < 2 ? null : _createAndAssignGroup,
-//                   icon: const Icon(Icons.link, size: 18),
-//                   label: const Text("Group", style: TextStyle(fontSize: 12)),
-//                 ),
-//               ),
-//               const SizedBox(width: 8),
-              
-//               // TOMBOL PROSES (Memanggil fungsi lama Anda)
-//               Expanded(
-//                 flex: 3,
-//                 child: ElevatedButton.icon(
-//                   style: ElevatedButton.styleFrom(
-//                     backgroundColor: Colors.green.shade700,
-//                     foregroundColor: Colors.white,
-//                     padding: const EdgeInsets.symmetric(vertical: 12),
-//                   ),
-//                   onPressed: _prosesKePermintaan, // Memanggil fungsi lama
-//                   icon: const Icon(Icons.check_circle, size: 18),
-//                   label: Text(
-//                     "Proses (${_selectedIds.length})", 
-//                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)
-//                   ),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ],
-//       ),
-//     ),
-//   );
-// }
 
 Widget _buildActionBottomBar() {
   double totalBerat = _totalSelectedTNW;
@@ -2538,450 +2000,6 @@ Future<void> _splitGroup() async {
 
   bool _isExporting = false;
 
-// Future<void> _exportToExcel() async {
-//   if (_isExporting || _filteredRequests.isEmpty) {
-//   if (_filteredRequests.isEmpty) {
-//     _showSnackBar("Tidak ada data untuk dieksport", Colors.orange);
-//     return;
-//   }
-
-//   try {
-//     //setState(() => _isLoading = true);
-// setState(() {
-//       _isExporting = true;
-//       _isLoading = true;
-//     });
-
-//     var excel = Excel.createExcel();
-//     Sheet sheetObject = excel['Data_Shipping_Detail'];
-//     excel.delete('Sheet1'); 
-
-//     // --- 1. HEADER (DIPERLENGKAP) ---
-//     List<CellValue> headers = [
-//       TextCellValue('Group ID'),      // Identitas Grup
-//       TextCellValue('Ship ID'),
-//       TextCellValue('No DO'),
-//       TextCellValue('SO Number'),
-//       TextCellValue('Customer'),
-//       TextCellValue('Material'),
-//       TextCellValue('Type'),
-//       TextCellValue('Qty'),
-//       TextCellValue('NW (Unit)'),     // Berat per unit
-//       TextCellValue('TNW (Kg)'),     // Total Berat Baris (Hasil Hitung)
-//       TextCellValue('RDD'),
-//       TextCellValue('Stuffing'),
-//       TextCellValue('Status'),
-//       TextCellValue('Pending Reason'), // Alasan Pending/Cancel
-//     ];
-//     sheetObject.appendRow(headers);
-
-//     // --- 2. ISI DATA ---
-//     for (var req in _filteredRequests) {
-//       final List dos = req['delivery_order'] ?? [];
-//       final String status = (req['status'] ?? "-").toString().toUpperCase();
-      
-//       // Ambil alasan pending atau cancel (sesuaikan dengan nama field di DB Anda)
-//       final String reason = req['pending_reason'] ?? req['cancel_reason'] ?? "-";
-//       final String groupId = req['group_id']?.toString() ?? "-"; // Munculkan Group ID
-
-//       for (var d in dos) {
-//         final List details = d['do_details'] ?? [];
-//         for (var det in details) {
-//           // Logika Perhitungan
-//           double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-//           double nwUnit = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-//           double totalNwRow = (qty * nwUnit) / 1000; // Hitung TNW dalam Kg
-
-//           sheetObject.appendRow([
-//             TextCellValue(groupId),           // Kolom Group
-//             TextCellValue(req['shipping_id'].toString()),
-//             TextCellValue(d['do_number'] ?? "-"),
-//             TextCellValue(req['so'] ?? "-"),
-//             TextCellValue(d['customer']?['customer_name'] ?? "-"),
-//             TextCellValue(det['material']?['material_name'] ?? "-"),
-//             TextCellValue(det['material']?['material_type'] ?? "-"),
-//             DoubleCellValue(qty),
-//             DoubleCellValue(nwUnit),          // NW per unit
-//             DoubleCellValue(totalNwRow),      // TNW (Hasil Perhitungan)
-//             TextCellValue(_formatDate(req['rdd'])),
-//             TextCellValue(_formatDate(req['stuffing_date'])),
-//             TextCellValue(status),
-//             TextCellValue(reason), 
-//           ]);
-//         }
-//       }
-//     }
-
-//     // --- 3. FINISHING (SIMPAN/DOWNLOAD) ---
-//     var fileBytes = excel.save();
-//     String fileName = "Shipping_Full_Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx";
-
-//     if (kIsWeb) {
-//       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//       final url = html.Url.createObjectUrlFromBlob(content);
-
-//       // Gunakan AnchorElement sekali pakai
-//       final anchor = html.AnchorElement(href: url)
-//         ..setAttribute("download", fileName)
-//         ..click();
-//       // html.AnchorElement(href: url)
-//       //   ..setAttribute("download", fileName)
-//       //   ..click();
-//       html.Url.revokeObjectUrl(url);
-//       _showSnackBar("Excel diunduh!", Colors.green);
-//     } else {
-//       final directory = await getApplicationDocumentsDirectory();
-//       String filePath = '${directory.path}/$fileName';
-//       // io.File(filePath)
-//       //   ..createSync(recursive: true)
-//       //   ..writeAsBytesSync(fileBytes!);
-
-//       // setState(() => _isLoading = false);
-//       final file = io.File(filePath);
-//       await file.create(recursive: true);
-//       await file.writeAsBytes(fileBytes!);
-//       await OpenFile.open(filePath);
-//     }
-
-//     //setState(() => _isLoading = false);
-//   } catch (e) {
-//     // setState(() => _isLoading = false);
-//     // _showSnackBar("Gagal: $e", Colors.red);
-//     debugPrint("Export Error: $e");
-//     _showSnackBar("Gagal: $e", Colors.red);
-//     if (mounted) {
-//       setState(() {
-//         _isLoading = false;
-//         _isExporting = false;
-//       });
-//     }
-//   }
-// }
-// }
-
-// Future<void> _exportToExcel() async {
-//   // 1. Pengecekan awal: Jika sedang proses atau data kosong, langsung stop.
-//   // if (_isExporting || _filteredRequests.isEmpty) {
-//   //   if (_filteredRequests.isEmpty) {
-//   //     _showSnackBar("Tidak ada data untuk dieksport", Colors.orange);
-//   //   }
-//   //   return; // Keluar dari fungsi
-//   // }
-//   if (_isExporting) return; // Langsung keluar jika sedang proses
-  
-//   _isExporting = true; // Kunci seketika (tanpa menunggu setState)
-
-//   if (_filteredRequests.isEmpty) {
-//     _showSnackBar("Tidak ada data", Colors.orange);
-//     _isExporting = false;
-//     return;
-//   }
-
-//   try {
-//     // 2. Kunci proses agar tidak klik double
-//     setState(() {
-//       _isExporting = true;
-//       _isLoading = true;
-//     });
-
-//     var excel = Excel.createExcel();
-//     Sheet sheetObject = excel['Data_Shipping_Detail'];
-//     excel.delete('Sheet1'); 
-
-//     // --- HEADER ---
-//     List<CellValue> headers = [
-//       TextCellValue('Group ID'),
-//       TextCellValue('Ship ID'),
-//       TextCellValue('No DO'),
-//       TextCellValue('SO Number'),
-//       TextCellValue('Customer'),
-//       TextCellValue('Material'),
-//       TextCellValue('Type'),
-//       TextCellValue('Qty'),
-//       TextCellValue('NW (Unit)'),
-//       TextCellValue('TNW (Kg)'),
-//       TextCellValue('RDD'),
-//       TextCellValue('Stuffing'),
-//       TextCellValue('Status'),
-//       TextCellValue('Pending Reason'),
-//     ];
-//     sheetObject.appendRow(headers);
-
-//     // --- ISI DATA ---
-//     for (var req in _filteredRequests) {
-//       final List dos = req['delivery_order'] ?? [];
-//       final String status = (req['status'] ?? "-").toString().toUpperCase();
-//       final String reason = req['pending_reason'] ?? req['cancel_reason'] ?? "-";
-//       final String groupId = req['group_id']?.toString() ?? "-";
-
-//       for (var d in dos) {
-//         final List details = d['do_details'] ?? [];
-//         for (var det in details) {
-//           double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-//           double nwUnit = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-//           double totalNwRow = (qty * nwUnit) / 1000;
-
-//           sheetObject.appendRow([
-//             TextCellValue(groupId),
-//             TextCellValue(req['shipping_id'].toString()),
-//             TextCellValue(d['do_number'] ?? "-"),
-//             TextCellValue(req['so'] ?? "-"),
-//             TextCellValue(d['customer']?['customer_name'] ?? "-"),
-//             TextCellValue(det['material']?['material_name'] ?? "-"),
-//             TextCellValue(det['material']?['material_type'] ?? "-"),
-//             DoubleCellValue(qty),
-//             DoubleCellValue(nwUnit),
-//             DoubleCellValue(totalNwRow),
-//             TextCellValue(_formatDate(req['rdd'])),
-//             TextCellValue(_formatDate(req['stuffing_date'])),
-//             TextCellValue(status),
-//             TextCellValue(reason), 
-//           ]);
-//         }
-//       }
-//     }
-
-//     // --- FINISHING ---
-//     var fileBytes = excel.save();
-//     String fileName = "Shipping_Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx";
-
-//     if (kIsWeb) {
-//       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//       final url = html.Url.createObjectUrlFromBlob(content);
-
-//       // final anchor = html.AnchorElement(href: url)
-//       //   ..setAttribute("download", fileName)
-//       //   ..click();
-      
-//       // html.Url.revokeObjectUrl(url);
-//       // Langsung klik tanpa memasukkan ke DOM
-//   html.AnchorElement(href: url)
-//     ..setAttribute("download", fileName)
-//     ..click(); 
-    
-//   html.Url.revokeObjectUrl(url);
-//       _showSnackBar("Excel diunduh!", Colors.green);
-//     } else {
-//       final directory = await getApplicationDocumentsDirectory();
-//       String filePath = '${directory.path}/$fileName';
-//       final file = io.File(filePath);
-//       await file.create(recursive: true);
-//       await file.writeAsBytes(fileBytes!);
-//       await OpenFile.open(filePath);
-//     }
-
-//   } catch (e) {
-//     debugPrint("Export Error: $e");
-//     _showSnackBar("Gagal: $e", Colors.red);
-//   } finally {
-//     // 3. Buka kunci dan matikan loading apa pun hasilnya (Berhasil/Gagal)
-//     if (mounted) {
-//       setState(() {
-//         _isLoading = false;
-//         _isExporting = false;
-//       });
-//     }
-//   }
-// }
-// Letakkan di dalam class _ListDOPageState, di atas fungsi initState
-// static bool _globalExportLock = false;
-
-// Future<void> _exportToExcel() async {
-//   // 1. Gembok Global: Jika sedang proses, kunci mati semua akses.
-//   if (_globalExportLock) return;
-//   _globalExportLock = true;
-
-//   if (_filteredRequests.isEmpty) {
-//     _showSnackBar("Tidak ada data untuk dieksport", Colors.orange);
-//     _globalExportLock = false; // Buka gembok jika batal
-//     return;
-//   }
-
-//   try {
-//     // Tampilkan loading UI
-//     setState(() => _isLoading = true);
-
-//     // --- 2. LOGIKA PEMBUATAN EXCEL ---
-//     var excel = Excel.createExcel();
-//     Sheet sheetObject = excel['Shipping_Report'];
-//     excel.delete('Sheet1'); 
-
-//     // Header
-//     List<CellValue> headers = [
-//       TextCellValue('Group ID'), TextCellValue('Ship ID'), TextCellValue('No DO'),
-//       TextCellValue('SO Number'), TextCellValue('Customer'), TextCellValue('Material'),
-//       TextCellValue('Qty'), TextCellValue('TNW (Kg)'), TextCellValue('RDD'),
-//       TextCellValue('Stuffing'), TextCellValue('Status')
-//     ];
-//     sheetObject.appendRow(headers);
-
-//     // Isi Data
-//     for (var req in _filteredRequests) {
-//       final List dos = req['delivery_order'] ?? [];
-//       for (var d in dos) {
-//         for (var det in d['do_details']) {
-//           double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-//           double nw = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-          
-//           sheetObject.appendRow([
-//             TextCellValue(req['group_id']?.toString() ?? "-"),
-//             TextCellValue(req['shipping_id'].toString()),
-//             TextCellValue(d['do_number'] ?? "-"),
-//             TextCellValue(req['so'] ?? "-"),
-//             TextCellValue(d['customer']?['customer_name'] ?? "-"),
-//             TextCellValue(det['material']?['material_name'] ?? "-"),
-//             DoubleCellValue(qty),
-//             DoubleCellValue((qty * nw) / 1000),
-//             TextCellValue(_formatDate(req['rdd'])),
-//             TextCellValue(_formatDate(req['stuffing_date'])),
-//             TextCellValue(req['status']?.toString().toUpperCase() ?? "-"),
-//           ]);
-//         }
-//       }
-//     }
-
-//     // --- 3. PROSES DOWNLOAD ---
-//      String fileName = "Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx";
-
-//     var fileBytes = excel.save(fileName: fileName);
-   
-//     if (kIsWeb) {
-//       // LOGIKA WEB YANG PALING AMAN (Tanpa memasukkan ke DOM untuk hindari double trigger)
-//       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//       final url = html.Url.createObjectUrlFromBlob(content);
-      
-//       html.AnchorElement(href: url)
-//         ..setAttribute("download", fileName)
-//         ..click(); // Klik langsung
-      
-//       html.Url.revokeObjectUrl(url);
-//       _showSnackBar("Excel berhasil diunduh!", Colors.green);
-//     } else {
-//       // LOGIKA MOBILE
-//       final directory = await getApplicationDocumentsDirectory();
-//       String filePath = '${directory.path}/$fileName';
-//       final file = io.File(filePath);
-//       await file.create(recursive: true);
-//       await file.writeAsBytes(fileBytes!);
-//       await OpenFile.open(filePath);
-//     }
-
-//   } catch (e) {
-//     debugPrint("Export Error: $e");
-//     _showSnackBar("Gagal: $e", Colors.red);
-//   } finally {
-//     // --- 4. DEBOUNCE (JEDA KRUSIAL) ---
-//     // Kita beri jeda 3 detik sebelum memperbolehkan klik lagi
-//     // Ini memberikan waktu bagi Browser/OS untuk menyelesaikan proses download asli
-//     await Future.delayed(const Duration(seconds: 3));
-    
-//     _globalExportLock = false; // Buka gembok global
-    
-//     if (mounted) {
-//       setState(() => _isLoading = false);
-//     }
-//   }
-// }
-// // 1. Pastikan variabel static ini ada di dalam class _ListDOPageState
-// static bool _globalExportLock = false;
-
-// Future<void> _exportToExcel() async {
-//   // Guard: Jangan proses jika sedang mengekspor atau data kosong
-//   if (_globalExportLock || _filteredRequests.isEmpty) return;
-
-//   try {
-//     _globalExportLock = true;
-//     setState(() => _isLoading = true);
-
-//     // --- 2. LOGIKA PEMBUATAN EXCEL ---
-//     var excel = Excel.createExcel();
-//     // Gunakan nama sheet kustom
-//     Sheet sheetObject = excel['Shipping_Data'];
-//     excel.delete('Sheet1'); 
-
-//     // Header
-//     sheetObject.appendRow([
-//       TextCellValue('Group ID'), 
-//       TextCellValue('Ship ID'), 
-//       TextCellValue('No DO'),
-//       TextCellValue('SO Number'), 
-//       TextCellValue('Customer'), 
-//       TextCellValue('Material'),
-//       TextCellValue('Qty'), 
-//       TextCellValue('TNW (Kg)'), 
-//       TextCellValue('RDD'),
-//       TextCellValue('Stuffing'), 
-//       TextCellValue('Status')
-//     ]);
-
-//     // Isi Data dari _filteredRequests
-//     for (var req in _filteredRequests) {
-//       final List dos = req['delivery_order'] ?? [];
-//       for (var d in dos) {
-//         for (var det in d['do_details']) {
-//           double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-//           double nw = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-          
-//           sheetObject.appendRow([
-//             TextCellValue(req['group_id']?.toString() ?? "-"),
-//             TextCellValue(req['shipping_id'].toString()),
-//             TextCellValue(d['do_number'] ?? "-"),
-//             TextCellValue(req['so'] ?? "-"),
-//             TextCellValue(d['customer']?['customer_name'] ?? "-"),
-//             TextCellValue(det['material']?['material_name'] ?? "-"),
-//             DoubleCellValue(qty),
-//             DoubleCellValue((qty * nw) / 1000),
-//             TextCellValue(_formatDate(req['rdd'])),
-//             TextCellValue(_formatDate(req['stuffing_date'])),
-//             TextCellValue(req['status']?.toString().toUpperCase() ?? "-"),
-//           ]);
-//         }
-//       }
-//     }
-
-//     // --- 3. PROSES SAVE & DOWNLOAD (FIX DOUBLE DOWNLOAD) ---
-//     // PENTING: Gunakan excel.encode() untuk mengambil bytes saja TANPA memicu download otomatis
-//     final fileBytes = excel.encode(); 
-//     if (fileBytes == null) return;
-
-//     String fileName = "Shipping_Report_${DateFormat('yyyyMMdd_HHmm')}.xlsx";
-
-//     if (kIsWeb) {
-//       // Strategi Web: Gunakan AnchorElement tanpa memasukkan ke DOM body
-//       // Ini cara paling "diam" agar tidak memicu deteksi ganda oleh browser
-//       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//       final url = html.Url.createObjectUrlFromBlob(content);
-      
-//       final anchor = html.AnchorElement(href: url)
-//         ..setAttribute("download", fileName)
-//         ..click(); // Memicu download dengan nama file yang benar
-      
-//       html.Url.revokeObjectUrl(url); // Hapus Blob dari memori browser
-//       _showSnackBar("Excel berhasil diunduh!", Colors.green);
-//     } else {
-//       // Strategi Mobile (Android/iOS)
-//       final directory = await getApplicationDocumentsDirectory();
-//       String filePath = '${directory.path}/$fileName';
-//       final file = io.File(filePath);
-//       await file.create(recursive: true);
-//       await file.writeAsBytes(fileBytes);
-//       await OpenFile.open(filePath);
-//     }
-
-//   } catch (e) {
-//     debugPrint("Export Error: $e");
-//     _showSnackBar("Gagal Mengekspor: $e", Colors.red);
-//   } finally {
-//     // --- 4. JEDA DEBOUNCE ---
-//     // Beri waktu 3 detik agar sistem browser selesai memproses download
-//     await Future.delayed(const Duration(seconds: 3));
-    
-//     _globalExportLock = false; // Buka kunci
-//     if (mounted) {
-//       setState(() => _isLoading = false);
-//     }
-//   }
-// }
 
 static bool _globalExportLock = false;
 
@@ -3021,7 +2039,20 @@ Future<void> _exportToExcel() async {
       final String status = (req['status'] ?? "-").toString().toUpperCase();
       
       // Ambil alasan pending atau cancel
-      final String reason = req['pending_reason'] ?? req['cancel_reason'] ?? "-";
+     // final String reason = req['pending_reason'] ?? req['cancel_reason'] ?? "-";
+      // Ambil alasan pending terbaru dari tabel riwayat yang sudah di-join
+      // req['shipping_pending_history'] sekarang berupa List
+      //final List history = req['shipping_pending_history'] ?? [];
+      final List history = List.from(req['shipping_pending_history'] ?? []);
+      String latestReason = "-";
+      
+      if (history.isNotEmpty) {
+        // Ambil data terakhir dari list (asumsi data terbaru)
+        // Jika query Anda menggunakan .order('pending_at'), sesuaikan indeksnya
+        history.sort((a, b) => (a['pending_at'] ?? "").compareTo(b['pending_at'] ?? ""));
+        latestReason = history.last['reason'] ?? "-";
+      }
+
       final String groupId = req['group_id']?.toString() ?? "-";
 
       for (var d in dos) {
@@ -3047,7 +2078,7 @@ Future<void> _exportToExcel() async {
             TextCellValue(_formatDate(req['rdd'])),                     // 11
             TextCellValue(_formatDate(req['stuffing_date'])),           // 12
             TextCellValue(status),                                      // 13
-            TextCellValue(reason),                                      // 14
+            TextCellValue(latestReason),                                 // 14
           ]);
         }
       }
