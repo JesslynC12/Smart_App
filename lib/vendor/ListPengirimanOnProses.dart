@@ -103,12 +103,89 @@ class _VendorOnProcessPageState extends State<VendorOnProcessPage> {
 //     _showSnackBar("Error: $e", Colors.red);
 //   }
 // }
+// Future<void> _fetchOngoingOrders() async {
+//   try {
+//     setState(() => _isLoading = true);
+//     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+//     // 1. Ambil data assignment vendor
+//     final response = await supabase.from('shipping_assignments').select('''
+//           *,
+//           shipping_request:shipping_id!inner (
+//             *,
+//             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+//             delivery_order(
+//               do_number,
+//               customer(customer_id, customer_name),
+//               do_details(
+//                 qty, 
+//                 material:material_id (material_id, material_name)
+//               )
+//             )
+//           )
+//         ''')
+//         .eq('nik', widget.vendorNik)
+//         .eq('status_assignment', 'accepted')
+//         .not('jam_booking', 'is', null)
+//         .eq('shipping_request.$_dateFilterType', formattedDate)
+//         .order('jam_booking', ascending: true);
+
+//     // 2. PROSES GROUPING MANUAL AGAR TIDAK DUPLIKAT
+//     Map<String, Map<String, dynamic>> groupedMap = {};
+
+//     for (var item in response) {
+//       final req = item['shipping_request'];
+//       if (req == null) continue;
+
+//       // Buat key unik (Pakai group_id jika ada, jika tidak pakai shipping_id)
+//       String key = req['group_id'] != null 
+//           ? "GROUP_${req['group_id']}" 
+//           : "SINGLE_${req['shipping_id']}";
+
+//       if (!groupedMap.containsKey(key)) {
+//         // Masukkan data pertama
+//         Map<String, dynamic> mutableItem = Map<String, dynamic>.from(item);
+//         mutableItem['all_assignment_ids'] = [item['id_assignment']];
+//   mutableItem['all_shipping_ids'] = [item['shipping_id']];
+//         // Suntik RDD origin ke tiap DO di item pertama
+//         List dos = List.from(mutableItem['shipping_request']['delivery_order'] ?? []);
+//         for (var d in dos) {
+//           d['rdd_origin'] = req['rdd'];
+//           d['parent_so'] = req['so'];
+//         }
+//         mutableItem['shipping_request']['delivery_order'] = dos;
+//         groupedMap[key] = mutableItem;
+//       } else {
+//         groupedMap[key]!['all_assignment_ids'].add(item['id_assignment']);
+//   groupedMap[key]!['all_shipping_ids'].add(item['shipping_id']);
+//         // Jika sudah ada, gabungkan Delivery Order-nya saja
+//         List existingDos = List.from(groupedMap[key]!['shipping_request']['delivery_order'] ?? []);
+//         List newDos = List.from(req['delivery_order'] ?? []);
+
+//         for (var ndo in newDos) {
+//           ndo['rdd_origin'] = req['rdd']; // Simpan RDD spesifik member grup ini
+//           ndo['parent_so'] = req['so'];
+//           existingDos.add(ndo);
+//         }
+//         groupedMap[key]!['shipping_request']['delivery_order'] = existingDos;
+//       }
+//     }
+
+//     setState(() {
+//       _dataList = groupedMap.values.toList();
+//       _isLoading = false;
+//     });
+//   } catch (e) {
+//     setState(() => _isLoading = false);
+//     _showSnackBar("Error: $e", Colors.red);
+//   }
+// }
+
 Future<void> _fetchOngoingOrders() async {
   try {
     setState(() => _isLoading = true);
     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-    // 1. Ambil data assignment vendor
     final response = await supabase.from('shipping_assignments').select('''
           *,
           shipping_request:shipping_id!inner (
@@ -130,23 +207,23 @@ Future<void> _fetchOngoingOrders() async {
         .eq('shipping_request.$_dateFilterType', formattedDate)
         .order('jam_booking', ascending: true);
 
-    // 2. PROSES GROUPING MANUAL AGAR TIDAK DUPLIKAT
     Map<String, Map<String, dynamic>> groupedMap = {};
 
     for (var item in response) {
       final req = item['shipping_request'];
       if (req == null) continue;
 
-      // Buat key unik (Pakai group_id jika ada, jika tidak pakai shipping_id)
       String key = req['group_id'] != null 
           ? "GROUP_${req['group_id']}" 
           : "SINGLE_${req['shipping_id']}";
 
       if (!groupedMap.containsKey(key)) {
-        // Masukkan data pertama
         Map<String, dynamic> mutableItem = Map<String, dynamic>.from(item);
         
-        // Suntik RDD origin ke tiap DO di item pertama
+        // Simpan ID Assignment dan Shipping ID dalam List untuk proses bulk update
+        mutableItem['grouped_assignment_ids'] = [item['id_assignment']];
+        mutableItem['grouped_shipping_ids'] = [item['shipping_id']];
+        
         List dos = List.from(mutableItem['shipping_request']['delivery_order'] ?? []);
         for (var d in dos) {
           d['rdd_origin'] = req['rdd'];
@@ -155,12 +232,15 @@ Future<void> _fetchOngoingOrders() async {
         mutableItem['shipping_request']['delivery_order'] = dos;
         groupedMap[key] = mutableItem;
       } else {
-        // Jika sudah ada, gabungkan Delivery Order-nya saja
+        // Gabungkan ID untuk keperluan bulk action
+        groupedMap[key]!['grouped_assignment_ids'].add(item['id_assignment']);
+        groupedMap[key]!['grouped_shipping_ids'].add(item['shipping_id']);
+        
         List existingDos = List.from(groupedMap[key]!['shipping_request']['delivery_order'] ?? []);
         List newDos = List.from(req['delivery_order'] ?? []);
 
         for (var ndo in newDos) {
-          ndo['rdd_origin'] = req['rdd']; // Simpan RDD spesifik member grup ini
+          ndo['rdd_origin'] = req['rdd'];
           ndo['parent_so'] = req['so'];
           existingDos.add(ndo);
         }
@@ -178,28 +258,54 @@ Future<void> _fetchOngoingOrders() async {
   }
 }
 
-  Future<void> _cancelOrder(Map<String, dynamic> item, String reason) async {
-    try {
-      final int assignmentId = item['id_assignment'];
-      final int shipId = item['shipping_id'];
+  // Future<void> _cancelOrder(Map<String, dynamic> item, String reason) async {
+  //   try {
+  //     final List<int> assignmentId = List<int>.from(item['all_assignment_ids'] ?? [item['id_assignment']]);
+  //     final List<int> shipId = List<int>.from(item['all_shipping_ids'] ?? [item['shipping_id']]);
 
-      await supabase.from('shipping_assignments').update({
-        'status_assignment': 'rejected',
-        'reason_rejected': reason,
-        'responded_at': DateTime.now().toIso8601String(),
-        'jam_booking': null,
-      }).eq('id_assignment', assignmentId);
+  //     await supabase.from('shipping_assignments').update({
+  //       'status_assignment': 'rejected',
+  //       'reason_rejected': reason,
+  //       'responded_at': DateTime.now().toIso8601String(),
+  //       'jam_booking': null,
+  //     }).eq('id_assignment', assignmentId);
 
-      await supabase.from('shipping_request').update({
-        'status': 'waiting assign vendor delivery',
-      }).eq('shipping_id', shipId);
+  //     await supabase.from('shipping_request').update({
+  //       'status': 'waiting assign vendor delivery',
+  //     }).eq('shipping_id', shipId);
 
-      _showSnackBar("Order berhasil dibatalkan", Colors.orange);
-      _fetchOngoingOrders();
-    } catch (e) {
-      _showSnackBar("Gagal membatalkan: $e", Colors.red);
-    }
+  //     _showSnackBar("Order berhasil dibatalkan", Colors.orange);
+  //     _fetchOngoingOrders();
+  //   } catch (e) {
+  //     _showSnackBar("Gagal membatalkan: $e", Colors.red);
+  //   }
+  // }
+
+Future<void> _cancelOrder(Map<String, dynamic> item, String reason) async {
+  try {
+    // Ambil daftar ID yang sudah kita kumpulkan di fetch data
+    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids']);
+    final List<int> shipIds = List<int>.from(item['grouped_shipping_ids']);
+
+    // 1. Update semua baris assignment menjadi 'rejected'
+    await supabase.from('shipping_assignments').update({
+      'status_assignment': 'cancel booking',
+      'reason_rejected': reason,
+      'cancelled_at': DateTime.now().toIso8601String(),
+      'jam_booking': null,
+    }).inFilter('id_assignment', assignmentIds);
+
+    // 2. Update semua baris shipping_request kembali ke status waiting assign vendor
+    await supabase.from('shipping_request').update({
+      'status': 'waiting assign vendor delivery',
+    }).inFilter('shipping_id', shipIds);
+
+    _showSnackBar("Order berhasil dibatalkan", Colors.orange);
+    _fetchOngoingOrders();
+  } catch (e) {
+    _showSnackBar("Gagal membatalkan: $e", Colors.red);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -925,17 +1031,17 @@ Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // INFO LOGS (Assigned & Responded)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Assigned: ${_formatDateTime(item['assigned_at'])}",
-                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-                  Text("Responded: ${_formatDateTime(item['responded_at'])}",
-                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-                ],
-              ),
-              const SizedBox(height: 12),
+              // // INFO LOGS (Assigned & Responded)
+              // Row(
+              //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              //   children: [
+              //     Text("Assigned: ${_formatDateTime(item['assigned_at'])}",
+              //         style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+              //     Text("Responded: ${_formatDateTime(item['responded_at'])}",
+              //         style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+              //   ],
+              // ),
+              // const SizedBox(height: 12),
 
               // INFO SUMMARY
               Row(
@@ -1033,19 +1139,40 @@ Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isAllowed ? () {
-                         // Navigasi Reschedule...
-                      } : null,
-                      icon: Icon(isAllowed ? Icons.edit_calendar : Icons.lock_clock, size: 16),
-                      label: Text(isAllowed ? "RESCHEDULE" : "TERKUNCI", style: const TextStyle(fontSize: 11)),
-                      style: ElevatedButton.styleFrom(backgroundColor: isAllowed ? Colors.red.shade700 : Colors.grey),
-                    ),
-                  ),
-                ],
-              ),
+  child: ElevatedButton.icon(
+    // Jika isAllowed true, jalankan fungsi navigasi. Jika false, set null (otomatis disabled)
+    onPressed: isAllowed ? () {
+      DynamicTabPage.of(context)?.openTab(
+        "Reschedule #${request['shipping_id']}", 
+        ScheduleSelectionPage(
+          assignmentId: item['id_assignment'],
+          shippingId: item['shipping_id'],
+          oldTime: item['jam_booking'],
+          vendorNik: widget.vendorNik,
+          onSuccess: () => _fetchOngoingOrders(),
+        ),
+      );
+    } : null, 
+    icon: Icon(
+      isAllowed ? Icons.edit_calendar : Icons.lock_clock, 
+      size: 16, 
+      color: Colors.white,
+    ),
+    label: Text(
+      isAllowed ? "RESCHEDULE" : "TERKUNCI", 
+      style: const TextStyle(fontSize: 11, color: Colors.white),
+    ),
+    style: ElevatedButton.styleFrom(
+      // Warna merah jika aktif, abu-abu jika terkunci
+      backgroundColor: isAllowed ? Colors.red.shade700 : Colors.grey,
+    ),
+  ),
+),
               
-              if (!isAllowed)
+            ],
+            
+          ),
+           if (!isAllowed)
                 const Padding(
                   padding: EdgeInsets.only(top: 8.0),
                   child: Text(
@@ -1053,12 +1180,12 @@ Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
                     style: TextStyle(fontSize: 10, color: Colors.red, fontStyle: FontStyle.italic),
                   ),
                 ),
-            ],
+            ]
           ),
-        ),
-      ],
+          ),
+      ]
     ),
-  );
+    );
 }
 
 // Tambahkan Helper TableCell jika belum ada
@@ -1104,46 +1231,127 @@ String _formatDateTime(String? dateStr) {
   //     ),
   //   );
   // }
-// --- DIALOG CANCEL DENGAN INPUT ALASAN ---
-  void _showCancelDialog(Map<String, dynamic> item) {
-    final TextEditingController reasonController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Batalkan Pengiriman?", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            //const Text("Mohon berikan alasan pembatalan."),
-            const SizedBox(height: 15),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: "Contoh: Armada mengalami kendala teknis...",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+
+// // --- DIALOG CANCEL DENGAN INPUT ALASAN ---
+//   void _showCancelDialog(Map<String, dynamic> item) {
+//     final TextEditingController reasonController = TextEditingController();
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: const Text("Batalkan Pengiriman?", style: TextStyle(fontWeight: FontWeight.bold)),
+//         content: Column(
+//           mainAxisSize: MainAxisSize.min,
+//           children: [
+//             //const Text("Mohon berikan alasan pembatalan."),
+//             const SizedBox(height: 15),
+//             TextField(
+//               controller: reasonController,
+//               maxLines: 3,
+//               decoration: InputDecoration(
+//                 hintText: "Contoh: Armada mengalami kendala teknis...",
+//                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+//               ),
+//             ),
+//           ],
+//         ),
+//         actions: [
+//           TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEMBALI")),
+//           ElevatedButton(
+//             onPressed: () {
+//               if (reasonController.text.trim().isEmpty) {
+//                 _showSnackBar("Alasan wajib diisi!", Colors.orange);
+//                 return;
+//               }
+//               Navigator.pop(context);
+//               _cancelOrder(item, reasonController.text);
+//             },
+//             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//             child: const Text("YA, CANCEL", style: TextStyle(color: Colors.white)),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+// void _showCancelDialog(Map<String, dynamic> item) {
+//   final TextEditingController reasonController = TextEditingController();
+  
+//   showDialog(
+//     context: context,
+//     builder: (context) => AlertDialog(
+//       title: const Text("Alasan Pembatalan"),
+//       content: TextField(
+//         controller: reasonController,
+//         decoration: const InputDecoration(hintText: "Masukkan alasan..."),
+//       ),
+//       actions: [
+//         TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
+//         ElevatedButton(
+//           onPressed: () {
+//             if (reasonController.text.isNotEmpty) {
+//               Navigator.pop(context);
+//               _cancelOrder(item, reasonController.text); // Memanggil fungsi baru
+//             }
+//           },
+//           child: const Text("SUBMIT"),
+//         ),
+//       ],
+//     ),
+//   );
+// }
+void _showCancelDialog(Map<String, dynamic> item) {
+  final List<String> cancelReasons = [
+    "Tidak Ada Supir",
+    "Tidak Ada Unit",
+    "Unit Rusak",
+    "Jalan Macet",
+    "Dokumen Expired",
+    "Other"
+  ];
+
+  String? selectedReason;
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return AlertDialog(
+          title: const Text("Pilih Alasan Pembatalan", 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: cancelReasons.map((reason) => RadioListTile<String>(
+              title: Text(reason, style: const TextStyle(fontSize: 13)),
+              value: reason,
+              groupValue: selectedReason,
+              activeColor: Colors.red,
+              onChanged: (val) {
+                setDialogState(() => selectedReason = val);
+              },
+            )).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), 
+              child: const Text("KEMBALI")
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: selectedReason == null 
+                ? null // Button mati jika alasan belum dipilih
+                : () {
+                    Navigator.pop(context);
+                    _cancelOrder(item, selectedReason!);
+                  },
+              child: const Text("SUBMIT CANCEL", 
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEMBALI")),
-          ElevatedButton(
-            onPressed: () {
-              if (reasonController.text.trim().isEmpty) {
-                _showSnackBar("Alasan wajib diisi!", Colors.orange);
-                return;
-              }
-              Navigator.pop(context);
-              _cancelOrder(item, reasonController.text);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("YA, CANCEL", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+        );
+      }
+    ),
+  );
+}
 
   bool _canReschedule(String? jamBooking, String? stuffingDate) {
   if (jamBooking == null || stuffingDate == null) return false;

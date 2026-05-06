@@ -90,15 +90,15 @@ class MainDrawer extends StatelessWidget {
           leading: const Icon(Icons.dvr_rounded),
           title: const Text("Entry & Operasional", style: TextStyle(fontWeight: FontWeight.w600)),
           children: [
-            if (_hasAccess('CheckIn'))
-              _menuItem(context, Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
-                Navigator.pop(context);
-                _showSnackBar(context, "Membuka Presensi...", Colors.blue);
-              }),
-            if (_hasAccess('Loading'))
-              _menuItem(context, Icons.unarchive_rounded, "Loading Barang", Colors.orange),
+            // if (_hasAccess('CheckIn'))
+            //   _menuItem(context, Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
+            //     Navigator.pop(context);
+            //     _showSnackBar(context, "Membuka Presensi...", Colors.blue);
+            //   }),
+            // if (_hasAccess('Loading'))
+            //   _menuItem(context, Icons.unarchive_rounded, "Loading Barang", Colors.orange),
               if (_hasAccess('PPICForm'))
-              _menuItem(context, Icons.edit_rounded, "PPIC Form", Colors.orange, onTap: () {
+              _menuItem(context, Icons.format_align_justify, "PPIC Form", Colors.orange, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("PPIC Form", PPICFormPage());
               }),
@@ -108,9 +108,9 @@ class MainDrawer extends StatelessWidget {
                 DynamicTabPage.of(context)?.openTab("Occupancy Form", WarehouseOccupancyForm());
               }),
             if (_hasAccess('KelayakanUnit'))
-              _menuItem(context, Icons.commute_rounded, "Kelayakan Unit", Colors.teal, onTap: () {
+              _menuItem(context, Icons.commute_rounded, "Check in & Kelayakan Unit", Colors.teal, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Kelayakan Unit", VehicleControlFormState(vehicleData: {})); // Pass empty vehicleData for now
+                DynamicTabPage.of(context)?.openTab("Check in & Kelayakan Unit", VehicleControlFormState()); // Pass empty vehicleData for now
               }),
             if (_hasAccess('InputDO'))
               _menuItem(context, Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
@@ -159,7 +159,7 @@ class MainDrawer extends StatelessWidget {
             _menuItem(context, Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
             
              if (_hasAccess('ListPPIC'))
-              _menuItem(context, Icons.view_agenda, "List PPIC", Colors.redAccent, onTap: () {
+              _menuItem(context, Icons.padding_outlined, "List PPIC", Colors.orange, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("List PPIC", const PPICListPage());
               }),

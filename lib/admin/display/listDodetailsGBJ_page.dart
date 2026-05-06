@@ -768,16 +768,50 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
                   : (isExpanded ? Colors.red.shade700 : Colors.blueGrey[400]),
               child: Icon(isGroupRow ? Icons.layers : Icons.local_shipping, color: Colors.white, size: 20),
             ),
-            title: Text(
-              isGroupRow ? "GROUP ID: ${item['group_id']}" : "SHIP ID: ${item['shipping_id']}",
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        //     title: Text(
+        //       isGroupRow ? "GROUP ID: ${item['group_id']}" : "SHIP ID: ${item['shipping_id']}",
+        //       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        //     ),
+          
+        //     subtitle: Text("🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
+        //         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
+        //     trailing: Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+        //   ),
+        // ),
+        
+        // const Divider(height: 1, indent: 16, endIndent: 16),
+        // 🔥 FIX DI SINI (pakai Column, bukan subtitle)
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isGroupRow 
+                      ? "GROUP ID: ${item['group_id']}" 
+                      : "SHIP ID: ${item['shipping_id']}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                //const SizedBox(width: 60), // 🔥 jarak
+                Text(
+                  "🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
             ),
-            subtitle: Text("🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black)),
-            trailing: Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+
+            trailing: Icon(
+              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+            ),
           ),
         ),
-        
+
         const Divider(height: 1, indent: 16, endIndent: 16),
 
         // --- BAGIAN DETAIL: SELALU TERBUKA ---
@@ -802,7 +836,7 @@ return Padding(
               Text(
                 "RDD: $rddSpesifik",
                 style: TextStyle(
-                  fontSize: 11, 
+                  fontSize: 12, 
                   fontWeight: FontWeight.bold, 
                   color: Colors.red.shade900
                 ),

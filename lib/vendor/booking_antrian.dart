@@ -38,11 +38,12 @@ class _ScheduleSelectionPageState extends State<ScheduleSelectionPage> {
 
 String? _tempSelectedReason;
 final List<String> _rescheduleReasons = [
-  'Kendala Truk',
-  'Macet di Perjalanan',
-  'Truk Tidak Tersedia',
-  'Kecelakaan',
-  'Lainnya',
+  'Tidak Ada Supir',
+    'Tidak Ada Unit',
+    'Unit Rusak',
+    'Jalan Macet',
+    'Dokumen Expired',
+    'Other'
 ];
 
   final List<String> _timeSlots = [
@@ -848,6 +849,7 @@ String _getCheckInTime(String timeSlot) {
 
 Future<void> _checkAvailability() async {
   try {
+    String filterDate = _shippingData!['stuffing_date'].toString().split(' ')[0];
    // Kita query ke assignments karena jam_booking ada di sana
     // Kita join ke request untuk memfilter berdasarkan tanggal dan gudang
     // final response = await supabase
@@ -864,21 +866,48 @@ Future<void> _checkAvailability() async {
           jam_booking,
           request:shipping_id (
             stuffing_date,
-            warehouse_id
+            warehouse_id,
+            group_id,
+            shipping_id
           )
         ''') // <--- PERBAIKAN: Tambahkan request:shipping_id agar bisa difilter
         .eq('status_assignment', 'accepted')
-        .eq('request.stuffing_date', _shippingData!['stuffing_date'])
+        .eq('request.stuffing_date', filterDate)
         .eq('request.warehouse_id', _shippingData!['warehouse_id'])
         .not('jam_booking', 'is', null);
 
     Map<String, int> counts = {};
-    for (var row in response) {
+    Map<String, Set<String>> uniqueVehiclesPerSlot = {};
+    if (response != null) {
+    for (var row in response as List) {
       String? time = row['jam_booking'];
-      if (time != null) {
-        counts[time] = (counts[time] ?? 0) + 1;
+    //   if (time != null) {
+    //     counts[time] = (counts[time] ?? 0) + 1;
+    //   }
+    // }
+    final req = row['request'];
+      
+      if (time == null || req == null) continue;
+
+      // --- LOGIKA IDENTITAS KENDARAAN ---
+      // Jika pesanan adalah bagian dari grup, gunakan ID Grup sebagai identitas kendaraan.
+      // Jika pesanan tunggal, gunakan Shipping ID sebagai identitas kendaraan.
+      String vehicleKey = req['group_id'] != null 
+          ? "GRP_${req['group_id']}" 
+          : "SHIP_${req['shipping_id']}";
+
+          if (!uniqueVehiclesPerSlot.containsKey(time)) {
+        uniqueVehiclesPerSlot[time] = {vehicleKey};
+      } else {
+        uniqueVehiclesPerSlot[time]!.add(vehicleKey);
       }
     }
+    }
+
+    // 2. Konversi hasil Set menjadi jumlah (integer) untuk ditampilkan di grid
+    uniqueVehiclesPerSlot.forEach((time, vehicles) {
+      counts[time] = vehicles.length;
+    });
 
     setState(() {
       _bookedCounts = counts;

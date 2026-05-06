@@ -50,12 +50,14 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
       if (isNumber) {
         query = query.eq('customer_id', int.parse(_searchQuery));
       } else {
+       
         query = query.ilike('customer_name', '%$_searchQuery%');
       }
     }
-    
+
+ // Batasi 500 jika kosong, jika cari naikkan limitnya
     // Gunakan order dan pastikan tidak ada limit yang tertahan
-    final data = await query.order('customer_id', ascending: true);
+    final data = await query.order('customer_id', ascending: true).limit(_searchQuery.isEmpty ? 500 : 3000);
 
     if (mounted) {
       setState(() {
@@ -883,9 +885,14 @@ Future<void> _exportCustomerToExcel() async {
                                         icon: const Icon(Icons.clear),
                                         onPressed: () {
                                           _searchController.clear();
-                                          _searchQuery = "";
-                                          _fetchData();
-                                        },
+                                        //   _searchQuery = "";
+                                        //   _fetchData();
+                                        // },
+                                        setState(() {
+    _searchQuery = ""; // Reset query
+  });
+  _fetchData(); // Ambil data awal lagi
+},
                                       )
                                     : null,
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),

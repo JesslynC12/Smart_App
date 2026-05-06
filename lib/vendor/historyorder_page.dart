@@ -50,7 +50,7 @@ class _VendorOrderHistoryPageState extends State<VendorOrderHistoryPage> {
             )
           ''')
           .eq('nik', widget.vendorNik)
-          .inFilter('status_assignment', ['completed', 'rejected', 'no response'])
+          .inFilter('status_assignment', ['completed', 'rejected', 'no response', 'cancel booking'])
           .order('responded_at', ascending: false);
 
       List<dynamic> rawData = response as List;
@@ -216,7 +216,7 @@ if (request['delivery_order'] != null) {
   if (allRequests.isEmpty) return const SizedBox.shrink();
 
   final String status = item['status_assignment']?.toString().toLowerCase() ?? "";
-  final bool isNegativeStatus = status == 'rejected' || status == 'no response';
+  final bool isNegativeStatus = status == 'rejected' || status == 'no response' ||status == 'cancel booking';
   final Color headerColor = isNegativeStatus ? Colors.red.shade700 : Colors.green.shade700;
 
   final request = allRequests[0]; 

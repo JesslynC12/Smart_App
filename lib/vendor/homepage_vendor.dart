@@ -293,7 +293,13 @@ Future<void> _fetchNewOrders() async {
     try {
       final nik = currentUser?.nikVendor;
       if (nik == null) return;
-
+      
+// 1. Dapatkan range waktu bulan sekarang (Awal bulan s/d Akhir bulan)
+    DateTime now = DateTime.now();
+    // Tanggal 1 di bulan sekarang, jam 00:00:00
+    DateTime firstDayOfMonth = DateTime(now.year, now.month, 1);
+    // Tanggal 1 di bulan depan, jam 00:00:00 (sebagai batas akhir)
+    DateTime firstDayOfNextMonth = DateTime(now.year, now.month + 1, 1);
       // Mengambil data status dalam satu kali panggil (Lebih Efisien)
       final List<dynamic> data = await supabase
           .from('shipping_assignments')
@@ -302,7 +308,10 @@ Future<void> _fetchNewOrders() async {
           status_assignment,
           request:shipping_id (group_id)
         ''')
-          .eq('nik', nik);
+          .eq('nik', nik)
+          // Filter: assigned_at >= awal bulan AND assigned_at < awal bulan depan
+        .gte('assigned_at', firstDayOfMonth.toIso8601String())
+        .lt('assigned_at', firstDayOfNextMonth.toIso8601String());
 
 if (mounted) {
       // Fungsi bantuan untuk menghitung penugasan unik (Group dihitung 1)
@@ -338,9 +347,18 @@ if (mounted) {
         final completedList = data.where((item) => item['status_assignment'] == 'completed').toList();
         completedCount = countUniqueAssignments(completedList);
 
-        // 4. Rejected (Hanya yang status rejected)
-        final rejectedList = data.where((item) => item['status_assignment'] == 'rejected').toList();
-        rejectedCount = countUniqueAssignments(rejectedList);
+        // // 4. Rejected (Hanya yang status rejected)
+        // final rejectedList = data.where((item) => item['status_assignment'] == 'rejected').toList();
+        // rejectedCount = countUniqueAssignments(rejectedList);
+        final failedList = data.where((item) {
+          final status = item['status_assignment']?.toString().toLowerCase();
+          // Menggunakan operator OR (||) untuk mengumpulkan semua status yang gagal/batal
+          return status == 'rejected' || 
+                 status == 'no response' || 
+                 status == 'cancel booking';
+        }).toList();
+        
+        rejectedCount = countUniqueAssignments(failedList);
 
         isLoading = false;
         });
@@ -403,10 +421,14 @@ if (mounted) {
                         children: [
                           //_buildStatusBanner(isApproved),
                           //const SizedBox(height: 25),
-                          const Text(
-                            "Aktivitas Pengiriman",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+                          // const Text(
+                          //   "Aktivitas Pengiriman",
+                          //   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          // ),
+                          Text(
+        "Aktivitas Pengiriman (${DateFormat('MMMM yyyy', 'id_ID').format(DateTime.now())})",
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
                           const SizedBox(height: 15),
                           _buildStatisticGrid(),
                         const SizedBox(height: 30),
