@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
 import 'package:project_app/admin/input%20form/Formppic.dart';
+import 'package:project_app/admin/input%20form/loading_page.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/vendor/ListPengirimanOnProses.dart';
 import 'package:project_app/vendor/historyorder_page.dart';
@@ -90,6 +91,16 @@ class MainDrawer extends StatelessWidget {
           leading: const Icon(Icons.dvr_rounded),
           title: const Text("Entry & Operasional", style: TextStyle(fontWeight: FontWeight.w600)),
           children: [
+             if (_hasAccess('InputDO'))
+              _menuItem(context, Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Input DO", const ShippingRequestPage());
+              }),
+               if (_hasAccess('KelayakanUnit'))
+              _menuItem(context, Icons.commute_rounded, "Check in & Kelayakan Unit", Colors.teal, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Check in & Kelayakan Unit", VehicleControlFormState()); // Pass empty vehicleData for now
+              }),
             // if (_hasAccess('CheckIn'))
             //   _menuItem(context, Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
             //     Navigator.pop(context);
@@ -97,6 +108,11 @@ class MainDrawer extends StatelessWidget {
             //   }),
             // if (_hasAccess('Loading'))
             //   _menuItem(context, Icons.unarchive_rounded, "Loading Barang", Colors.orange),
+              if (_hasAccess('Loading'))
+              _menuItem(context, Icons.unarchive_rounded, "Loading Form", Colors.orange, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Loading Form", ListLoadingState());
+              }),
               if (_hasAccess('PPICForm'))
               _menuItem(context, Icons.format_align_justify, "PPIC Form", Colors.orange, onTap: () {
                 Navigator.pop(context);
@@ -107,16 +123,7 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Occupancy Form", WarehouseOccupancyForm());
               }),
-            if (_hasAccess('KelayakanUnit'))
-              _menuItem(context, Icons.commute_rounded, "Check in & Kelayakan Unit", Colors.teal, onTap: () {
-                Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Check in & Kelayakan Unit", VehicleControlFormState()); // Pass empty vehicleData for now
-              }),
-            if (_hasAccess('InputDO'))
-              _menuItem(context, Icons.local_shipping_rounded, "Input DO", Colors.purple, onTap: () {
-                Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Input DO", const ShippingRequestPage());
-              }),
+           
             if (_hasAccess('Complain'))
               _menuItem(context, Icons.report_problem_rounded, "Complain", Colors.redAccent, onTap: () {
                 Navigator.pop(context);

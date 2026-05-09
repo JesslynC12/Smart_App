@@ -1035,6 +1035,7 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
       'shipping_id': sid,
       'reason': reasonController.text.trim(),
       'pending_by': _currentUserName ?? 'Admin',
+      'pending_at': DateTime.now().toIso8601String(),
     }).toList();
 
     await supabase.from('shipping_pending_history').insert(historyInserts);

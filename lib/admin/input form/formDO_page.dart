@@ -79,6 +79,8 @@ void _loadDataForEdit() {
   if (_tanggalRDD != null) _tanggalRDDController.text = DateFormat('dd/MM/yyyy').format(_tanggalRDD!);
   if (_stuffingDate != null) _stuffingDateController.text = DateFormat('dd/MM/yyyy').format(_stuffingDate!);
 
+//String jamBuat = _formatTanggal(data['date_createdDO']); // <--- CONTOH PENGGUNAAN
+
   final List dos = data['delivery_order'] ?? [];
   for (var doItem in dos) {
     for (var det in (doItem['do_details'] as List)) {
@@ -89,6 +91,7 @@ void _loadDataForEdit() {
         "material_id": det['material_id'].toString(),
         "material_name": det['material']?['material_name'] ?? "",
         "qty": det['qty'].toString(),
+        "date_created": _formatTanggal(data['date_createdDO']),
       });
     }
   }
@@ -508,6 +511,7 @@ void _showErrorDialog(String message) {
             _PaddingCell(Text("Deskripsi Material", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
             _PaddingCell(Text("Qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
             _PaddingCell(Text("Action",style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,color: Colors.white))),
+            
           ],
         ),
         ...selectedMaterials.asMap().entries.map((entry) {
@@ -826,7 +830,24 @@ void _addItemToTable() async {
       ],
     );
   }
-
+// Le
+String _formatTanggal(String? dateFromDb) {
+  if (dateFromDb == null || dateFromDb.isEmpty) return "-";
+  
+  try {
+    // 1. Parse string dan pastikan dianggap sebagai UTC
+    DateTime utcDate = DateTime.parse(dateFromDb).toUtc(); 
+    
+    // 2. Konversi ke Local (Otomatis menyesuaikan settingan jam di HP user)
+    DateTime localDate = utcDate.toLocal();
+    
+    // 3. Format ke tampilan Indonesia (24 Jam)
+    return DateFormat('dd/MM/yyyy HH:mm:ss').format(localDate);
+  } catch (e) {
+    debugPrint("Error Format Tanggal: $e");
+    return dateFromDb;
+  }
+}
   Widget _buildInputLabel(String label, TextEditingController controller, {bool isDate = false, VoidCallback? onTap, String? hint}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -842,37 +863,6 @@ void _addItemToTable() async {
       ],
     );
   }
-
-//   Widget _buildDropdownWarehouse() {
-//   return Column(
-//     crossAxisAlignment: CrossAxisAlignment.start,
-//     children: [
-//       const Text("Warehouse *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-//       const SizedBox(height: 8),
-//       DropdownButtonFormField<int>( // Gunakan int untuk ID
-//         value: _selectedWarehouseId,
-//         hint: const Text("Pilih Warehouse", style: TextStyle(fontSize: 13)),
-//         items: warehouseList.map((wh) {
-//           return DropdownMenuItem<int>(
-//             value: wh['warehouse_id'] as int,
-//             child: Text(wh['warehouse_name'].toString(), style: const TextStyle(fontSize: 13)),
-//           );
-//         }).toList(),
-//         onChanged: (value) {
-//           setState(() {
-//             _selectedWarehouseId = value;
-//           });
-//         },
-//         validator: (value) => value == null ? "Wajib diisi" : null,
-//         decoration: InputDecoration(
-//           isDense: true,
-//           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-//           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-//         ),
-//       ),
-//     ],
-//   );
-// }
 
   Widget _buildSectionHeader(IconData icon, String title) {
     return Row(
@@ -945,6 +935,7 @@ try {
             'so': _soNumberController.text,
             'status': 'waiting approval', // Sesuai ENUM
             'createdDO_by': userDisplayName ?? 'Unknown', // Diambil dari profiles.name
+      'date_createdDO': DateTime.now().toIso8601String(),
       // 'lokasi': userLokasi ?? 'Unknown',
           })
           .select()

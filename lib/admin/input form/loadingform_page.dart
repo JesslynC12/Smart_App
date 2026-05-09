@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
-class CheckInFormPage extends StatefulWidget {
+class LoadingFormPage extends StatefulWidget {
   final Map<String, dynamic> item;
   final String? lateReason;
 //final VoidCallback onBack;
-  const CheckInFormPage({super.key, required this.item, this.lateReason});
+  const LoadingFormPage({super.key, required this.item, this.lateReason});
 
   @override
-  State<CheckInFormPage> createState() => _CheckInFormPageState();
+  State<LoadingFormPage> createState() => _LoadingFormPageState();
 }
 
-class _CheckInFormPageState extends State<CheckInFormPage> {
+class _LoadingFormPageState extends State<LoadingFormPage> {
   
   final _formKey = GlobalKey<FormState>();
   final supabase = Supabase.instance.client;

@@ -564,12 +564,27 @@ Future<void> _createAndAssignGroup() async {
   
   try {
     //setState(() => _isLoading = true);
+final currentUser = supabase.auth.currentUser;
+    String creatorName = "System"; // Default fallback
 
+    if (currentUser != null) {
+      final profile = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', currentUser.id)
+          .single();
+      creatorName = profile['name'] ?? "No Name";
+    }
     // 1. Insert ke tabel shipping_groups
     // Jika tidak pakai Auth, hapus bagian created_by
     final groupResponse = await supabase
         .from('shipping_groups')
-        .insert({}) // baris kosong untuk dpt ID auto-increment
+        .insert({
+          // Mengirimkan waktu sekarang dari perangkat user dalam format ISO8601
+          'created_at': DateTime.now().toIso8601String(), 
+          'created_by': creatorName,
+        })
+      
         .select()
         .single();
 

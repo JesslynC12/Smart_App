@@ -395,7 +395,7 @@ String storageLocDisplay = whData != null
                   _buildDetailedSummary(),
                   const Padding(
   padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-  child: Text("📋 STATUS DEDICATED", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+  child: Text("STATUS DEDICATED", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
 ),
 Padding(
   padding: const EdgeInsets.symmetric(horizontal: 16),
