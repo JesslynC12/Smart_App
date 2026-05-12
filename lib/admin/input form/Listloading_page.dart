@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/input%20form/checkIn_page.dart';
+import 'package:project_app/admin/input%20form/loadingform_page.dart'; // Pastikan import ini benar
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
-class VehicleControlFormState extends StatefulWidget {
-    const VehicleControlFormState({super.key});
+class ListLoadingState extends StatefulWidget {
+  const ListLoadingState({super.key});
 
   @override
-  State<VehicleControlFormState> createState() => _VehicleControlFormState();
+  State<ListLoadingState> createState() => _ListLoadingState();
 }
 
-class _VehicleControlFormState extends State<VehicleControlFormState> {
-  Widget? _currentActiveContent;
+class _ListLoadingState extends State<ListLoadingState> {
+ //Widget? _currentActiveContent;
   final supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<dynamic> _planningList = [];
-  String? _currentUser;
+  //String? _currentUser;
 
 // Variabel Filter Baru
   DateTime _selectedDate = DateTime.now();
@@ -50,69 +50,69 @@ void dispose() {
   super.dispose();
 }
 
-// Fungsi untuk memproses Check-in
-Future<void> _handleCheckIn(Map<String, dynamic> item) async {
-  final request = item['request'] ?? {};
-  final String jamBookingStr = item['jam_booking'] ?? "00:00 - 00:00";
+// // Fungsi untuk memproses Check-in
+// Future<void> _handleCheckIn(Map<String, dynamic> item) async {
+//   final request = item['request'] ?? {};
+//   final String jamBookingStr = item['jam_booking'] ?? "00:00 - 00:00";
   
-  // 1. Ambil Jam Mulai (misal '11:00' dari '11:00 - 13:00')
-  String startTimeStr = jamBookingStr.split(" - ")[0];
+//   // 1. Ambil Jam Mulai (misal '11:00' dari '11:00 - 13:00')
+//   String startTimeStr = jamBookingStr.split(" - ")[0];
   
-  // 2. Buat objek DateTime untuk jam booking hari ini
-  DateTime now = DateTime.now();
-  DateTime bookingTime = DateTime(
-    now.year, now.month, now.day,
-    int.parse(startTimeStr.split(":")[0]),
-    int.parse(startTimeStr.split(":")[1]),
-  );
+//   // 2. Buat objek DateTime untuk jam booking hari ini
+//   DateTime now = DateTime.now();
+//   DateTime bookingTime = DateTime(
+//     now.year, now.month, now.day,
+//     int.parse(startTimeStr.split(":")[0]),
+//     int.parse(startTimeStr.split(":")[1]),
+//   );
 
-  // 3. Cek apakah tanggal stuffing adalah hari ini
-  String stuffingDateStr = request['stuffing_date'] ?? "";
-  bool isToday = DateFormat('yyyy-MM-dd').format(now) == stuffingDateStr;
+//   // 3. Cek apakah tanggal stuffing adalah hari ini
+//   String stuffingDateStr = request['stuffing_date'] ?? "";
+//   bool isToday = DateFormat('yyyy-MM-dd').format(now) == stuffingDateStr;
 
-  if (!isToday) {
-    _showSnackBar("Check-in hanya bisa dilakukan pada tanggal Stuffing!", Colors.orange);
-    return;
-  }
+//   if (!isToday) {
+//     _showSnackBar("Check-in hanya bisa dilakukan pada tanggal Stuffing!", Colors.orange);
+//     return;
+//   }
 
-  // 4. Deteksi Terlambat (Jika waktu sekarang > jam booking)
-  if (now.isAfter(bookingTime)) {
-    _showLateCheckInDialog(item);
-  } else {
-    _openCheckInTab(item);
-    // PINDAH KE HALAMAN FORM (Normal)
-    //Navigator.push(context, MaterialPageRoute(builder: (c) => CheckInFormPage(item: item, onBack: () {  },)));
-  //_navigateToForm(item);
+//   // 4. Deteksi Terlambat (Jika waktu sekarang > jam booking)
+//   if (now.isAfter(bookingTime)) {
+//     _showLateCheckInDialog(item);
+//   } else {
+//     _openCheckInTab(item);
+//     // PINDAH KE HALAMAN FORM (Normal)
+//     //Navigator.push(context, MaterialPageRoute(builder: (c) => CheckInFormPage(item: item, onBack: () {  },)));
+//   //_navigateToForm(item);
    
-  }
-}
+//   }
+// }
 
 // Fungsi untuk membuka Tab Form
-  void _openCheckInTab(Map<String, dynamic> item, {String? reason}) {
+  void _handleGoToLoading(Map<String, dynamic> item) {
     final groupId = item['request']['group_id'];
     final shipId = item['request']['shipping_id'];
 
     String tabTitle = groupId != null 
-        ? "Check-in Grup #$groupId" 
-        : "Check-in Ship #$shipId";
+        ? "Loading Grup #$groupId" 
+        : "Loading Ship #$shipId";
 
     DynamicTabPage.of(context)?.openTab(
       tabTitle,
-      CheckInFormPage(
+      LoadingFormPage(
         item: item,
-        lateReason: reason,
+        //lateReason: reason,
         // Jika CheckInFormPage butuh callback onBack, tambahkan di sini
       ),
     );
   }
-void _getUserData() {
-    final user = supabase.auth.currentUser;
-    if (user != null) {
-      setState(() {
-        _currentUser = user.email;
-      });
-    }
-  }
+// void _getUserData() {
+//     final user = supabase.auth.currentUser;
+//     if (user != null) {
+//       setState(() {
+//         _currentUser = user.email;
+//       });
+//     }
+//   }
   
 //   void _navigateToForm(Map<String, dynamic> item, {String? lateReason}) {
 //   setState(() {
@@ -127,83 +127,83 @@ void _getUserData() {
 //       },
 //     );
 //   });
-// }
-// Dialog Pop-up Alasan Terlambat
-void _showLateCheckInDialog(Map<String, dynamic> item) {
-  final TextEditingController reasonController = TextEditingController();
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      title: const Text("⚠️ Check-in Terlambat", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text("Anda telah melewati batas jam booking. Silakan masukkan alasan keterlambatan:"),
-          const SizedBox(height: 10),
-          TextField(
-            controller: reasonController,
-            decoration: const InputDecoration(border: OutlineInputBorder(), hintText: "Contoh: Macet, Ban Bocor, dll"),
-            maxLines: 3,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          onPressed: () {
-            if (reasonController.text.trim().isEmpty) {
-              _showSnackBar("Alasan harus diisi!", Colors.orange);
-              return;
-            }
+// // }
+// // Dialog Pop-up Alasan Terlambat
+// void _showLateCheckInDialog(Map<String, dynamic> item) {
+//   final TextEditingController reasonController = TextEditingController();
+//   showDialog(
+//     context: context,
+//     barrierDismissible: false,
+//     builder: (context) => AlertDialog(
+//       title: const Text("⚠️ Check-in Terlambat", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+//       content: Column(
+//         mainAxisSize: MainAxisSize.min,
+//         children: [
+//           const Text("Anda telah melewati batas jam booking. Silakan masukkan alasan keterlambatan:"),
+//           const SizedBox(height: 10),
+//           TextField(
+//             controller: reasonController,
+//             decoration: const InputDecoration(border: OutlineInputBorder(), hintText: "Contoh: Macet, Ban Bocor, dll"),
+//             maxLines: 3,
+//           ),
+//         ],
+//       ),
+//       actions: [
+//         TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
+//         ElevatedButton(
+//           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//           onPressed: () {
+//             if (reasonController.text.trim().isEmpty) {
+//               _showSnackBar("Alasan harus diisi!", Colors.orange);
+//               return;
+//             }
            
-    //   Navigator.push(
-    //     context,
-    //     MaterialPageRoute(
-    //       builder: (context) => AssignVendorPage(shippingId: item['shipping_id']),
-    //     ),
-    //   );
-    // },
-  //  final String shipId = item['shipping_id'].toString();
+//     //   Navigator.push(
+//     //     context,
+//     //     MaterialPageRoute(
+//     //       builder: (context) => AssignVendorPage(shippingId: item['shipping_id']),
+//     //     ),
+//     //   );
+//     // },
+//   //  final String shipId = item['shipping_id'].toString();
               
-  //             DynamicTabPage.of(context)?.openTab(
-  //               "Assign Vendor Shipping #$shipId", 
-  //               AssignVendorPage(shippingId: item['shipping_id']),
-  //             );
-  //           },
-  // final groupId = item['group_id'];
-  // final shipId = item['shipping_id'];
+//   //             DynamicTabPage.of(context)?.openTab(
+//   //               "Assign Vendor Shipping #$shipId", 
+//   //               AssignVendorPage(shippingId: item['shipping_id']),
+//   //             );
+//   //           },
+//   // final groupId = item['group_id'];
+//   // final shipId = item['shipping_id'];
   
-  // // 2. Tentukan Judul Tab secara dinamis
-  // String tabTitle;
-  // if (groupId != null) {
-  //   tabTitle = "Assign Vendor Grup #$groupId";
-  // } else {
-  //   tabTitle = "Assign Vendor Shipping #$shipId";
-  // }
+//   // // 2. Tentukan Judul Tab secara dinamis
+//   // String tabTitle;
+//   // if (groupId != null) {
+//   //   tabTitle = "Assign Vendor Grup #$groupId";
+//   // } else {
+//   //   tabTitle = "Assign Vendor Shipping #$shipId";
+//   // }
 
-  // 3. Panggil DynamicTab untuk membuka halaman di dalam bingkai
-  // DynamicTabPage.of(context)?.openTab(
-  //   tabTitle, 
-  //   CheckInFormPage(item: item, lateReason: reasonController.text), // ID yang dikirim tetap shippingId utama
-  // );
+//   // 3. Panggil DynamicTab untuk membuka halaman di dalam bingkai
+//   // DynamicTabPage.of(context)?.openTab(
+//   //   tabTitle, 
+//   //   CheckInFormPage(item: item, lateReason: reasonController.text), // ID yang dikirim tetap shippingId utama
+//   // );
 
-            //Navigator.pop(context);
-           // PINDAH KE HALAMAN FORM (Membawa alasan terlambat)
-            // Navigator.push(context, MaterialPageRoute(builder: (c) => 
-            //    CheckInFormPage(item: item, lateReason: reasonController.text)));
-            //_navigateToForm(item, lateReason: reasonController.text);
-             Navigator.pop(context); // Tutup dialog
-              _openCheckInTab(item, reason: reasonController.text);
+//             //Navigator.pop(context);
+//            // PINDAH KE HALAMAN FORM (Membawa alasan terlambat)
+//             // Navigator.push(context, MaterialPageRoute(builder: (c) => 
+//             //    CheckInFormPage(item: item, lateReason: reasonController.text)));
+//             //_navigateToForm(item, lateReason: reasonController.text);
+//              Navigator.pop(context); // Tutup dialog
+//               _openCheckInTab(item, reason: reasonController.text);
             
-          },
-          child: const Text("LANJUT KE FORM", style: TextStyle(color: Colors.white)),
-        ),
-      ],
-    ),
-  );
-}
+//           },
+//           child: const Text("LANJUT KE FORM", style: TextStyle(color: Colors.white)),
+//         ),
+//       ],
+//     ),
+//   );
+// }
 
 // // Fungsi Eksekusi Update ke Database
 // Future<void> _processCheckIn(Map<String, dynamic> item, String? lateReason) async {
@@ -226,48 +226,49 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
 //     _showSnackBar("Gagal Check-in: $e", Colors.red);
 //   }
 // }
-Future<void> _processCheckIn(Map<String, dynamic> item, String? lateReason) async {
-  try {
-    setState(() => _isLoading = true);
+
+// Future<void> _processCheckIn(Map<String, dynamic> item, String? lateReason) async {
+//   try {
+//     setState(() => _isLoading = true);
     
-    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
-    final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
+//     final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
+//     final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
 
-// UPDATE 1: Tabel Assignments (Data Detail Eksekusi)
-    // await supabase.from('shipping_assignments').update({
-    //   'status_assignment': 'check in',
-    //   'checkin_at': DateTime.now().toIso8601String(),
-    //   'late_reason': lateReason,
-    // }).inFilter('id_assignment', assignmentIds);
+// // UPDATE 1: Tabel Assignments (Data Detail Eksekusi)
+//     // await supabase.from('shipping_assignments').update({
+//     //   'status_assignment': 'check in',
+//     //   'checkin_at': DateTime.now().toIso8601String(),
+//     //   'late_reason': lateReason,
+//     // }).inFilter('id_assignment', assignmentIds);
 
-    // 1. Simpan Milestone Kedatangan di tabel Assignments (Tanpa ubah status)
-    await supabase.from('shipping_assignments').update({
-      'checkIn_at': DateTime.now().toIso8601String(),
-      'latecheckIn_reason': lateReason, 
-      'checkIn_by': _currentUser ?? 'admin',
-      // Status assignment dibiarkan 'accepted' sesuai permintaan Anda
-    }).inFilter('id_assignment', assignmentIds);
+//     // 1. Simpan Milestone Kedatangan di tabel Assignments (Tanpa ubah status)
+//     await supabase.from('shipping_assignments').update({
+//       'checkIn_at': DateTime.now().toIso8601String(),
+//       'latecheckIn_reason': lateReason, 
+//       'checkIn_by': _currentUser ?? 'admin',
+//       // Status assignment dibiarkan 'accepted' sesuai permintaan Anda
+//     }).inFilter('id_assignment', assignmentIds);
 
-    // 2. Update Status Utama di tabel Request (Sesuai keinginan Anda)
-    await supabase.from('shipping_request').update({
-      'status': 'check in', 
-    }).inFilter('shipping_id', shipIds);
+//     // 2. Update Status Utama di tabel Request (Sesuai keinginan Anda)
+//     await supabase.from('shipping_request').update({
+//       'status': 'check in', 
+//     }).inFilter('shipping_id', shipIds);
 
-    if (mounted) {
-      _showSnackBar("Berhasil Check-in!", Colors.green);
-      _fetchPlanningData(); // Refresh data
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _showSnackBar("Gagal Check-in: $e", Colors.red);
-    }
-  }
-}
+//     if (mounted) {
+//       _showSnackBar("Berhasil Check-in!", Colors.green);
+//       _fetchPlanningData(); // Refresh data
+//     }
+//   } catch (e) {
+//     if (mounted) {
+//       setState(() => _isLoading = false);
+//       _showSnackBar("Gagal Check-in: $e", Colors.red);
+//     }
+//   }
+// }
 
-void _showSnackBar(String msg, Color color) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
-}
+// void _showSnackBar(String msg, Color color) {
+//   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+// }
   // Future<void> _fetchPlanningData() async {
   //   try {
   //     setState(() => _isLoading = true);
@@ -448,10 +449,10 @@ Future<void> _fetchPlanningData() async {
             )
           )
         ''')
-        .eq('status_assignment', 'accepted')
+        .eq('status_assignment', 'check in')
         .not('jam_booking', 'is', null)
         .eq('request.stuffing_date', formattedDate)
-        .neq('request.status', 'check in')
+        .neq('request.status', 'loading')
         .order('jam_booking', ascending: true);
 
     Map<String, dynamic> groupedData = {};
@@ -532,9 +533,9 @@ Future<void> _fetchPlanningData() async {
   // }
   @override
   Widget build(BuildContext context) {
-    if (_currentActiveContent != null) {
-    return _currentActiveContent!;
-  }
+  //   if (_currentActiveContent != null) {
+  //   return _currentActiveContent!;
+  // }
     return Scaffold(
       body: Column(
         children: [
@@ -842,17 +843,53 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                   const Icon(Icons.store, size: 18, color: Colors.red),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: 
-                    Text(
+                    child: Text(
                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
-                  _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
+                 // _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
+                  //_infoBox("CHECK-IN AT", _formatDateTime(item['checkIn_at'])),
                 ],
               ),
-              const SizedBox(height: 16),
-
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 14, color: Colors.orange),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Check-in At: ${_formatDateTime(item['checkIn_at'])}",
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                        ),
+// Tampilkan info jika dia check-in terlambat
+               if (item['latecheckIn_reason'] != null) ...[
+                          const SizedBox(width: 12),
+                          const Text("|", style: TextStyle(color: Colors.orange, fontSize: 11)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Terlambat: ${item['latecheckIn_reason']}",
+                              style: TextStyle(fontSize: 11, color: Colors.red.shade900, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
               // --- LOOPING DETAIL DO (Sudah Gabung) ---
               ...dos.map((doItem) {
                 final List details = doItem['do_details'] ?? [];
@@ -919,9 +956,9 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
               SizedBox(
   width: double.infinity,
   child: ElevatedButton.icon(
-    onPressed: () => _handleCheckIn(item),
-    icon: const Icon(Icons.location_on, color: Colors.white),
-    label: const Text("CHECK-IN KEDATANGAN", 
+    onPressed: () =>_handleGoToLoading(item),
+    icon: const Icon(Icons.play_arrow, color: Colors.white),
+    label: const Text("Loading", 
         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
     style: ElevatedButton.styleFrom(
       backgroundColor: Colors.green.shade700,
@@ -958,6 +995,24 @@ Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign
 //   DateTime dt = DateTime.parse(dateStr).toLocal();
 //   return DateFormat('dd/MM/yy HH:mm').format(dt);
 // }
+
+// String _formatDateTime(String? dateStr) {
+//   if (dateStr == null || dateStr.isEmpty) return "-";
+
+//   try {
+//     // Parse UTC dari database
+//     DateTime utcTime = DateTime.parse(dateStr);
+
+//     // Convert ke timezone device/user
+//     DateTime localTime = utcTime.toLocal();
+
+//     // Format tampilan
+//     return DateFormat('dd/MM/yy HH:mm').format(localTime);
+//   } catch (e) {
+//     debugPrint("Error parsing datetime: $e");
+//     return "-";
+//   }
+// }
 String _formatDateTime(String? dateStr) {
   if (dateStr == null || dateStr.isEmpty) return "-";
 
@@ -970,6 +1025,23 @@ String _formatDateTime(String? dateStr) {
     return "-";
   }
 }
+// String _formatDateTime(String? dateStr) {
+//   if (dateStr == null || dateStr.isEmpty) return "-";
+  
+//   try {
+//     // 1. Parsing string dari DB (Supabase mengirim ISO8601 dengan offset +00)
+//     DateTime utcTime = DateTime.parse(dateStr);
+    
+//     // 2. Paksa konversi ke waktu Lokal (WIB/UTC+7 jika di Indonesia)
+//     //DateTime localTime = utcTime.toLocal();
+//     DateTime localTime = utcTime.add(const Duration(hours: 7));
+//     // 3. Format lengkap: dd/MM/yy HH:mm (Contoh: 10/05/26 22:03)
+//     return DateFormat('dd/MM/yy HH:mm').format(localTime);
+//   } catch (e) {
+//     debugPrint("Error parsing date: $e");
+//     return "-";
+//   }
+// }
 
 Widget _infoBox(String label, String value) {
   return Column(
@@ -981,15 +1053,15 @@ Widget _infoBox(String label, String value) {
   );
 } 
 
-  Widget _infoColumn(String label, String value, {Color? color}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color ?? Colors.black87)),
-      ],
-    );
-  }
+  // Widget _infoColumn(String label, String value, {Color? color}) {
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.start,
+  //     children: [
+  //       Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
+  //       Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color ?? Colors.black87)),
+  //     ],
+  //   );
+  // }
 
 
   String _formatDate(String? dateStr) {
@@ -1004,7 +1076,7 @@ Widget _infoBox(String label, String value) {
         children: [
           Icon(Icons.event_note, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          const Text("Tidak ada antrian planning saat ini", style: TextStyle(color: Colors.grey)),
+          const Text("Tidak ada antrian loading saat ini", style: TextStyle(color: Colors.grey)),
         ],
       ),
     );

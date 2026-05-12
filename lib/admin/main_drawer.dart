@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
 import 'package:project_app/admin/input%20form/Formppic.dart';
-import 'package:project_app/admin/input%20form/loading_page.dart';
+import 'package:project_app/admin/input%20form/Listloading_page.dart';
+import 'package:project_app/admin/input%20form/posKeluar_page.dart';
+import 'package:project_app/admin/input%20form/weighbridge_page.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/vendor/ListPengirimanOnProses.dart';
 import 'package:project_app/vendor/historyorder_page.dart';
@@ -101,11 +103,7 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Check in & Kelayakan Unit", VehicleControlFormState()); // Pass empty vehicleData for now
               }),
-            // if (_hasAccess('CheckIn'))
-            //   _menuItem(context, Icons.how_to_reg_rounded, "Check-In", Colors.blue, onTap: () {
-            //     Navigator.pop(context);
-            //     _showSnackBar(context, "Membuka Presensi...", Colors.blue);
-            //   }),
+          
             // if (_hasAccess('Loading'))
             //   _menuItem(context, Icons.unarchive_rounded, "Loading Barang", Colors.orange),
               if (_hasAccess('Loading'))
@@ -113,6 +111,28 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Loading Form", ListLoadingState());
               }),
+               if (_hasAccess('Weighbridge'))
+              _menuItem(context, Icons.how_to_reg_rounded, "Weighbridge", Colors.blue, onTap: () {
+                Navigator.pop(context);
+               DynamicTabPage.of(context)?.openTab(
+        "Weighbridge",
+        WeighbridgeState(
+          item: {},
+        ),
+      );
+    },
+  ),
+   if (_hasAccess('PosKeluar'))
+              _menuItem(context, Icons.security_rounded, "Security Pos Keluar", Colors.blue, onTap: () {
+                Navigator.pop(context);
+               DynamicTabPage.of(context)?.openTab(
+        "Security Pos Keluar",
+        SecurityPosKeluarState(
+          item: {},
+        ),
+      );
+    },
+  ),
               if (_hasAccess('PPICForm'))
               _menuItem(context, Icons.format_align_justify, "PPIC Form", Colors.orange, onTap: () {
                 Navigator.pop(context);

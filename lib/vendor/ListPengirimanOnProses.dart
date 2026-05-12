@@ -202,7 +202,7 @@ Future<void> _fetchOngoingOrders() async {
           )
         ''')
         .eq('nik', widget.vendorNik)
-        .eq('status_assignment', 'accepted')
+        .inFilter('status_assignment', ['accepted', 'check in', 'loading','weighbridge','keluar'])
         .not('jam_booking', 'is', null)
         .eq('shipping_request.$_dateFilterType', formattedDate)
         .order('jam_booking', ascending: true);
@@ -232,18 +232,42 @@ Future<void> _fetchOngoingOrders() async {
         mutableItem['shipping_request']['delivery_order'] = dos;
         groupedMap[key] = mutableItem;
       } else {
-        // Gabungkan ID untuk keperluan bulk action
-        groupedMap[key]!['grouped_assignment_ids'].add(item['id_assignment']);
-        groupedMap[key]!['grouped_shipping_ids'].add(item['shipping_id']);
+        // // Gabungkan ID untuk keperluan bulk action
+        // groupedMap[key]!['grouped_assignment_ids'].add(item['id_assignment']);
+        // groupedMap[key]!['grouped_shipping_ids'].add(item['shipping_id']);
         
-        List existingDos = List.from(groupedMap[key]!['shipping_request']['delivery_order'] ?? []);
-        List newDos = List.from(req['delivery_order'] ?? []);
+        // List existingDos = List.from(groupedMap[key]!['shipping_request']['delivery_order'] ?? []);
+        // List newDos = List.from(req['delivery_order'] ?? []);
 
-        for (var ndo in newDos) {
+        // for (var ndo in newDos) {
+        //   ndo['rdd_origin'] = req['rdd'];
+        //   ndo['parent_so'] = req['so'];
+        //   existingDos.add(ndo);
+        // }
+        // 1. Tambahkan ID unik jika belum ada di list bulk update
+      if (!groupedMap[key]!['grouped_assignment_ids'].contains(item['id_assignment'])) {
+        groupedMap[key]!['grouped_assignment_ids'].add(item['id_assignment']);
+      }
+      if (!groupedMap[key]!['grouped_shipping_ids'].contains(item['shipping_id'])) {
+        groupedMap[key]!['grouped_shipping_ids'].add(item['shipping_id']);
+      }
+      
+      // 2. PROSES FILTER DUPLIKASI DO
+      List existingDos = List.from(groupedMap[key]!['shipping_request']['delivery_order'] ?? []);
+      List newDos = List.from(req['delivery_order'] ?? []);
+
+      for (var ndo in newDos) {
+        // CEK: Hanya tambahkan jika do_number belum ada di list yang sudah digabung
+        bool isDuplicate = existingDos.any((existing) => 
+          existing['do_number'] == ndo['do_number']
+        );
+
+        if (!isDuplicate) {
           ndo['rdd_origin'] = req['rdd'];
           ndo['parent_so'] = req['so'];
           existingDos.add(ndo);
         }
+      }
         groupedMap[key]!['shipping_request']['delivery_order'] = existingDos;
       }
     }
@@ -979,6 +1003,8 @@ Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
   final bool isGroup = request['group_id'] != null;
   final List dos = request['delivery_order'] ?? [];
   final warehouse = request['warehouse'];
+  final String status = item['status_assignment'] ?? '';
+final bool hasArrived = ['check in', 'loading', 'weighbridge', 'keluar'].contains(status);
   
   String warehouseDisplay = warehouse != null 
       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
@@ -1131,17 +1157,29 @@ Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _showCancelDialog(item),
-                      icon: const Icon(Icons.cancel, size: 16),
-                      label: const Text("CANCEL", style: TextStyle(fontSize: 11)),
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
-                    ),
-                  ),
+                     onPressed: hasArrived
+            ? null 
+            : () => _showCancelDialog(item),
+        icon: Icon(
+          Icons.cancel, 
+          size: 16,
+          color: hasArrived ? Colors.grey : Colors.red,
+        ),
+        label: Text(
+          hasArrived ? "ARRIVED" : "CANCEL", 
+          style: TextStyle(fontSize: 11, color: hasArrived ? Colors.grey : Colors.red,fontWeight: hasArrived ? FontWeight.bold : FontWeight.normal)
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.red, 
+          side: BorderSide(color: hasArrived ? Colors.grey : Colors.red),
+        ),
+      ),
+    ),
                   const SizedBox(width: 10),
                   Expanded(
   child: ElevatedButton.icon(
     // Jika isAllowed true, jalankan fungsi navigasi. Jika false, set null (otomatis disabled)
-    onPressed: isAllowed ? () {
+    onPressed:isAllowed ? () {
       DynamicTabPage.of(context)?.openTab(
         "Reschedule #${request['shipping_id']}", 
         ScheduleSelectionPage(
@@ -1180,6 +1218,14 @@ Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {
                     style: TextStyle(fontSize: 10, color: Colors.red, fontStyle: FontStyle.italic),
                   ),
                 ),
+                if (hasArrived)
+  const Padding(
+    padding: EdgeInsets.only(top: 8.0),
+    child: Text(
+      "* Truk sudah Check-in.",
+      style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic),
+    ),
+  ),
             ]
           ),
           ),

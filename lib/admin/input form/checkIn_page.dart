@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -161,6 +163,7 @@ Future<void> _getProfileName() async {
  
 
       await supabase.from('shipping_assignments').update({
+        'status_assignment': 'check in', // Tambahkan baris ini
         'checkIn_at': DateTime.now().toIso8601String(),
         'checkIn_by': _currentUserName,
         'no_polisi': _noPolisiController.text.toUpperCase(),
@@ -190,7 +193,8 @@ Future<void> _getProfileName() async {
 
       if (mounted) {
         _showSnackBar("Check-in Berhasil!", Colors.green);
-        Navigator.pop(context);
+        //Navigator.pop(context);
+        DynamicTabPage.of(context)?.closeCurrentTab();
       }
     } catch (e) {
       _showSnackBar("Gagal Simpan: $e", Colors.red);
@@ -278,22 +282,44 @@ Future<void> _getProfileName() async {
           children: [
             Row(
               children: [
-                Expanded(child: _buildTextField("No Polisi", _noPolisiController, Icons.vignette)),
+                Expanded(child:_buildTextField(
+  _noPolisiController, 
+  'No Polisi *', 
+  isUpperCase: true, 
+  maxLength: 12
+),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _buildTextField("Tahun", _tahunKendaraanController, Icons.calendar_today, isNumber: true)),
+                Expanded(child: _buildTextField(
+  _tahunKendaraanController, 
+  'Tahun', 
+  isNumber: true
+)),
               ],
             ),
             const SizedBox(height: 10),
-            _buildTextField("Nama Supir", _namaSupirController, Icons.person),
+            _buildTextField(
+  _namaSupirController, 
+  'Nama Supir *', 
+),
             const SizedBox(height: 10),
-            _buildTextField("No HP Supir", _noHpSupirController, Icons.phone, isNumber: true),
+            _buildTextField(
+  _noHpSupirController, 
+  'No HP Supir *', 
+  isNumber: true
+),
+        
             if (widget.lateReason != null) ...[
               const SizedBox(height: 10),
               _buildLateWarning(),
             ],
+        
           ],
+          
         ),
+        
       ),
+      
     );
   }
 
@@ -968,20 +994,119 @@ Widget _buildModernDecisionCard({
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool isNumber = false}) {
-    return TextFormField(
+  // Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool isNumber = false}) {
+  //   return TextFormField(
+  //     controller: controller,
+  //     keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+  //     decoration: InputDecoration(
+  //       labelText: label,
+  //       prefixIcon: Icon(icon, size: 20),
+  //       border: const OutlineInputBorder(),
+  //       isDense: true,
+  //     ),
+  //     validator: (v) => v == null || v.isEmpty ? "Wajib diisi" : null,
+  //   );
+  // }
+
+// Widget _buildTextField(
+//   TextEditingController controller, 
+//   String label, {
+//   bool isNumber = false, 
+//   bool isUpperCase = false,
+//   int? maxLength,
+// }) {
+//   return Padding(
+//     padding: const EdgeInsets.only(bottom: 10),
+//     child: TextField(
+//       controller: controller,
+//       // Jika isNumber true, keyboard akan muncul angka saja
+//       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+//       // Memaksa huruf besar saat mengetik
+//       textCapitalization: isUpperCase ? TextCapitalization.characters : TextCapitalization.none,
+//       inputFormatters: [
+//         // Jika isNumber true, hanya angka yang bisa masuk
+//         if (isNumber) FilteringTextInputFormatter.digitsOnly,
+//         // Jika ada batas karakter (misal No Polisi atau Tahun)
+//         if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+//       ],
+//       decoration: InputDecoration(
+//         labelText: label,
+//         border: const OutlineInputBorder(),
+//         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+//       ),
+      
+//     ),
+    
+//   );
+// }
+
+// Widget _buildTextField(
+//   TextEditingController controller, 
+//   String label, {
+//   bool isNumber = false, 
+//   bool isUpperCase = false,
+//   int? maxLength,
+// }) {
+//   return Padding(
+//     padding: const EdgeInsets.only(bottom: 10),
+//     child: TextFormField( // Gunakan TextFormField agar validator berfungsi
+//       controller: controller,
+//       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+//       // Memaksa keyboard mode huruf kapital
+//       textCapitalization: isUpperCase ? TextCapitalization.characters : TextCapitalization.none,
+//       inputFormatters: [
+//         // Hanya izinkan angka jika isNumber true
+//         if (isNumber) FilteringTextInputFormatter.digitsOnly,
+//         // Batasi jumlah karakter jika maxLength diisi
+//         if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+//       ],
+//       decoration: InputDecoration(
+//         labelText: label,
+//         border: const OutlineInputBorder(),
+//         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+//         isDense: true,
+//       ),
+//       // Balikkan validatornya ke sini
+//       validator: (v) => v == null || v.isEmpty ? "Wajib diisi" : null,
+//     ),
+//   );
+// }
+Widget _buildTextField(
+  TextEditingController controller, 
+  String label, {
+  bool isNumber = false, 
+  bool isUpperCase = false,
+  int? maxLength,
+}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 10), // Memberi jarak antar field agar pesan error punya ruang
+    child: TextFormField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      textCapitalization: isUpperCase ? TextCapitalization.characters : TextCapitalization.none,
+      inputFormatters: [
+        if (isNumber) FilteringTextInputFormatter.digitsOnly,
+        if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+      ],
+      // Gunakan style ini agar teks error tidak berantakan
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, size: 20),
+        labelStyle: const TextStyle(fontSize: 13),
         border: const OutlineInputBorder(),
-        isDense: true,
+        // Jangan terlalu tipis (isDense) jika menggunakan validator
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), 
+        errorStyle: const TextStyle(fontSize: 11, height: 0.8), // Mengatur kerapatan teks error
+        counterText: "", // Menghilangkan counter teks jika memakai maxLength
       ),
-      validator: (v) => v == null || v.isEmpty ? "Wajib diisi" : null,
-    );
-  }
-
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) {
+          return "Wajib diisi";
+        }
+        return null;
+      },
+    ),
+  );
+}
   // Widget _buildDetailedSummary() {
   //   final request = _shippingData?['request'] ?? {};
   //   final bool isGroup = request['group_id'] != null;

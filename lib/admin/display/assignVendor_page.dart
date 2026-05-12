@@ -960,6 +960,7 @@ Future<void> _processToDatabase() async {
       'shipping_id': sid,
       'nik': nikVendor,
       'status_assignment': 'offered', // Status awal sesuai schema Anda
+      // 'assigned_at': DateTime.now().toIso8601String(),
       'assigned_at': DateTime.now().toIso8601String(),
     }).toList();
     await supabase.from('shipping_assignments').insert(assignmentData);

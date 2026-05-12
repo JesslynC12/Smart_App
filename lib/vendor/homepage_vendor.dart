@@ -109,12 +109,68 @@ Timer? _timer;
   //   finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
   //   return finalResult;
   // }
-  List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
+//   List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
+//   Map<int, Map<String, dynamic>> groupedMap = {};
+//   List<Map<String, dynamic>> finalResult = [];
+
+//   for (var req in source) {
+//     // Suntik RDD origin ke tiap DO
+//     if (req['delivery_order'] != null) {
+//       for (var doItem in req['delivery_order']) {
+//         doItem['rdd_origin'] = req['rdd'];
+//       }
+//     }
+
+//     final dynamic rawGroupId = req['group_id'];
+
+//     if (rawGroupId == null) {
+//       Map<String, dynamic> singleItem = Map<String, dynamic>.from(req);
+//       // Simpan ID assignment tunggal dalam list agar seragam dengan grup
+//       singleItem['grouped_assignment_ids'] = [req['id_assignment']];
+      
+//       if (singleItem['delivery_order'] != null) {
+//         for (var doItem in singleItem['delivery_order']) {
+//           doItem['parent_so'] = singleItem['so']?.toString() ?? "-";
+//         }
+//       }
+//       finalResult.add(singleItem);
+//     } else {
+//       int gId = rawGroupId is String ? int.parse(rawGroupId) : rawGroupId as int;
+      
+//       if (!groupedMap.containsKey(gId)) {
+//         groupedMap[gId] = Map<String, dynamic>.from(req);
+//         groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
+//         groupedMap[gId]!['grouped_assignment_ids'] = [req['id_assignment']]; // Mulai kumpulkan ID assignment
+        
+//         if (groupedMap[gId]!['delivery_order'] != null) {
+//           for (var doItem in groupedMap[gId]!['delivery_order']) {
+//             doItem['parent_so'] = req['so']?.toString(); 
+//           }
+//         }
+//       } else {
+//         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
+//         groupedMap[gId]!['grouped_assignment_ids'].add(req['id_assignment']); // Tambah ID assignment anggota grup lain
+        
+//         List newDos = List.from(req['delivery_order'] ?? []);
+//         for (var ndo in newDos) { 
+//           ndo['parent_so'] = req['so']?.toString(); 
+//         }
+//         List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
+//         currentDos.addAll(newDos);
+//         groupedMap[gId]!['delivery_order'] = currentDos;
+//       }
+//     }
+//   }
+//   finalResult.addAll(groupedMap.values);
+//   finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
+//   return finalResult;
+// }
+List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
   Map<int, Map<String, dynamic>> groupedMap = {};
   List<Map<String, dynamic>> finalResult = [];
 
   for (var req in source) {
-    // Suntik RDD origin ke tiap DO
+    // 1. Inisialisasi rdd_origin untuk data mentah
     if (req['delivery_order'] != null) {
       for (var doItem in req['delivery_order']) {
         doItem['rdd_origin'] = req['rdd'];
@@ -124,8 +180,8 @@ Timer? _timer;
     final dynamic rawGroupId = req['group_id'];
 
     if (rawGroupId == null) {
+      // --- PENANGANAN SINGLE SHIPMENT ---
       Map<String, dynamic> singleItem = Map<String, dynamic>.from(req);
-      // Simpan ID assignment tunggal dalam list agar seragam dengan grup
       singleItem['grouped_assignment_ids'] = [req['id_assignment']];
       
       if (singleItem['delivery_order'] != null) {
@@ -135,33 +191,53 @@ Timer? _timer;
       }
       finalResult.add(singleItem);
     } else {
+      // --- PENANGANAN GROUP SHIPMENT ---
       int gId = rawGroupId is String ? int.parse(rawGroupId) : rawGroupId as int;
       
       if (!groupedMap.containsKey(gId)) {
-        groupedMap[gId] = Map<String, dynamic>.from(req);
-        groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
-        groupedMap[gId]!['grouped_assignment_ids'] = [req['id_assignment']]; // Mulai kumpulkan ID assignment
+        // Data pertama dalam grup
+        Map<String, dynamic> firstInGroup = Map<String, dynamic>.from(req);
+        firstInGroup['grouped_ids'] = [req['shipping_id']];
+        firstInGroup['grouped_assignment_ids'] = [req['id_assignment']];
         
-        if (groupedMap[gId]!['delivery_order'] != null) {
-          for (var doItem in groupedMap[gId]!['delivery_order']) {
+        if (firstInGroup['delivery_order'] != null) {
+          for (var doItem in firstInGroup['delivery_order']) {
             doItem['parent_so'] = req['so']?.toString(); 
           }
         }
+        groupedMap[gId] = firstInGroup;
       } else {
-        groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
-        groupedMap[gId]!['grouped_assignment_ids'].add(req['id_assignment']); // Tambah ID assignment anggota grup lain
-        
-        List newDos = List.from(req['delivery_order'] ?? []);
-        for (var ndo in newDos) { 
-          ndo['parent_so'] = req['so']?.toString(); 
+        // Data pendamping dalam grup (Proses Merge)
+        if (!groupedMap[gId]!['grouped_ids'].contains(req['shipping_id'])) {
+          groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
         }
-        List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
-        currentDos.addAll(newDos);
-        groupedMap[gId]!['delivery_order'] = currentDos;
+        if (!groupedMap[gId]!['grouped_assignment_ids'].contains(req['id_assignment'])) {
+          groupedMap[gId]!['grouped_assignment_ids'].add(req['id_assignment']);
+        }
+        
+        List existingDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
+        List newDos = List.from(req['delivery_order'] ?? []);
+
+        for (var ndo in newDos) {
+          // FIX: Cek apakah do_number sudah ada sebelum ditambah (mencegah duplikat tampilan)
+          bool isDuplicate = existingDos.any((existing) => 
+            existing['do_number'] == ndo['do_number']
+          );
+
+          if (!isDuplicate) {
+            ndo['parent_so'] = req['so']?.toString();
+            ndo['rdd_origin'] = req['rdd']; // Pastikan RDD asli terbawa
+            existingDos.add(ndo);
+          }
+        }
+        groupedMap[gId]!['delivery_order'] = existingDos;
       }
     }
   }
+  
   finalResult.addAll(groupedMap.values);
+  
+  // Urutkan berdasarkan ID terbaru agar pesanan baru di atas
   finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
   return finalResult;
 }
@@ -340,7 +416,15 @@ if (mounted) {
           // 1. Total Request (Semua status)
         totalRequests = countUniqueAssignments(data);
           // 2. On Going (Hanya yang status accepted)
-        final ongoingList = data.where((item) => item['status_assignment'] == 'accepted').toList();
+        // 2. On Going (PERBAIKAN: Sertakan status proses operasional)
+        final ongoingList = data.where((item) {
+          final status = item['status_assignment']?.toString().toLowerCase();
+          return status == 'accepted' || 
+                 status == 'check in' || 
+                 status == 'loading' || 
+                 status == 'weighbridge' || 
+                 status == 'keluar';
+        }).toList();
         ongoingCount = countUniqueAssignments(ongoingList);
 
         // 3. Completed (Hanya yang status completed)

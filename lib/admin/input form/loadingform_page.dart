@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -19,41 +20,22 @@ class _LoadingFormPageState extends State<LoadingFormPage> {
   bool _isSubmitting = false;
   Map<String, dynamic>? _shippingData;
 
-  // Controllers
-  final TextEditingController _noPolisiController = TextEditingController();
-  final TextEditingController _tahunKendaraanController = TextEditingController();
-  final TextEditingController _namaSupirController = TextEditingController();
-  final TextEditingController _noHpSupirController = TextEditingController();
-  final TextEditingController _catatanController = TextEditingController();
-  final TextEditingController _kondisiLainManualController = TextEditingController();
-  final TextEditingController _treatmentLainManualController = TextEditingController();
-
-  // Checkbox Per Sisi
-  final Map<String, bool> _sisiKanan = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiKiri = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiDepan = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiPintu = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiAtap = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiLantai = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Bergelombang': false};
-
-  // Lain-lain
-  final Map<String, bool> _kondisiLain = {'Kontainer Berbau': false, 'Karet Seal Pintu Lepas/Rusak': false, 'Lock Container < 4': false, 'Terkontaminasi Serangga': false};
-  final Map<String, bool> _dokumen = {'KTP': false, 'SIM': false, 'STNK': false, 'Buku KUER': false};
-  final Map<String, bool> _apd = {'Helm': false, 'Sepatu': false, 'Seragam/Rompi': false};
-  final Map<String, bool> _treatment = {'Cleaning': false, 'Las': false, 'Gerinda Sisi Tajam': false, 'Treatment Bau': false, 'Semprot Alkohol': false, 'Silicon Sealent': false, 'Bodem/dongkrak': false, 'Washing': false, 'Pelapisan Dinding': false};
-
-  String? _ganjalRoda;
-  String? _remHandRem;
-  String? _decision;
-bool _isKondisiLainLainChecked = false; 
-bool _isTreatmentLainLainChecked = false;
 String _currentUserName = 'admin';
+// --- STATE UNTUK FORM LOADING ---
+  String? _rekomendasiLogistic; // OKE, Tidak Sempurna, Belum Dilakukan
+  String? _lokasiStuffing;
+  String? _ganjalBan;
+  String? _selectedChecker; // Untuk Dropdown
+  List<Map<String, dynamic>> _checkerList = []; // Data dari DB
+  final TextEditingController _noSegelController = TextEditingController();
+  //final TextEditingController _checkerController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _shippingData = widget.item;
     _getProfileName();
+    _fetchCheckers();
   }
 
 Future<void> _getProfileName() async {
@@ -79,13 +61,8 @@ Future<void> _getProfileName() async {
 
   @override
   void dispose() {
-    _noPolisiController.dispose();
-    _tahunKendaraanController.dispose();
-    _namaSupirController.dispose();
-    _noHpSupirController.dispose();
-    _catatanController.dispose();
-    _kondisiLainManualController.dispose();
-    _treatmentLainManualController.dispose();
+   _noSegelController.dispose();
+    //_checkerController.dispose();
     super.dispose();
   }
 
@@ -93,111 +70,41 @@ Future<void> _getProfileName() async {
     return map.entries.where((e) => e.value).map((e) => e.key).toList();
   }
 
-
-// --- FUNGSI VALIDASI SEBELUM SAVE ---
-  bool _isValidationSuccess() {
-    // 1. Cek Safety Factor
-    bool isDocChecked = _dokumen.values.contains(true);
-    bool isApdChecked = _apd.values.contains(true);
-
-    // 1. Validasi Form Identitas (No Polisi, Nama Supir, dll)
-  // Ini akan memicu pesan error merah di bawah TextField masing-masing
-  // if (_noPolisiController.text.trim().isEmpty ||
-  //     _tahunKendaraanController.text.trim().isEmpty ||
-  //     _namaSupirController.text.trim().isEmpty ||
-  //     _noHpSupirController.text.trim().isEmpty) {
-  //   _showSnackBar("Harap lengkapi Identitas Kendaraan & Supir!", Colors.orange);
-  //   return false;
-  // }
-  if (!_formKey.currentState!.validate()) {
-    _showSnackBar("Harap lengkapi Identitas Kendaraan & Supir!", Colors.orange);
-    return false;
-  }
-
-    if (!isDocChecked || _ganjalRoda == null || _remHandRem == null || !isApdChecked) {
-      _showSnackBar("Safety Factor (Dokumen, Ganjal, Rem, APD) wajib diisi!", Colors.orange);
-      return false;
-    }
-
-    // // 2. Cek Rekomendasi Treatment
-    // bool isTreatmentChecked = _treatment.values.contains(true) || _isTreatmentLainLainChecked;
-    // if (!isTreatmentChecked) {
-    //   _showSnackBar("Rekomendasi Treatment wajib diisi minimal satu!", Colors.orange);
-    //   return false;
-    // }
-
-
-    // 3. Cek Decision
-    if (_decision == null) {
-      _showSnackBar("Decision for Unit wajib dipilih!", Colors.orange);
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<void> _submitCheckIn() async {
-    //if (!_formKey.currentState!.validate()) return;
-   if (!_isValidationSuccess()) {
-      //_showSnackBar("Pilih Keputusan Kelayakan Unit!", Colors.orange);
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-// Proses List Akhir dengan "Lainnya"
-    List<String> kondisiLainFinal = _mapToList(_kondisiLain);
-    if (_isKondisiLainLainChecked && _kondisiLainManualController.text.isNotEmpty) {
-      kondisiLainFinal.add("Lainnya: ${_kondisiLainManualController.text.trim()}");
-    }
-
-    List<String> treatmentFinal = _mapToList(_treatment);
-    if (_isTreatmentLainLainChecked && _treatmentLainManualController.text.isNotEmpty) {
-      treatmentFinal.add("Lainnya: ${_treatmentLainManualController.text.trim()}");
-    }
+Future<void> _fetchCheckers() async {
     try {
-      final item = widget.item;
-      final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
-      final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
- 
-
-      await supabase.from('shipping_assignments').update({
-        'checkIn_at': DateTime.now().toIso8601String(),
-        'checkIn_by': _currentUserName,
-        'no_polisi': _noPolisiController.text.toUpperCase(),
-        'tahun_kendaraan': _tahunKendaraanController.text,
-        'nama_supir': _namaSupirController.text,
-        'no_hp_supir': _noHpSupirController.text,
-        'sisi_kanan': _mapToList(_sisiKanan),
-        'sisi_kiri': _mapToList(_sisiKiri),
-        'sisi_depan': _mapToList(_sisiDepan),
-        'sisi_pintu_belakang': _mapToList(_sisiPintu),
-        'sisi_atap': _mapToList(_sisiAtap),
-        'sisi_lantai': _mapToList(_sisiLantai),
-        'kondisi_tidak_standar_lainnya': kondisiLainFinal,
-        'dokumen_pendukung': _mapToList(_dokumen),
-        'ganjal_roda': _ganjalRoda,
-        'rem_handrem': _remHandRem,
-        'apd_supir': _mapToList(_apd),
-        'rekomendasi_treatment': treatmentFinal,
-        'decision_for_unit': _decision,
-        'catatan': _catatanController.text, // Pastikan nama kolom di DB sesuai
-        'latecheckIn_reason': widget.lateReason,
-      }).inFilter('id_assignment', assignmentIds);
-
-      await supabase.from('shipping_request').update({
-        'status': 'check in',
-      }).inFilter('shipping_id', shipIds);
-
+      final data = await supabase
+          .from('checker')
+          .select('checker_id, checker_name')
+          .eq('status', 'active') // Hanya yang aktif
+          .order('checker_name', ascending: true);
+      
       if (mounted) {
-        _showSnackBar("Check-in Berhasil!", Colors.green);
-        Navigator.pop(context);
+        setState(() {
+          _checkerList = List<Map<String, dynamic>>.from(data);
+        });
       }
     } catch (e) {
-      _showSnackBar("Gagal Simpan: $e", Colors.red);
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      debugPrint("Error ambil checker: $e");
     }
   }
+
+// Future<void> _submitCheckIn() async {
+//     if (_rekomendasiLogistic == null) {
+//       _showSnackBar("Harap isi Verifikasi Rekomendasi Logistic!", Colors.orange);
+//       return;
+//     }
+    
+//     setState(() => _isSubmitting = true);
+//     try {
+//       // Logic update database Anda di sini (Update status ke 'loading' dsb)
+//       _showSnackBar("Data Loading Berhasil Disimpan!", Colors.green);
+//       Navigator.pop(context);
+//     } catch (e) {
+//       _showSnackBar("Gagal Simpan: $e", Colors.red);
+//     } finally {
+//       if (mounted) setState(() => _isSubmitting = false);
+//     }
+//   }
 
   @override
   Widget build(BuildContext context) {
@@ -216,41 +123,35 @@ Future<void> _getProfileName() async {
       body: Column(
         children: [
           Expanded(
+            child: Form(
+    key: _formKey,
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildDetailedSummary(),
-                  const SizedBox(height: 25),
-                  _buildSectionTitle("1. IDENTITAS KENDARAAN & SUPIR"),
-                  _buildDriverForm(),
-                  //const Divider(),
-                  _buildSectionTitle("2. KONDISI CONTAINER (SISI)"),
-                  _buildContainerGrid(),
-                  _buildSectionTitle("3. KONDISI TIDAK STANDAR LAINNYA"),
-                  // _buildCheckboxGroup(_kondisiLain),
-                  _buildCheckboxGroup(_kondisiLain, isKondisiLain: true),
-                  //const Divider(),
-                  _buildSectionTitle("4. SAFETY FACTOR"),
-                  _buildSafetyFactor(),
-                  //const Divider(),
-                  _buildSectionTitle("5. REKOMENDASI TREATMENT"),
-                  _buildTreatmentCheckboxGroup(_treatment),
-                  //const Divider(),
-                  _buildSectionTitle("6. DECISION FOR UNIT"),
-                  _buildDecisionSection(),
-                  //Text("Catatan Logistic", style: const TextStyle(fontSize: 12, fontStyle: FontStyle.bold, color: Colors.blueGrey)),
-                  // _buildCatatanField(),
-                  // const SizedBox(height: 20),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text("Catatan Logistic", style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold)),
-                  ),
-                  _buildCatatanField(),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 10),
+                  // --- HASIL INSPEKSI SEBELUMNYA ---
+                    _buildSectionTitle("HASIL INSPEKSI UNIT (CHECK-IN)"),
+                    _buildInspectionResultSummary(),
+                    
+                    const SizedBox(height: 12),
+                    _buildSectionTitle("LOADING GBJ"),
+                    const SizedBox(height: 12),
+                 _buildRekomendasiLogistic(),
+
+                  // --- BAGIAN 2: MUNCUL HANYA JIKA REKOMENDASI SUDAH DIPILIH ---
+                  if (_rekomendasiLogistic != null) ...[
+                    const Divider(),
+                    _buildLoadingChecklist(),
+                  ] else ...[
+                    _buildLockedInfo(),
+                  ],
+                 const SizedBox(height: 30),
                 ],
               ),
             ),
+          ),
           ),
           _buildBottomAction(),
         ],
@@ -258,773 +159,376 @@ Future<void> _getProfileName() async {
     );
   }
 
-  // --- Helper Widgets ---
-
-  Widget _buildSectionTitle(String title) {
+Widget _buildInspectionResultSummary() {
+    final item = widget.item;
+    // Helper fungsi untuk merubah List menjadi String yang rapi
+  String formatList(dynamic data) {
+    if (data == null) return "-";
+    if (data is List) {
+      return data.isEmpty ? "-" : data.join(", ").toUpperCase();
+    }
+    return data.toString().toUpperCase();
+  }
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.grey.shade100,
-      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
-    );
-  }
-
-  Widget _buildDriverForm() {
-    return Padding(
       padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: _buildTextField("No Polisi", _noPolisiController, Icons.vignette)),
-                const SizedBox(width: 10),
-                Expanded(child: _buildTextField("Tahun", _tahunKendaraanController, Icons.calendar_today, isNumber: true)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _buildTextField("Nama Supir", _namaSupirController, Icons.person),
-            const SizedBox(height: 10),
-            _buildTextField("No HP Supir", _noHpSupirController, Icons.phone, isNumber: true),
-            if (widget.lateReason != null) ...[
-              const SizedBox(height: 10),
-              _buildLateWarning(),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContainerGrid() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 6,
-        childAspectRatio: 0.8,
-        children: [
-          _buildSideChecklist("SISI KANAN", _sisiKanan),
-          _buildSideChecklist("SISI KIRI", _sisiKiri),
-          _buildSideChecklist("SISI DEPAN", _sisiDepan),
-          _buildSideChecklist("SISI BELAKANG", _sisiPintu),
-          _buildSideChecklist("SISI ATAP", _sisiAtap),
-          _buildSideChecklist("SISI LANTAI", _sisiLantai),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSideChecklist(String title, Map<String, bool> sideMap) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(side: BorderSide(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      margin: const EdgeInsets.all(4),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-            child: Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red)),
-          ),
-          ...sideMap.keys.map((key) {
-            return CheckboxListTile(
-              title: Text(key, style: const TextStyle(fontSize: 10)),
-              value: sideMap[key],
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              onChanged: (val) => setState(() => sideMap[key] = val!),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  // Widget _buildCheckboxGroup(Map<String, bool> map) {
-  //   return Padding(
-  //     padding: const EdgeInsets.symmetric(horizontal: 8),
-  //     child: Wrap(
-  //       children: map.keys.map((key) {
-  //         return SizedBox(
-  //           width: MediaQuery.of(context).size.width * 0.5 - 12,
-  //           child: CheckboxListTile(
-  //             title: Text(key, style: const TextStyle(fontSize: 11)),
-  //             value: map[key],
-  //             dense: true,
-  //             controlAffinity: ListTileControlAffinity.leading,
-  //             onChanged: (val) => setState(() => map[key] = val!),
-  //           ),
-  //         );
-  //       }).toList(),
-        
-  //     ),
-  //   );
-  // }
-
-//   Widget _buildCheckboxGroup(Map<String, bool> map) {
-//   return Padding(
-//     padding: const EdgeInsets.symmetric(horizontal: 8),
-//     child: Column(
-//       children: [
-//         Wrap(
-//           children: [
-//             ...map.keys.map((key) {
-//               return SizedBox(
-//                 width: MediaQuery.of(context).size.width * 0.5 - 12,
-//                 child: CheckboxListTile(
-//                   title: Text(key, style: const TextStyle(fontSize: 11)),
-//                   value: map[key],
-//                   dense: true,
-//                   controlAffinity: ListTileControlAffinity.leading,
-//                   onChanged: (val) => setState(() => map[key] = val!),
-//                 ),
-//               );
-//             }).toList(),
-            
-//             // Tambahkan Checkbox "Lainnya" secara manual khusus untuk grup ini
-//             if (map == _kondisiLain)
-//               SizedBox(
-//                 width: MediaQuery.of(context).size.width * 0.5 - 12,
-//                 child: CheckboxListTile(
-//                   title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-//                   value: _isKondisiLainLainChecked,
-//                   dense: true,
-//                   controlAffinity: ListTileControlAffinity.leading,
-//                   onChanged: (val) => setState(() => _isKondisiLainLainChecked = val!),
-//                 ),
-//               ),
-//           ],
-//         ),
-        
-//         // Tampilkan TextField jika "Lainnya" dicentang
-//         if (map == _kondisiLain && _isKondisiLainLainChecked)
-//           Padding(
-//             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-//             child: TextField(
-//               controller: _kondisiLainManualController,
-//               decoration: const InputDecoration(
-//                 labelText: "Sebutkan kondisi lainnya...",
-//                 labelStyle: TextStyle(fontSize: 12),
-//                 border: OutlineInputBorder(),
-//                 isDense: true,
-//                 hintText: "Misal: Ban gundul, Kaca retak, dll"
-//               ),
-//               style: const TextStyle(fontSize: 13),
-//             ),
-//           ),
-//       ],
-//     ),
-//   );
-// }
-
-Widget _buildCheckboxGroup(Map<String, bool> map, {bool isKondisiLain = false}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: Column(
-      children: [
-        Wrap(
-          children: [
-            ...map.keys.map((key) {
-              return SizedBox(
-                width: MediaQuery.of(context).size.width * 0.5 - 12,
-                child: CheckboxListTile(
-                  title: Text(key, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                  value: map[key],
-                  dense: true,
-                  activeColor: Colors.red.shade700,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (val) => setState(() => map[key] = val!),
-                ),
-              );
-            }).toList(),
-            
-            if (map == _kondisiLain)
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.5 - 12,
-                child: CheckboxListTile(
-                  title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  value: _isKondisiLainLainChecked,
-                  dense: true,
-                  activeColor: Colors.red.shade700,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (val) => setState(() => _isKondisiLainLainChecked = val!),
-                ),
-              ),
-          ],
-        ),
-        
-        if (map == _kondisiLain && _isKondisiLainLainChecked)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: TextField(
-              controller: _kondisiLainManualController,
-              decoration: InputDecoration(
-                labelText: "Sebutkan kondisi lainnya...",
-                labelStyle: const TextStyle(fontSize: 12),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-// Widget _buildCheckboxGroup(Map<String, bool> map, {bool isKondisiLain = false}) {
-//     return Padding(
-//       padding: const EdgeInsets.symmetric(horizontal: 8),
-//       child: Column(
-//         children: [
-//           Wrap(
-//             children: [
-//               ...map.keys.map((key) => SizedBox(
-//                 width: MediaQuery.of(context).size.width * 0.5 - 12,
-//                 child: CheckboxListTile(
-//                   title: Text(key, style: const TextStyle(fontSize: 11)),
-//                   value: map[key], dense: true, controlAffinity: ListTileControlAffinity.leading,
-//                   onChanged: (val) => setState(() => map[key] = val!),
-//                 ),
-//               )),
-//               if (isKondisiLain) SizedBox(
-//                 width: MediaQuery.of(context).size.width * 0.5 - 12,
-//                 child: CheckboxListTile(
-//                   title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-//                   value: _isKondisiLainLainChecked, dense: true,
-//                   onChanged: (val) => setState(() => _isKondisiLainLainChecked = val!),
-//                 ),
-//               ),
-//             ],
-//           ),
-//           if (isKondisiLain && _isKondisiLainLainChecked) Padding(
-//             padding: const EdgeInsets.all(16),
-//             child: TextField(controller: _kondisiLainManualController, decoration: const InputDecoration(labelText: "Kondisi lainnya...", border: OutlineInputBorder(), isDense: true)),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-Widget _buildTreatmentCheckboxGroup(Map<String, bool> map) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: Column(
-      children: [
-        // Menggunakan Wrap agar checkbox otomatis turun ke baris baru jika tidak cukup
-        Wrap(
-          children: [
-            ...map.keys.map((key) {
-              return SizedBox(
-                width: MediaQuery.of(context).size.width * 0.5 - 32, // Membagi 2 kolom
-                child: CheckboxListTile(
-                  title: Text(key, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                  value: map[key],
-                  dense: true,
-                  activeColor: Colors.red.shade700,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (val) => setState(() => map[key] = val!),
-                ),
-              );
-            }).toList(),
-            
-            // Tombol Checkbox "Lainnya" khusus untuk Treatment
-            SizedBox(
-              width: MediaQuery.of(context).size.width * 0.5 - 32,
-              child: CheckboxListTile(
-                title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                value: _isTreatmentLainLainChecked,
-                dense: true,
-                activeColor: Colors.red.shade700,
-                controlAffinity: ListTileControlAffinity.leading,
-                onChanged: (val) => setState(() => _isTreatmentLainLainChecked = val!),
-              ),
-            ),
-          ],
-        ),
-        
-//         // Munculkan TextField jika "Lainnya" dicentang
-//         if (_isTreatmentLainLainChecked)
-//           Padding(
-//             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-//             child: TextField(
-//               controller: _treatmentLainManualController,
-//               decoration: InputDecoration(
-//                 labelText: "Sebutkan treatment lainnya...",
-//                 labelStyle: const TextStyle(fontSize: 12),
-//                 filled: true,
-//                 fillColor: Colors.grey.shade50,
-//                 border: const OutlineInputBorder(),
-//                 isDense: true,
-//                 hintText: "Contoh: Pengecekan ulang sensor, dll"
-//               ),
-//               style: const TextStyle(fontSize: 13),
-//             ),
-//           ),
-//       ],
-//     ),
-//   );
-// }
-if (_isTreatmentLainLainChecked) Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(controller: _treatmentLainManualController, decoration: const InputDecoration(labelText: "Treatment lainnya...", border: OutlineInputBorder(), isDense: true)),
-          ),
-        ],
-      ),
-    );
-  }
-
-// Widget _buildCheckboxGroup(Map<String, bool> map) {
-//     return Padding(
-//       padding: const EdgeInsets.symmetric(horizontal: 8),
-//       child: Column(
-//         children: [
-//           Wrap(
-//             children: [
-//               ...map.keys.map((key) {
-//                 return SizedBox(
-//                   width: MediaQuery.of(context).size.width * 0.5 - 32, // Penyesuaian lebar dalam card
-//                   child: CheckboxListTile(
-//                     title: Text(key, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-//                     value: map[key],
-//                     dense: true,
-//                     activeColor: Colors.red.shade700,
-//                     controlAffinity: ListTileControlAffinity.leading,
-//                     onChanged: (val) => setState(() => map[key] = val!),
-//                   ),
-//                 );
-//               }).toList(),
-              
-//               // Logika khusus untuk checkbox "Lainnya" di bagian Kondisi Tidak Standar
-//               if (map == _kondisiLain)
-//                 SizedBox(
-//                   width: MediaQuery.of(context).size.width * 0.5 - 32,
-//                   child: CheckboxListTile(
-//                     title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-//                     value: _isKondisiLainLainChecked,
-//                     dense: true,
-//                     activeColor: Colors.red.shade700,
-//                     controlAffinity: ListTileControlAffinity.leading,
-//                     onChanged: (val) => setState(() => _isKondisiLainLainChecked = val!),
-//                   ),
-//                 ),
-//             ],
-//           ),
-          
-//           if (map == _kondisiLain && _isKondisiLainLainChecked)
-//             Padding(
-//               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-//               child: TextField(
-//                 controller: _kondisiLainManualController,
-//                 decoration: InputDecoration(
-//                   labelText: "Sebutkan kondisi lainnya...",
-//                   labelStyle: const TextStyle(fontSize: 12),
-//                   filled: true,
-//                   fillColor: Colors.grey.shade50,
-//                   border: const OutlineInputBorder(),
-//                   isDense: true,
-//                 ),
-//                 style: const TextStyle(fontSize: 13),
-//               ),
-//             ),
-//         ],
-//       ),
-//     );
-//   }
-
-  // Widget _buildSafetyFactor() {
-  //   return Padding(
-  //     padding: const EdgeInsets.all(16),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         const Text("Dokumen Pendukung:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-  //         _buildCheckboxGroup(_dokumen),
-  //         const SizedBox(height: 15),
-  //         const Text("Ganjal Roda:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-  //         _buildRadioGroup(['Standard', 'Tidak Standard', 'Tidak Ada'], _ganjalRoda, (v) => setState(() => _ganjalRoda = v)),
-  //         const SizedBox(height: 15),
-  //         const Text("Rem / Hand Rem:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-  //         _buildRadioGroup(['Hand Rem OK', 'Tidak Ada/Rusak'], _remHandRem, (v) => setState(() => _remHandRem = v)),
-  //         const SizedBox(height: 15),
-  //         const Text("APD Supir:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-  //         _buildCheckboxGroup(_apd),
-  //       ],
-  //     ),
-  //   );
-  // }
-Widget _buildSafetyFactor() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Kategori Dokumen
-        _buildSafetyItemCard(
-          title: "DOKUMEN PENDUKUNG",
-          icon: Icons.assignment_turned_in_outlined,
-          content: _buildCheckboxGroup(_dokumen),
-        ),
-        const SizedBox(height: 12),
-        
-        // Kategori Ganjal Roda
-        _buildSafetyItemCard(
-          title: "GANJAL RODA",
-          icon: Icons.stop_circle_outlined,
-          content: _buildModernRadioGroup(
-            ['Standard', 'Tidak Standard', 'Tidak Ada'], 
-            _ganjalRoda, 
-            (v) => setState(() => _ganjalRoda = v)
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Kategori Rem
-        _buildSafetyItemCard(
-          title: "REM / HAND REM",
-          icon: Icons.pan_tool_alt_outlined,
-          content: _buildModernRadioGroup(
-            ['Hand Rem', 'Tidak Ada/Tidak Standard'], 
-            _remHandRem, 
-            (v) => setState(() => _remHandRem = v)
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Kategori APD
-        _buildSafetyItemCard(
-          title: "APD SUPIR",
-          icon: Icons.shield_outlined,
-          content: _buildCheckboxGroup(_apd),
-        ),
-      ],
-    ),
-  );
-}
-
-// Widget _buildSafetyItemCard({required String title, required IconData icon, required Widget content}) {
-//   return Container(
-//     width: double.infinity,
-//     decoration: BoxDecoration(
-//       color: Colors.white,
-//       borderRadius: BorderRadius.circular(10),
-//       border: Border.all(color: Colors.grey.shade300, width: 1),
-//     ),
-//     child: Column(
-//       crossAxisAlignment: CrossAxisAlignment.start,
-//       children: [
-//         // Header Kecil
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//           decoration: BoxDecoration(
-//             color: Colors.grey.shade50,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-//             border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-//           ),
-//           child: Row(
-//             children: [
-//               Icon(icon, size: 16, color: Colors.blueGrey.shade700),
-//               const SizedBox(width: 8),
-//               Text(
-//                 title,
-//                 style: TextStyle(
-//                   fontSize: 11,
-//                   fontWeight: FontWeight.bold,
-//                   color: Colors.blueGrey.shade800,
-//                   letterSpacing: 0.5,
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-//         // Konten (Checkbox/Radio)
-//         Padding(
-//           padding: const EdgeInsets.symmetric(vertical: 8),
-//           child: content,
-//         ),
-//       ],
-//     ),
-//   );
-// }
-Widget _buildSafetyItemCard({required String title, required IconData icon, required Widget content}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.blueGrey.shade50,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300, width: 1),
+        border: Border.all(color: Colors.blueGrey.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: Colors.blueGrey.shade700),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueGrey.shade800,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _resultRow("Sisi Kanan", item['sisi_kanan']),
+          _resultRow("Sisi Kiri", item['sisi_kiri']),
+          _resultRow("Sisi Depan", item['sisi_depan']),
+          _resultRow("Sisi Belakang", item['sisi_pintu_belakang']),
+          _resultRow("Sisi Atap", item['sisi_atap']),
+          _resultRow("Sisi Lantai", item['sisi_lantai']),
+          const Divider(),
+          // MENAMPILKAN KONDISI TIDAK LAYAK LAINNYA
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: content,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child:
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Kondisi Tidak Layak Lainnya:  ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+             Expanded(
+                child: Text(
+                  formatList(item['kondisi_tidak_standar_lainnya']),
+                  style: const TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+          const SizedBox(height: 8),
+          //_resultRow("Kondisi Tidak Layak Lainnya",item['kondisi_tidak_standar_lainnya']?? "-"),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("Rekomendasi Treatment: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                
+                child: Text(
+                  formatList(item['rekomendasi_treatment']?? '-').toString().toUpperCase(),
+                  style: const TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          //_resultText("Treatment", item['rekomendasi_treatment']?? "-"),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("Decision: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: item['decision_for_unit'] == 'LAYAK' ? Colors.green : Colors.orange,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  (item['decision_for_unit'] ?? '-').toString().toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-Widget _buildModernRadioGroup(List<String> options, String? groupVal, Function(String?) onChanged) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-    child: Wrap(
+
+  Widget _resultRow(String label, dynamic data) {
+    List<String> list = data != null ? List<String>.from(data) : [];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 100, child: Text("$label:", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+          Expanded(child: Text(list.isEmpty ? "OK / Standar" : list.join(", "), style: TextStyle(fontSize: 11, color: list.isEmpty ? Colors.green : Colors.red))),
+        ],
+      ),
+    );
+  }
+
+  
+Widget _buildRekomendasiLogistic() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          
+          _buildLabelField("Verifikasi Rekomendasi Logistic"),
+         
+          // const Text("Verifikasi Rekomendasi Logistic :", 
+          //   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
+          // const SizedBox(height: 12),
+          _buildModernRadioGroup(
+            ['OKE', 'Tidak Sempurna', 'Belum Dilakukan'], 
+            _rekomendasiLogistic, 
+            (val) => setState(() => _rekomendasiLogistic = val)
+          ),
+        ],
+      ),
+    );
+  }
+
+Future<void> _submitLoadingData() async {
+  // 1. Validasi Form
+  if (!_formKey.currentState!.validate()) {
+    _showSnackBar("Harap lengkapi semua field yang wajib diisi!", Colors.orange);
+    return;
+  }
+// 2. Validasi manual untuk variabel state (PENTING)
+  // Tambahkan pengecekan null sebelum melakukan int.parse
+  // if (_selectedChecker == null) {
+  //   _showSnackBar("Silakan pilih Checker terlebih dahulu!", Colors.orange);
+  //   return;
+  // }
+
+  // 2. Validasi Checklist Manual
+  if (_rekomendasiLogistic == null || _ganjalBan == null) {
+    _showSnackBar("Harap selesaikan semua verifikasi checklist!", Colors.orange);
+    return;
+  }
+
+  setState(() => _isSubmitting = true);
+
+  try {
+    // Ambil ID Assignment (bisa tunggal atau list grup)
+    final assignmentIds = List<int>.from(widget.item['grouped_assignment_ids'] ?? [widget.item['id_assignment']]);
+    final shipIds = List<int>.from(widget.item['grouped_shipping_ids'] ?? [widget.item['shipping_id']]);
+
+    // UPDATE Tabel shipping_assignments
+    await supabase.from('shipping_assignments').update({
+       'status_assignment': 'loading', 
+      'loading_by': _currentUserName,
+      'verifikasi_rekomendasi_logistic': _rekomendasiLogistic,
+      'ganjal_ban': _ganjalBan,
+      'checker_id': int.parse(_selectedChecker!), // Simpan ID sebagai FK
+      'no_segel_smart': _noSegelController.text.trim(),
+      'loading_at': DateTime.now().toIso8601String(),
+    }).inFilter('id_assignment', assignmentIds);
+
+    // UPDATE Tabel shipping_request (Ubah status utama)
+    await supabase.from('shipping_request').update({
+      'status': 'loading',
+    }).inFilter('shipping_id', shipIds);
+
+    if (mounted) {
+      _showSnackBar("Data Loading Berhasil Disimpan!", Colors.green);
+      // Gunakan penutup tab sesuai sistem Dynamic Tab Anda
+      DynamicTabPage.of(context)?.closeCurrentTab();
+    }
+  } catch (e) {
+    _showSnackBar("Gagal Simpan: $e", Colors.red);
+  } finally {
+    if (mounted) setState(() => _isSubmitting = false);
+  }
+}
+
+  Widget _buildLoadingChecklist() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // // LOKASI STUFFING
+          // _buildLabelField("Lokasi Stuffing"),
+          // _buildModernRadioGroup(
+          //   ['GBJ Belakang', 'GBJ Depan', 'GBJ Kuncimas', 'GBJ Sewa', 'Other'], 
+          //   _lokasiStuffing, 
+          //   (val) => setState(() => _lokasiStuffing = val)
+          // ),
+          // const SizedBox(height: 20),
+          
+          // GANJAL BAN
+          _buildLabelField("Ganjal Ban"),
+          _buildModernRadioGroup(
+            ['Terpasang', 'Tidak Terpasang'], 
+            _ganjalBan, 
+            (val) => setState(() => _ganjalBan = val)
+          ),
+          const SizedBox(height: 25),
+
+          // CHECKER & SEGEL
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedChecker,
+                  style: const TextStyle(fontSize: 12, color: Colors.black),
+                  decoration: _inputDecoration("Checker", Icons.person_pin_rounded),
+                  items: _checkerList.map((c) => DropdownMenuItem(
+                    value: c['checker_id'].toString(),
+                    child: Text(c['checker_name'])
+                  )).toList(),
+                  onChanged: (val) => setState(() => _selectedChecker = val),
+                  validator: (v) => v == null ? "Wajib" : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _noSegelController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: _inputDecoration("No Segel SMART", Icons.qr_code_scanner_rounded),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Sub-Helper UI (Profesional Look) ---
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 18, color: Colors.red.shade700),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    );
+  }
+  
+  Widget _buildDecisionBadge(dynamic decision) {
+    String text = (decision ?? '-').toString().toUpperCase();
+    bool isLayak = text == 'LAYAK';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isLayak ? Colors.green.shade600 : Colors.orange.shade700,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildLabelField(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
+    );
+  }
+Widget _resultRowGroup(String title, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red.shade900, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _rowItem(String label, dynamic data) {
+    List<String> list = data != null ? List<String>.from(data) : [];
+    bool isEmpty = list.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 80, child: Text("$label:", style: const TextStyle(fontSize: 11, color: Colors.blueGrey))),
+          Expanded(
+            child: Text(
+              isEmpty ? "OK" : list.join(", "),
+              style: TextStyle(fontSize: 11, fontWeight: isEmpty ? FontWeight.normal : FontWeight.bold, color: isEmpty ? Colors.green.shade700 : Colors.red.shade700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildLockedInfo() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid)
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.lock_clock_outlined, color: Colors.grey, size: 40),
+          SizedBox(height: 10),
+          Text("Opsi lainnya akan terbuka setelah\nVerifikasi Rekomendasi Logistic diisi.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+  Widget _buildSectionTitle(String title) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.grey.shade200,
+      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
+    );
+  }
+
+  Widget _buildModernRadioGroup(List<String> options, String? groupVal, Function(String?) onChanged) {
+    return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: options.map((opt) {
         bool isSelected = groupVal == opt;
-        Color activeColor = opt.contains('Tidak') || opt.contains('Rusak') 
-            ? Colors.red.shade700 
-            : Colors.green.shade700;
-
         return InkWell(
           onTap: () => onChanged(opt),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isSelected ? activeColor.withOpacity(0.1) : Colors.white,
+              color: isSelected ? Colors.red.shade700 : Colors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isSelected ? activeColor : Colors.grey.shade300,
-                width: isSelected ? 1.5 : 1,
-              ),
+              border: Border.all(color: isSelected ? Colors.red.shade700 : Colors.grey.shade300),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                  size: 14,
-                  color: isSelected ? activeColor : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  opt,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? activeColor : Colors.black87,
-                  ),
-                ),
-              ],
-            ),
+            child: Text(opt, style: TextStyle(
+              fontSize: 12, 
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? Colors.white : Colors.black87
+            )),
           ),
         );
       }).toList(),
-    ),
-  );
-}
-  Widget _buildRadioGroup(List<String> options, String? groupVal, Function(String?) onChanged) {
-    return Wrap(
-      spacing: 5,
-      children: options.map((opt) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Radio<String>(value: opt, groupValue: groupVal, onChanged: onChanged, visualDensity: VisualDensity.compact),
-            Text(opt, style: const TextStyle(fontSize: 11)),
-          ],
-        );
-      }).toList(),
     );
   }
 
-  // Widget _buildDecisionSection() {
-  //   return Column(
-  //     children: [
-  //       _buildDecisionTile('LAYAK SESUAI STANDAR', 'LAYAK', Colors.green),
-  //       _buildDecisionTile('LAYAK SETELAH TREATMENT', 'LAYAK SETELAH TREATMENT', Colors.orange),
-  //       _buildDecisionTile('DITOLAK', 'DITOLAK', Colors.red),
-  //     ],
-  //   );
-  // }
-  Widget _buildDecisionSection() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      children: [
-        _buildModernDecisionCard(
-          label: 'LAYAK SESUAI STANDAR',
-          value: 'LAYAK',
-          icon: Icons.check_circle_rounded,
-          color: Colors.green.shade700,
-        ),
-        const SizedBox(height: 10),
-        _buildModernDecisionCard(
-          label: 'LAYAK SETELAH TREATMENT',
-          value: 'LAYAK SETELAH TREATMENT',
-          icon: Icons.published_with_changes_rounded,
-          color: Colors.orange.shade800,
-        ),
-        const SizedBox(height: 10),
-        _buildModernDecisionCard(
-          label: 'UNIT DITOLAK (REJECT)',
-          value: 'DITOLAK',
-          icon: Icons.cancel_rounded,
-          color: Colors.red.shade800,
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildModernDecisionCard({
-  required String label,
-  required String value,
-  required IconData icon,
-  required Color color,
-}) {
-  bool isSelected = _decision == value;
-
-  return InkWell(
-    onTap: () => setState(() => _decision = value),
-    borderRadius: BorderRadius.circular(12),
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isSelected ? color : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSelected ? color : Colors.grey.shade300,
-          width: 2,
-        ),
-        boxShadow: isSelected
-            ? [BoxShadow(color: color.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
-            : [],
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? Colors.white : color,
-            size: 20,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          if (isSelected)
-            const Icon(Icons.check_circle, color: Colors.white, size: 16),
-        ],
-      ),
-    ),
-  );
-}
-
-  Widget _buildDecisionTile(String label, String value, Color color) {
-    return RadioListTile<String>(
-      title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-      value: value,
-      groupValue: _decision,
-      onChanged: (v) => setState(() => _decision = v),
-    );
-  }
-
-  Widget _buildCatatanField() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: _catatanController,
-        maxLines: 3,
-        decoration: const InputDecoration(labelText: "Catatan Inspeksi", border: OutlineInputBorder(), hintText: "Tambahkan catatan jika ada..."),
-      ),
-    );
-  }
-
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool isNumber = false}) {
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon) {
     return TextFormField(
       controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, size: 20),
         border: const OutlineInputBorder(),
         isDense: true,
       ),
-      validator: (v) => v == null || v.isEmpty ? "Wajib diisi" : null,
     );
   }
-
-  // Widget _buildDetailedSummary() {
-  //   final request = _shippingData?['request'] ?? {};
-  //   final bool isGroup = request['group_id'] != null;
-  //   final List dos = request['delivery_order'] ?? [];
-  //   final warehouse = request['warehouse'];
-  //   String warehouseDisplay = warehouse != null ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" : "-";
-
-  //   return Container(
-  //     decoration: BoxDecoration(color: Colors.white, border: Border(left: BorderSide(color: isGroup ? Colors.blue.shade700 : Colors.red.shade700, width: 6))),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         Padding(
-  //           padding: const EdgeInsets.all(16.0),
-  //           child: Column(
-  //             crossAxisAlignment: CrossAxisAlignment.start,
-  //             children: [
-  //               Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, fontSize: 11)),
-  //               const SizedBox(height: 8),
-  //               Text(isGroup ? "ID Grup: ${request['group_id']}" : "ID Shipping: ${request['shipping_id']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-  //               const SizedBox(height: 16),
-  //               Row(
-  //                 children: [
-  //                   _infoBox("Stuffing Date", _formatDate(request['stuffing_date'])),
-  //                   const Spacer(),
-  //                   _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
-  //                 ],
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //         ...dos.map((doItem) {
-  //           final String rddSpesifik = _formatDate(doItem['rdd_origin']);
-  //           return Padding(
-  //             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-  //             child: Text("DO: ${doItem['do_number']} | RDD: $rddSpesifik", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-  //           );
-  //         }).toList(),
-  //       ],
-  //     ),
-  //   );
-  // }
-
 
   Widget _buildDetailedSummary() {
 
@@ -1271,6 +775,7 @@ Widget _buildModernDecisionCard({
     );
 
   }
+  
   Widget _buildBottomAction() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1279,9 +784,15 @@ Widget _buildModernDecisionCard({
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
-          onPressed: _isSubmitting ? null : _submitCheckIn,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-          child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Text("SIMPAN HASIL INSPEKSI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+         onPressed: (_rekomendasiLogistic == null || _isSubmitting) ? null : _submitLoadingData,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade700, 
+            disabledBackgroundColor: Colors.grey.shade300,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+          ),
+          child: _isSubmitting 
+            ? const CircularProgressIndicator(color: Colors.white) 
+            : const Text("SIMPAN DATA LOADING", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       ),
     );

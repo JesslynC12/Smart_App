@@ -22,81 +22,166 @@ class _VendorOrderHistoryPageState extends State<VendorOrderHistoryPage> {
     _fetchHistory();
   }
 
-  Future<void> _fetchHistory() async {
-    try {
-      setState(() => _isLoading = true);
+//   Future<void> _fetchHistory() async {
+//     try {
+//       setState(() => _isLoading = true);
       
-      final response = await supabase
-          .from('shipping_assignments')
-          .select('''
-            *,
-            request:shipping_id (
-              shipping_id,
-              so,
-              rdd,
-              group_id,
-              stuffing_date,
-              storage_location,
-              is_dedicated,
-              warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
-              delivery_order (
-                do_number,
-                customer (customer_id, customer_name),
-                do_details (
-                  qty,
-                  material:material_id (material_id, material_name)
-                )
+//       final response = await supabase
+//           .from('shipping_assignments')
+//           .select('''
+//             *,
+//             request:shipping_id (
+//               shipping_id,
+//               so,
+//               rdd,
+//               group_id,
+//               stuffing_date,
+//               storage_location,
+//               is_dedicated,
+//               warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+//               delivery_order (
+//                 do_number,
+//                 customer (customer_id, customer_name),
+//                 do_details (
+//                   qty,
+//                   material:material_id (material_id, material_name)
+//                 )
+//               )
+//             )
+//           ''')
+//           .eq('nik', widget.vendorNik)
+//           .inFilter('status_assignment', ['completed', 'rejected', 'no response', 'cancel booking'])
+//           .order('responded_at', ascending: false);
+
+//       List<dynamic> rawData = response as List;
+//       List<Map<String, dynamic>> processedHistory = [];
+//       Map<int, Map<String, dynamic>> groupedHistory = {};
+
+//       for (var item in rawData) {
+//         final request = item['request'];
+//         if (request == null) continue;
+//         // --- PROSES SUNTIK RDD KE LEVEL DO ---
+// if (request['delivery_order'] != null) {
+//   for (var doItem in request['delivery_order']) {
+//     doItem['rdd_origin'] = request['rdd']; // Simpan RDD asli
+//   }
+// }
+//         final int? groupId = request['group_id'];
+
+//         if (groupId != null) {
+//           if (!groupedHistory.containsKey(groupId)) {
+//             groupedHistory[groupId] = Map<String, dynamic>.from(item);
+//             groupedHistory[groupId]!['all_requests'] = [request];
+//           } else {
+//             groupedHistory[groupId]!['all_requests'].add(request);
+//           }
+//         } else {
+//           Map<String, dynamic> singleItem = Map<String, dynamic>.from(item);
+//           singleItem['all_requests'] = [request];
+//           processedHistory.add(singleItem);
+//         }
+//       }
+
+//       processedHistory.addAll(groupedHistory.values);
+//       processedHistory.sort((a, b) => (b['responded_at'] ?? "").compareTo(a['responded_at'] ?? ""));
+        
+//       setState(() {
+//         _historyData = processedHistory;
+//         _isLoading = false;
+//       });
+//     } catch (e) {
+//       setState(() => _isLoading = false);
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text("Gagal memuat riwayat: $e"), backgroundColor: Colors.red),
+//       );
+//     }
+//   }
+
+Future<void> _fetchHistory() async {
+  try {
+    setState(() => _isLoading = true);
+    
+    final response = await supabase
+        .from('shipping_assignments')
+        .select('''
+          *,
+          request:shipping_id (
+            shipping_id, so, rdd, group_id, stuffing_date, storage_location, is_dedicated,
+            warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+            delivery_order (
+              do_number,
+              customer (customer_id, customer_name),
+              do_details (
+                qty,
+                material:material_id (material_id, material_name)
               )
             )
-          ''')
-          .eq('nik', widget.vendorNik)
-          .inFilter('status_assignment', ['completed', 'rejected', 'no response', 'cancel booking'])
-          .order('responded_at', ascending: false);
+          )
+        ''')
+        .eq('nik', widget.vendorNik)
+        .inFilter('status_assignment', ['completed', 'rejected', 'no response', 'cancel booking'])
+        .order('responded_at', ascending: false);
 
-      List<dynamic> rawData = response as List;
-      List<Map<String, dynamic>> processedHistory = [];
-      Map<int, Map<String, dynamic>> groupedHistory = {};
+    List<dynamic> rawData = response as List;
+    Map<String, Map<String, dynamic>> groupedMap = {};
 
-      for (var item in rawData) {
-        final request = item['request'];
-        if (request == null) continue;
-        // --- PROSES SUNTIK RDD KE LEVEL DO ---
-if (request['delivery_order'] != null) {
-  for (var doItem in request['delivery_order']) {
-    doItem['rdd_origin'] = request['rdd']; // Simpan RDD asli
-  }
-}
-        final int? groupId = request['group_id'];
+    for (var item in rawData) {
+      final req = item['request'];
+      if (req == null) continue;
 
-        if (groupId != null) {
-          if (!groupedHistory.containsKey(groupId)) {
-            groupedHistory[groupId] = Map<String, dynamic>.from(item);
-            groupedHistory[groupId]!['all_requests'] = [request];
-          } else {
-            groupedHistory[groupId]!['all_requests'].add(request);
+      // Buat key unik (Pakai group_id jika ada, jika tidak pakai shipping_id)
+      String key = req['group_id'] != null 
+          ? "GROUP_${req['group_id']}" 
+          : "SINGLE_${req['shipping_id']}";
+
+      if (!groupedMap.containsKey(key)) {
+        // --- DATA BARU (BELUM ADA DI MAP) ---
+        Map<String, dynamic> mutableItem = Map<String, dynamic>.from(item);
+        
+        // Inisialisasi list all_requests untuk menampung member grup
+        mutableItem['all_requests'] = [Map<String, dynamic>.from(req)];
+        
+        // Suntik RDD origin ke tiap DO di request pertama
+        List dos = List.from(mutableItem['all_requests'][0]['delivery_order'] ?? []);
+        for (var d in dos) {
+          d['rdd_origin'] = req['rdd'];
+        }
+        mutableItem['all_requests'][0]['delivery_order'] = dos;
+        
+        groupedMap[key] = mutableItem;
+      } else {
+        // --- DATA SUDAH ADA (PROSES MERGE UNTUK GRUP) ---
+        List allReqs = groupedMap[key]!['all_requests'];
+        
+        // Cek apakah shipping_id ini sudah masuk ke list all_requests
+        bool isShipExists = allReqs.any((r) => r['shipping_id'] == req['shipping_id']);
+        
+        if (!isShipExists) {
+          Map<String, dynamic> newReq = Map<String, dynamic>.from(req);
+          List newDos = List.from(newReq['delivery_order'] ?? []);
+          
+          for (var ndo in newDos) {
+            ndo['rdd_origin'] = req['rdd'];
           }
-        } else {
-          Map<String, dynamic> singleItem = Map<String, dynamic>.from(item);
-          singleItem['all_requests'] = [request];
-          processedHistory.add(singleItem);
+          newReq['delivery_order'] = newDos;
+          allReqs.add(newReq);
         }
       }
-
-      processedHistory.addAll(groupedHistory.values);
-      processedHistory.sort((a, b) => (b['responded_at'] ?? "").compareTo(a['responded_at'] ?? ""));
-        
-      setState(() {
-        _historyData = processedHistory;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gagal memuat riwayat: $e"), backgroundColor: Colors.red),
-      );
     }
-  }
 
+    // Ubah map kembali ke list dan urutkan berdasarkan waktu respon terbaru
+    List<Map<String, dynamic>> finalResult = groupedMap.values.toList();
+    finalResult.sort((a, b) => (b['responded_at'] ?? "").compareTo(a['responded_at'] ?? ""));
+      
+    setState(() {
+      _historyData = finalResult;
+      _isLoading = false;
+    });
+  } catch (e) {
+    setState(() => _isLoading = false);
+    debugPrint("Error History: $e");
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
