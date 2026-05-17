@@ -160,10 +160,19 @@ Future<void> _getProfileName() async {
       final item = widget.item;
       final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
       final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
- 
+// --- PENYESUAIAN LOGIKA STATUS ---
+      // Jika DITOLAK, status assignment menjadi 'Rejected unit'
+      // Namun status request kembali ke 'waiting assign vendor delivery' agar muncul di list Admin
+      String targetStatusAssignment = (_decision == 'DITOLAK') 
+          ? 'rejected unit' 
+          : 'check in';
+          
+      String targetStatusRequest = (_decision == 'DITOLAK') 
+          ? 'waiting assign vendor delivery' 
+          : 'check in';
 
       await supabase.from('shipping_assignments').update({
-        'status_assignment': 'check in', // Tambahkan baris ini
+        'status_assignment': targetStatusAssignment, // Tambahkan baris ini
         'checkIn_at': DateTime.now().toIso8601String(),
         'checkIn_by': _currentUserName,
         'no_polisi': _noPolisiController.text.toUpperCase(),
@@ -188,12 +197,19 @@ Future<void> _getProfileName() async {
       }).inFilter('id_assignment', assignmentIds);
 
       await supabase.from('shipping_request').update({
-        'status': 'check in',
+        'status': targetStatusRequest,
       }).inFilter('shipping_id', shipIds);
 
+      // if (mounted) {
+      //   _showSnackBar("Check-in Berhasil!", Colors.green);
+      //   //Navigator.pop(context);
+      //   DynamicTabPage.of(context)?.closeCurrentTab();
+      // }
       if (mounted) {
-        _showSnackBar("Check-in Berhasil!", Colors.green);
-        //Navigator.pop(context);
+        _showSnackBar(
+          _decision == 'DITOLAK' ? "Unit Ditolak. Status kembali ke Waiting Assign Vendor." : "Check-in Berhasil!", 
+          _decision == 'DITOLAK' ? Colors.orange : Colors.green
+        );
         DynamicTabPage.of(context)?.closeCurrentTab();
       }
     } catch (e) {
@@ -1257,7 +1273,9 @@ Widget _buildTextField(
 
             final List doDetails = doItem['do_details'] ?? [];
 
-            final String soNum = request['so']?.toString() ?? "-";
+            final String soNum = doItem['so']?.toString() ?? 
+                               doItem['parent_so']?.toString() ?? 
+                               "-";
 
             final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 

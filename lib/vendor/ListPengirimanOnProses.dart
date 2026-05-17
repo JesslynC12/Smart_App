@@ -305,29 +305,65 @@ Future<void> _fetchOngoingOrders() async {
   //   }
   // }
 
+// Future<void> _cancelOrder(Map<String, dynamic> item, String reason) async {
+//   try {
+//     // Ambil daftar ID yang sudah kita kumpulkan di fetch data
+//     final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids']);
+//     final List<int> shipIds = List<int>.from(item['grouped_shipping_ids']);
+
+//     // 1. Update semua baris assignment menjadi 'rejected'
+//     await supabase.from('shipping_assignments').update({
+//       'status_assignment': 'cancel booking',
+//       'reason_rejected': reason,
+//       'cancelled_at': DateTime.now().toIso8601String(),
+//       'jam_booking': null,
+//     }).inFilter('id_assignment', assignmentIds);
+
+//     // 2. Update semua baris shipping_request kembali ke status waiting assign vendor
+//     await supabase.from('shipping_request').update({
+//       'status': 'waiting assign vendor delivery',
+//     }).inFilter('shipping_id', shipIds);
+
+//     _showSnackBar("Order berhasil dibatalkan", Colors.orange);
+//     _fetchOngoingOrders();
+//   } catch (e) {
+//     _showSnackBar("Gagal membatalkan: $e", Colors.red);
+//   }
+// }
 Future<void> _cancelOrder(Map<String, dynamic> item, String reason) async {
   try {
-    // Ambil daftar ID yang sudah kita kumpulkan di fetch data
-    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids']);
-    final List<int> shipIds = List<int>.from(item['grouped_shipping_ids']);
+    setState(() => _isLoading = true);
 
-    // 1. Update semua baris assignment menjadi 'rejected'
+    // Ambil daftar ID Assignment dan Shipping ID yang sudah dikumpulkan saat grouping di fetch data
+    // Kita menggunakan List<int> agar sesuai dengan format inFilter Supabase
+    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? []);
+    final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? []);
+
+    if (assignmentIds.isEmpty || shipIds.isEmpty) {
+      throw "Data ID tidak ditemukan untuk proses pembatalan.";
+    }
+
+    // 1. Update SEMUA baris di tabel shipping_assignments yang masuk dalam grup ini
     await supabase.from('shipping_assignments').update({
       'status_assignment': 'cancel booking',
       'reason_rejected': reason,
       'cancelled_at': DateTime.now().toIso8601String(),
-      'jam_booking': null,
-    }).inFilter('id_assignment', assignmentIds);
+      'jam_booking': null, // Menghapus jam booking agar slot kembali tersedia
+    }).inFilter('id_assignment', assignmentIds); // Menggunakan inFilter untuk banyak ID sekaligus
 
-    // 2. Update semua baris shipping_request kembali ke status waiting assign vendor
+    // 2. Update SEMUA baris di tabel shipping_request kembali ke status awal (waiting vendor)
     await supabase.from('shipping_request').update({
       'status': 'waiting assign vendor delivery',
-    }).inFilter('shipping_id', shipIds);
+    }).inFilter('shipping_id', shipIds); // Menggunakan inFilter untuk banyak ID sekaligus
 
-    _showSnackBar("Order berhasil dibatalkan", Colors.orange);
+    _showSnackBar("Grup Order berhasil dibatalkan", Colors.orange);
+    
+    // Refresh data untuk memperbarui tampilan UI
     _fetchOngoingOrders();
+    
   } catch (e) {
-    _showSnackBar("Gagal membatalkan: $e", Colors.red);
+    setState(() => _isLoading = false);
+    _showSnackBar("Gagal membatalkan grup: $e", Colors.red);
   }
 }
 
@@ -1179,9 +1215,19 @@ final bool hasArrived = ['check in', 'loading', 'weighbridge', 'keluar'].contain
                   Expanded(
   child: ElevatedButton.icon(
     // Jika isAllowed true, jalankan fungsi navigasi. Jika false, set null (otomatis disabled)
-    onPressed:isAllowed ? () {
+    onPressed:(isAllowed && !hasArrived)
+      ? () {
+      final int? groupId = request['group_id'];
+          final int shipId = request['shipping_id'];
+          String tabTitle;
+
+          if (groupId != null) {
+            tabTitle = "Reschedule Grup #$groupId";
+          } else {
+            tabTitle = "Reschedule Shipping #$shipId";
+          }
       DynamicTabPage.of(context)?.openTab(
-        "Reschedule #${request['shipping_id']}", 
+        tabTitle,
         ScheduleSelectionPage(
           assignmentId: item['id_assignment'],
           shippingId: item['shipping_id'],

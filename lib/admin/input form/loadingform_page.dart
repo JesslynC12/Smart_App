@@ -140,18 +140,36 @@ Future<void> _fetchCheckers() async {
                     const SizedBox(height: 12),
                  _buildRekomendasiLogistic(),
 
-                  // --- BAGIAN 2: MUNCUL HANYA JIKA REKOMENDASI SUDAH DIPILIH ---
-                  if (_rekomendasiLogistic != null) ...[
-                    const Divider(),
-                    _buildLoadingChecklist(),
-                  ] else ...[
-                    _buildLockedInfo(),
+          //         // --- BAGIAN 2: MUNCUL HANYA JIKA REKOMENDASI SUDAH DIPILIH ---
+          //         if (_rekomendasiLogistic != null) ...[
+          //           const Divider(),
+          //           _buildLoadingChecklist(),
+          //         ] else ...[
+          //           _buildLockedInfo(),
+          //         ],
+          //        const SizedBox(height: 30),
+          //       ],
+          //     ),
+          //   ),
+          // ),
+          // ),
+          // _buildBottomAction(),
+          const Divider(),
+
+                    if (_rekomendasiLogistic == 'OKE') ...[
+                      _buildSectionTitle("DATA TEKNIS LOADING"),
+                      _buildLoadingChecklist(), 
+                    ] else if (_rekomendasiLogistic != null) ...[
+                      _buildLockedInfo(),
+                        
+                    ],
+                    // ------------------------------------------
+                    
+                    const SizedBox(height: 30),
                   ],
-                 const SizedBox(height: 30),
-                ],
+                ),
               ),
             ),
-          ),
           ),
           _buildBottomAction(),
         ],
@@ -271,65 +289,187 @@ Widget _buildRekomendasiLogistic() {
          
           // const Text("Verifikasi Rekomendasi Logistic :", 
           //   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-          // const SizedBox(height: 12),
+           const SizedBox(height: 12),
           _buildModernRadioGroup(
             ['OKE', 'Tidak Sempurna', 'Belum Dilakukan'], 
             _rekomendasiLogistic, 
-            (val) => setState(() => _rekomendasiLogistic = val)
-          ),
-        ],
-      ),
-    );
-  }
+           (val) {
+            setState(() {
+              _rekomendasiLogistic = val;
+              // Reset field bawah jika status bukan OKE agar data lama tidak ikut terkirim
+              if (val != 'OKE') {
+                _ganjalBan = null;
+                _selectedChecker = null;
+                _noSegelController.clear();
+              }
+         });
+          },
+        ),
+      ],
+    ),
+  );
+}
 
+// Future<void> _submitLoadingData() async {
+//   // 1. Validasi Pilihan Rekomendasi (Wajib diisi apapun hasilnya)
+//   if (_rekomendasiLogistic == null) {
+//     _showSnackBar("Harap pilih Verifikasi Rekomendasi Logistic!", Colors.orange);
+//     return;
+//   }
+//   // 2. Jika OKE, wajib isi data teknis (Ganjal & Checker)
+//   if (_rekomendasiLogistic == 'OKE') {
+//     if (!_formKey.currentState!.validate() || _ganjalBan == null) {
+//       _showSnackBar("Untuk status OKE, data Ganjal Ban & Checker wajib diisi!", Colors.orange);
+//       return;
+//     }
+//   }
+//   // // 1. Validasi Form
+//   // if (!_formKey.currentState!.validate()) {
+//   //   _showSnackBar("Harap lengkapi semua field yang wajib diisi!", Colors.orange);
+//   //   return;
+//   // }
+// // 2. Validasi manual untuk variabel state (PENTING)
+//   // Tambahkan pengecekan null sebelum melakukan int.parse
+//   // if (_selectedChecker == null) {
+//   //   _showSnackBar("Silakan pilih Checker terlebih dahulu!", Colors.orange);
+//   //   return;
+//   // }
+
+//   // 2. Validasi Checklist Manual
+//   // if (_rekomendasiLogistic == null || _ganjalBan == null) {
+//   //   _showSnackBar("Harap selesaikan semua verifikasi checklist!", Colors.orange);
+//   //   return;
+//   // }
+
+//   setState(() => _isSubmitting = true);
+
+//   try {
+//     final idAssignment = widget.item['id_assignment'];
+//     // Ambil ID Assignment (bisa tunggal atau list grup)
+//     final assignmentIds = List<int>.from(widget.item['grouped_assignment_ids'] ?? [widget.item['id_assignment']]);
+//     final shipIds = List<int>.from(widget.item['grouped_shipping_ids'] ?? [widget.item['shipping_id']]);
+
+//     // UPDATE Tabel shipping_assignments
+//     await supabase.from('loading').insert({
+//       'id_assignment': idAssignment,
+//       'loading_by': _currentUserName,
+//        'verifikasi_rekomendasi_logistic': _rekomendasiLogistic,
+//       // 'ganjal_ban': _ganjalBan,
+//       // 'checker_id': int.parse(_selectedChecker!), // Simpan ID sebagai FK
+//       // 'no_segel_smart': _noSegelController.text.trim(),
+//       // 'loading_at': DateTime.now().toIso8601String(),
+//       'checker_id': _rekomendasiLogistic == 'OKE' ? int.parse(_selectedChecker!) : null,
+//       'ganjal_ban': _rekomendasiLogistic == 'OKE' ? _ganjalBan : null,
+//       'no_segel_smart': (_rekomendasiLogistic == 'OKE' && _noSegelController.text.isNotEmpty) 
+//           ? _noSegelController.text.trim() 
+//           : null,
+//       'loading_at': DateTime.now().toIso8601String(),
+//     });
+//     // // UPDATE status di shipping_assignments (Opsional: agar status truk berubah)
+//     //   await supabase.from('shipping_assignments').update({
+//     //     'status_assignment': 'loading',
+//     //   }).eq('id_assignment', idAssignment);
+
+//     // // UPDATE Tabel shipping_request (Ubah status utama)
+//     // await supabase.from('shipping_request').update({
+//     //   'status': 'loading',
+//     // }).inFilter('shipping_id', shipIds);
+//     // B. HANYA UPDATE STATUS JIKA OKE
+//     if (_rekomendasiLogistic == 'OKE') {
+//       // Update status di shipping_assignments agar bisa lanjut ke Weighbridge
+//       await supabase.from('shipping_assignments').update({
+//         'status_assignment': 'loading', 
+//       }).inFilter('id_assignment', assignmentIds);
+
+//       // Update status di shipping_request agar sinkron di dashboard
+//       await supabase.from('shipping_request').update({
+//         'status': 'loading',
+//       }).inFilter('shipping_id', shipIds);
+//     }
+
+//      if (mounted) {
+//     //   _showSnackBar("Data Loading Berhasil Disimpan!", Colors.green);
+//     String msg = _rekomendasiLogistic == 'OKE' 
+//           ? "Data Berhasil Diverifikasi OKE!" 
+//           : "Riwayat penolakan berhasil dicatat. Status tetap antri loading.";
+//       _showSnackBar(msg, _rekomendasiLogistic == 'OKE' ? Colors.green : Colors.blue);
+//       // Gunakan penutup tab sesuai sistem Dynamic Tab Anda
+//       DynamicTabPage.of(context)?.closeCurrentTab();
+//     }
+//   } catch (e) {
+//     _showSnackBar("Gagal Simpan: $e", Colors.red);
+//   } finally {
+//     if (mounted) setState(() => _isSubmitting = false);
+//   }
+// }
 Future<void> _submitLoadingData() async {
-  // 1. Validasi Form
-  if (!_formKey.currentState!.validate()) {
-    _showSnackBar("Harap lengkapi semua field yang wajib diisi!", Colors.orange);
+  // 1. Validasi Pilihan Rekomendasi
+  if (_rekomendasiLogistic == null) {
+    _showSnackBar("Harap pilih Verifikasi Rekomendasi Logistic!", Colors.orange);
     return;
   }
-// 2. Validasi manual untuk variabel state (PENTING)
-  // Tambahkan pengecekan null sebelum melakukan int.parse
-  // if (_selectedChecker == null) {
-  //   _showSnackBar("Silakan pilih Checker terlebih dahulu!", Colors.orange);
-  //   return;
-  // }
 
-  // 2. Validasi Checklist Manual
-  if (_rekomendasiLogistic == null || _ganjalBan == null) {
-    _showSnackBar("Harap selesaikan semua verifikasi checklist!", Colors.orange);
-    return;
+  // 2. Jika OKE, wajib isi data teknis
+  if (_rekomendasiLogistic == 'OKE') {
+    if (!_formKey.currentState!.validate() || _ganjalBan == null) {
+      _showSnackBar("Data Ganjal Ban & Checker wajib diisi!", Colors.orange);
+      return;
+    }
   }
 
   setState(() => _isSubmitting = true);
 
   try {
-    // Ambil ID Assignment (bisa tunggal atau list grup)
-    final assignmentIds = List<int>.from(widget.item['grouped_assignment_ids'] ?? [widget.item['id_assignment']]);
-    final shipIds = List<int>.from(widget.item['grouped_shipping_ids'] ?? [widget.item['shipping_id']]);
+    // Ambil daftar ID Assignment dan Shipping ID dari data grup/single
+    final List<int> assignmentIds = List<int>.from(widget.item['grouped_assignment_ids'] ?? [widget.item['id_assignment']]);
+    final List<int> shipIds = List<int>.from(widget.item['grouped_shipping_ids'] ?? [widget.item['shipping_id']]);
 
-    // UPDATE Tabel shipping_assignments
-    await supabase.from('shipping_assignments').update({
-       'status_assignment': 'loading', 
-      'loading_by': _currentUserName,
-      'verifikasi_rekomendasi_logistic': _rekomendasiLogistic,
-      'ganjal_ban': _ganjalBan,
-      'checker_id': int.parse(_selectedChecker!), // Simpan ID sebagai FK
-      'no_segel_smart': _noSegelController.text.trim(),
-      'loading_at': DateTime.now().toIso8601String(),
-    }).inFilter('id_assignment', assignmentIds);
+    // =========================================================
+    // A. PROSES INPUT KE TABEL LOADING (BULK INSERT)
+    // =========================================================
+    // Kita membuat list of Map untuk setiap assignment_id dalam grup
+    final List<Map<String, dynamic>> loadingEntries = assignmentIds.map((id) {
+      return {
+        'id_assignment': id,
+        'loading_by': _currentUserName,
+        'verifikasi_rekomendasi_logistic': _rekomendasiLogistic,
+        'checker_id': _rekomendasiLogistic == 'OKE' ? int.parse(_selectedChecker!) : null,
+        'ganjal_ban': _rekomendasiLogistic == 'OKE' ? _ganjalBan : null,
+        'no_segel_smart': (_rekomendasiLogistic == 'OKE' && _noSegelController.text.isNotEmpty) 
+            ? _noSegelController.text.trim() 
+            : null,
+        'loading_at': DateTime.now().toIso8601String(),
+      };
+    }).toList();
 
-    // UPDATE Tabel shipping_request (Ubah status utama)
-    await supabase.from('shipping_request').update({
-      'status': 'loading',
-    }).inFilter('shipping_id', shipIds);
+    // Jalankan insert masal ke tabel loading
+    await supabase.from('loading').insert(loadingEntries);
+
+    // =========================================================
+    // B. UPDATE STATUS HANYA JIKA REKOMENDASI OKE
+    // =========================================================
+    if (_rekomendasiLogistic == 'OKE') {
+      // Update status di shipping_assignments (Bulk)
+      await supabase.from('shipping_assignments').update({
+        'status_assignment': 'loading', 
+      }).inFilter('id_assignment', assignmentIds);
+
+      // Update status di shipping_request (Bulk)
+      await supabase.from('shipping_request').update({
+        'status': 'loading',
+      }).inFilter('shipping_id', shipIds);
+    }
 
     if (mounted) {
-      _showSnackBar("Data Loading Berhasil Disimpan!", Colors.green);
-      // Gunakan penutup tab sesuai sistem Dynamic Tab Anda
+      String msg = _rekomendasiLogistic == 'OKE' 
+          ? "Berhasil! Seluruh grup DO diproses ke Loading." 
+          : "Riwayat penolakan grup berhasil dicatat.";
+      _showSnackBar(msg, _rekomendasiLogistic == 'OKE' ? Colors.green : Colors.blue);
+      
       DynamicTabPage.of(context)?.closeCurrentTab();
     }
   } catch (e) {
+    debugPrint("Error Submit Loading: $e");
     _showSnackBar("Gagal Simpan: $e", Colors.red);
   } finally {
     if (mounted) setState(() => _isSubmitting = false);
@@ -475,7 +615,7 @@ Widget _resultRowGroup(String title, List<Widget> children) {
         children: [
           Icon(Icons.lock_clock_outlined, color: Colors.grey, size: 40),
           SizedBox(height: 10),
-          Text("Opsi lainnya akan terbuka setelah\nVerifikasi Rekomendasi Logistic diisi.",
+          Text("Field Lainnya dikunci.\nSelesaikan treatment unit terlebih dahulu sampai OKE.",
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
         ],
@@ -636,7 +776,9 @@ Widget _resultRowGroup(String title, List<Widget> children) {
 
             final List doDetails = doItem['do_details'] ?? [];
 
-            final String soNum = request['so']?.toString() ?? "-";
+            final String soNum = doItem['so']?.toString() ?? 
+                               doItem['parent_so']?.toString() ?? 
+                               "-";
 
             final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 
@@ -777,6 +919,9 @@ Widget _resultRowGroup(String title, List<Widget> children) {
   }
   
   Widget _buildBottomAction() {
+    // Tombol aktif jika user sudah memilih salah satu rekomendasi
+  bool canSubmit = _rekomendasiLogistic != null;
+  bool isOke = _rekomendasiLogistic == 'OKE';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -5))]),
@@ -784,19 +929,44 @@ Widget _resultRowGroup(String title, List<Widget> children) {
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
-         onPressed: (_rekomendasiLogistic == null || _isSubmitting) ? null : _submitLoadingData,
+         //onPressed: (_rekomendasiLogistic == null || _isSubmitting) ? null : _submitLoadingData,
+         onPressed: (_isSubmitting || !canSubmit) ? null : _submitLoadingData,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green.shade700, 
-            disabledBackgroundColor: Colors.grey.shade300,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-          ),
-          child: _isSubmitting 
-            ? const CircularProgressIndicator(color: Colors.white) 
-            : const Text("SIMPAN DATA LOADING", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          //   backgroundColor: Colors.green.shade700, 
+          //   disabledBackgroundColor: Colors.grey.shade300,
+          //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+          // ),
+          backgroundColor: _rekomendasiLogistic == 'OKE' ? Colors.green.shade700 : Colors.blue.shade700,
+          disabledBackgroundColor: Colors.grey.shade300,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
         ),
+  //         child: _isSubmitting 
+  //           ? const CircularProgressIndicator(color: Colors.white) 
+  //           : const Text("SIMPAN DATA LOADING", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+  //       ),
+  //     ),
+  //   );
+  // }
+  child: _isSubmitting
+            ? const CircularProgressIndicator(color: Colors.white)
+            : Text(
+//                 _rekomendasiLogistic == 'OKE' ? "SIMPAN DATA LOADING" : "CATAT RIWAYAT (BELUM OKE)",
+//                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+//               ),
+//       ),
+//     ),
+//   );
+// }
+isOke ? "KONFIRMASI SELESAI (OKE)" : "CATAT RIWAYAT (BELUM OKE)",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildLateWarning() {
     return Container(

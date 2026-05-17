@@ -323,64 +323,192 @@ int _getMaxCapacity(String timeSlot) {
 //       );
 //     }
 //   }
+
+// Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
+//   if (_selectedTime == null) return;
+//   if (widget.oldTime != null && _selectedTime == widget.oldTime) {
+//     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pilih jam yang berbeda!"), backgroundColor: Colors.orange));
+//     return;
+//   }
+
+//   setState(() => _isSaving = true);
+//   try {
+//     final List<int> shipIds = List<int>.from(_shippingData!['all_shipping_ids']);
+
+//     // 1. Ambil semua assignment ID yang terkait dengan shipping IDs ini
+//     final assignmentRes = await supabase
+//         .from('shipping_assignments')
+//         .select('id_assignment')
+//         .inFilter('shipping_id', shipIds)
+//         .eq('nik', widget.vendorNik);
+
+//     final List<int> assignmentIds = (assignmentRes as List).map((e) => e['id_assignment'] as int).toList();
+
+//     // 2. Insert ke history jika Reschedule
+//     if (widget.oldTime != null) {
+//       final List<Map<String, dynamic>> historyInserts = assignmentIds.map((id) => {
+//         'id_assignment': id,
+//         'jam_lama': widget.oldTime,
+//         'jam_baru': _selectedTime,
+//         'changed_by': widget.vendorNik,
+//         'reason_reschedule': rescheduleReasons,
+//         'created_at': DateTime.now().toIso8601String(),
+//       }).toList();
+//       await supabase.from('booking_history').insert(historyInserts);
+//     }
+
+//     // 3. Update tabel penugasan vendor (Massal)
+//     await supabase.from('shipping_assignments').update({
+//       'status_assignment': 'accepted',
+//       'responded_at': DateTime.now().toIso8601String(),
+//       'jam_booking': _selectedTime,
+//     }).inFilter('id_assignment', assignmentIds);
+
+//     // 4. Update tabel request utama (Massal)
+//     await supabase.from('shipping_request').update({
+//       'status': 'on process',
+//     }).inFilter('shipping_id', shipIds);
+
+//     if (mounted) {
+//       widget.onSuccess();
+//       final dynamicTab = DynamicTabPage.of(context);
+//       if (dynamicTab != null) {
+//         dynamicTab.closeCurrentTab();
+//       } else {
+//         Navigator.pop(context);
+//       }
+//       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Berhasil! Jadwal grup telah disimpan."), backgroundColor: Colors.green));
+//     }
+//   } catch (e) {
+//     setState(() => _isSaving = false);
+//     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red));
+//   }
+// }
 Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
   if (_selectedTime == null) return;
+
   if (widget.oldTime != null && _selectedTime == widget.oldTime) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pilih jam yang berbeda!"), backgroundColor: Colors.orange));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Pilih jam yang berbeda!"),
+        backgroundColor: Colors.orange,
+      ),
+    );
     return;
   }
 
   setState(() => _isSaving = true);
-  try {
-    final List<int> shipIds = List<int>.from(_shippingData!['all_shipping_ids']);
 
-    // 1. Ambil semua assignment ID yang terkait dengan shipping IDs ini
+  try {
+    final List<int> shipIds =
+        List<int>.from(_shippingData!['all_shipping_ids']);
+
+    // =====================================================
+    // CEK USER LOGIN & ROLE
+    // =====================================================
+    final currentUser = supabase.auth.currentUser;
+
+    String changedBy = widget.vendorNik;
+
+    if (currentUser != null) {
+      final profileRes = await supabase
+          .from('profiles')
+          .select('role, name')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+      if (profileRes != null) {
+        final String role =
+            (profileRes['role'] ?? '').toString().toLowerCase();
+
+        // Jika internal/admin -> pakai nama
+        if (role != 'vendor') {
+          changedBy =
+              (profileRes['name'] ?? widget.vendorNik).toString();
+        }
+
+        // Jika vendor -> tetap pakai nik vendor
+        else {
+          changedBy = widget.vendorNik;
+        }
+      }
+    }
+
+    // =====================================================
+    // AMBIL ASSIGNMENT ID
+    // =====================================================
     final assignmentRes = await supabase
         .from('shipping_assignments')
         .select('id_assignment')
         .inFilter('shipping_id', shipIds)
         .eq('nik', widget.vendorNik);
 
-    final List<int> assignmentIds = (assignmentRes as List).map((e) => e['id_assignment'] as int).toList();
+    final List<int> assignmentIds = (assignmentRes as List)
+        .map((e) => e['id_assignment'] as int)
+        .toList();
 
-    // 2. Insert ke history jika Reschedule
+    // =====================================================
+    // INSERT HISTORY
+    // =====================================================
     if (widget.oldTime != null) {
-      final List<Map<String, dynamic>> historyInserts = assignmentIds.map((id) => {
-        'id_assignment': id,
-        'jam_lama': widget.oldTime,
-        'jam_baru': _selectedTime,
-        'changed_by': widget.vendorNik,
-        'reason_reschedule': rescheduleReasons,
-        'created_at': DateTime.now().toIso8601String(),
+      final List<Map<String, dynamic>> historyInserts =
+          assignmentIds.map((id) {
+        return {
+          'id_assignment': id,
+          'jam_lama': widget.oldTime,
+          'jam_baru': _selectedTime,
+          'changed_by': changedBy,
+          'reason_reschedule': rescheduleReasons,
+          'created_at': DateTime.now().toIso8601String(),
+        };
       }).toList();
+
       await supabase.from('booking_history').insert(historyInserts);
     }
 
-    // 3. Update tabel penugasan vendor (Massal)
+    // =====================================================
+    // UPDATE ASSIGNMENT
+    // =====================================================
     await supabase.from('shipping_assignments').update({
       'status_assignment': 'accepted',
       'responded_at': DateTime.now().toIso8601String(),
       'jam_booking': _selectedTime,
     }).inFilter('id_assignment', assignmentIds);
 
-    // 4. Update tabel request utama (Massal)
+    // =====================================================
+    // UPDATE SHIPPING REQUEST
+    // =====================================================
     await supabase.from('shipping_request').update({
       'status': 'on process',
     }).inFilter('shipping_id', shipIds);
 
     if (mounted) {
       widget.onSuccess();
+
       final dynamicTab = DynamicTabPage.of(context);
+
       if (dynamicTab != null) {
         dynamicTab.closeCurrentTab();
       } else {
         Navigator.pop(context);
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Berhasil! Jadwal grup telah disimpan."), backgroundColor: Colors.green));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Berhasil! Jadwal grup telah disimpan."),
+          backgroundColor: Colors.green,
+        ),
+      );
     }
   } catch (e) {
     setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Gagal menyimpan: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 }
   
@@ -871,7 +999,15 @@ Future<void> _checkAvailability() async {
             shipping_id
           )
         ''') // <--- PERBAIKAN: Tambahkan request:shipping_id agar bisa difilter
-        .eq('status_assignment', 'accepted')
+        //.eq('status_assignment', 'accepted')
+        .inFilter('status_assignment', [
+          'accepted', 
+          'on going', 
+          'check in', 
+          'loading', 
+          'weighbridge', 
+          'keluar'
+        ])
         .eq('request.stuffing_date', filterDate)
         .eq('request.warehouse_id', _shippingData!['warehouse_id'])
         .not('jam_booking', 'is', null);

@@ -133,11 +133,19 @@ Future<void> _fetchWarehouse() async {
             shipping_assignments(
             status_assignment,
             responded_at,
+            decision_for_unit,
+            catatan,
+            reason_rejected,
             master_vendor(vendor_name)
           )
           ''').eq('status', 'waiting assign vendor delivery')
           //.eq('is_dedicated', 'dedicated') // Filter hanya yang DEDICATED
-          .eq('shipping_assignments.status_assignment', 'rejected'); // Ambil yang pernah direject
+          //.eq('shipping_assignments.status_assignment', 'rejected'); // Ambil yang pernah direject
+          //.or('status_assignment.eq.rejected,decision_for_unit.eq.DITOLAK', referencedTable: 'shipping_assignments');
+          .or(
+          'status_assignment.eq.rejected,status_assignment.eq.rejected unit,status_assignment.eq.cancel booking', 
+          referencedTable: 'shipping_assignments'
+        );
 // .filter('vendor_id', 'is', null);
       if (_selectedFilterLoc != "SEMUA") {
         query = query.eq('warehouse_id',int.parse(_selectedFilterLoc));
@@ -176,13 +184,25 @@ Future<void> _fetchWarehouse() async {
           // 3. Cari di data asli (response) semua riwayat reject untuk ID-ID tersebut
       for (var originalRow in (response as List)) {
         if (groupShipIds.contains(originalRow['shipping_id'])) {
-          final List rejects = originalRow['shipping_assignments'] as List? ?? [];
+          //final List rejects = originalRow['shipping_assignments'] as List? ?? [];
+final List assignments = originalRow['shipping_assignments'] as List? ?? [];
 
-      for (var r in rejects) {
-        if (r['status_assignment'] == 'rejected') {
+      for (var a in assignments) {
+        if (a['status_assignment'] == 'rejected'||a['status_assignment'] == 'rejected unit' || a['status_assignment'] == 'cancel booking') {
           // Gunakan nama vendor sebagai KEY agar otomatis menimpa jika namanya sama (menjadi unik)
-          String vName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-          uniqueRejects[vName] = r;
+          String vName = a['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          // Menandai tipe penolakan agar UI bisa menyesuaikan warna/teks
+          //a['reject_type'] = (a['decision_for_unit'] == 'DITOLAK') ? 'INSPEKSI' : 'KONFIRMASI';
+          //a['reject_type'] = (a['status_assignment'] == 'rejected unit') ? 'INSPEKSI' : 'KONFIRMASI';
+          // Tentukan tipe reject untuk kebutuhan warna UI
+    if (a['status_assignment'] == 'rejected unit') {
+      a['reject_type'] = 'INSPEKSI';
+    } else if (a['status_assignment'] == 'cancel booking') {
+      a['reject_type'] = 'CANCEL'; // Tipe baru untuk cancel
+    } else {
+      a['reject_type'] = 'KONFIRMASI';
+    }
+          uniqueRejects[vName] = a;
         }
       }
         }
@@ -807,34 +827,107 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                             padding: const EdgeInsets.all(10),
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              color: Colors.yellow.shade200,
-                              borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(8),
-                                bottomRight: Radius.circular(8),
-                              ),
-                            ),
+                            //   color: Colors.yellow.shade200,
+                            //   borderRadius: const BorderRadius.only(
+                            //     bottomLeft: Radius.circular(8),
+                            //     bottomRight: Radius.circular(8),
+                            //   ),
+                            // ),
+                            color: rejectHistory.any((r) => r['reject_type'] == 'INSPEKSI') 
+          ? Colors.red.shade100 
+          : Colors.yellow.shade200,
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(8),
+        bottomRight: Radius.circular(8),
+      ),
+    ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // Row(
+                                //   children: [
+                                //     Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
+                                //     const SizedBox(width: 4),
+                                //     Text("Direject Oleh:", 
+                                //       style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                                //   ],
+                                // ),
+                                // const SizedBox(height: 4),
+                                // ...rejectHistory.map((rej) {
+                                //   String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+                                //   return Padding(
+                                //     padding: const EdgeInsets.only(bottom: 2),
+                                //     child: Text(
+                                //       "• $vendorName",
+                                //       style: const TextStyle(fontSize: 10, color: Colors.black87),
+                                //     ),
+                                //   );
+                                // }).toList(),
                                 Row(
-                                  children: [
-                                    Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
-                                    const SizedBox(width: 4),
-                                    Text("Direject Oleh:", 
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                ...rejectHistory.map((rej) {
-                                  String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 2),
-                                    child: Text(
-                                      "• $vendorName",
-                                      style: const TextStyle(fontSize: 10, color: Colors.black87),
-                                    ),
-                                  );
-                                }).toList(),
+          children: [
+            Icon(Icons.report_problem, size: 14, 
+                color: rejectHistory.any((r) => r['reject_type'] == 'INSPEKSI') ? Colors.red.shade900 : Colors.orange.shade900),
+            const SizedBox(width: 4),
+            Text("RIWAYAT PENOLAKAN:", 
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, 
+                  color: rejectHistory.any((r) => r['reject_type'] == 'INSPEKSI') ? Colors.red.shade900 : Colors.orange.shade900)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ...rejectHistory.map((rej) {
+          String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          //String type = rej['reject_type'] == 'INSPEKSI' ? "UNIT DITOLAK SAAT CHECK-IN" : "VENDOR MENOLAK ORDER";
+          //String catatan = rej['catatan'] != null ? "\n   Ket: ${rej['catatan']}" : "";
+String typeText = "";
+String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
+  // if (rej['reject_type'] == 'INSPEKSI') {
+  //   // Format untuk penolakan unit saat check-in
+  //   String detailCheckIn = (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) 
+  //       ? " - ${rej['catatan']}" 
+  //       : "";
+  //   typeText = "UNIT DITOLAK SAAT CHECK-IN$detailCheckIn";
+  // } else {
+  //   // Format untuk penolakan order oleh vendor
+  //   String detailReject = (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) 
+  //       ? " - ${rej['reason_rejected']}" 
+  //       : "";
+  //   typeText = "VENDOR MENOLAK ORDER$detailReject";
+  // }
+  if (status == 'rejected unit') {
+    // Jika ditolak saat check-in kelayakan unit
+    typeText = "UNIT DITOLAK SAAT CHECK-IN";
+    if (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) {
+      typeText += " - ${rej['catatan']}";
+    }
+  } 
+  else if (status == 'cancel booking') {
+    // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
+   typeText = "BOOKING DIBATALKAN";
+    // Mengambil alasan pembatalan (Silakan sesuaikan kolomnya, di sini dicontohkan pakai 'reason_rejected' atau 'catatan')
+    var alasanCancel = rej['reason_rejected'] ?? rej['catatan'];
+    if (alasanCancel != null && alasanCancel.toString().isNotEmpty) {
+      typeText += " - $alasanCancel";
+    }
+  } 
+  else {
+    // Jika ditolak via konfirmasi penawaran awal oleh vendor (status == 'rejected' atau lainnya)
+    typeText = "VENDOR MENOLAK ORDER";
+    if (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) {
+      typeText += " - ${rej['reason_rejected']}";
+    }
+  }
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              "• $vendorName: $typeText",
+              style: TextStyle(
+                fontSize: 10, 
+                color: rej['reject_type'] == 'INSPEKSI' ? Colors.red.shade800 : Colors.black87,
+                fontWeight: rej['reject_type'] == 'INSPEKSI' ? FontWeight.bold : FontWeight.normal
+              ),
+            ),
+          );
+        }).toList(),
                              ],
                   ),
                 ),

@@ -726,22 +726,22 @@ static Future<void> updateVendorStatus(String userId, String newStatus) async {
   }
 
 // Di dalam file auth_service.dart atau service khusus shipping
-static Future<List<Map<String, dynamic>>> getVendorShippingRequests(String registCode) async {
-  final response = await _supabase
-      .from('shipping_request')
-      .select('*, shipping_request_details(*)')
-      .eq('vendor_id', registCode)
-      .order('date_created', ascending: false);
+// static Future<List<Map<String, dynamic>>> getVendorShippingRequests(String registCode) async {
+//   final response = await _supabase
+//       .from('shipping_request')
+//       .select('*, shipping_request_details(*)')
+//       .eq('vendor_id', registCode)
+//       .order('date_created', ascending: false);
   
-  return List<Map<String, dynamic>>.from(response);
-}
+//   return List<Map<String, dynamic>>.from(response);
+// }
 
-static Future<void> updateShippingStatus(int id, String status) async {
-  await _supabase
-      .from('shipping_request')
-      .update({'status': status})
-      .eq('shipping_id', id);
-}  
+// static Future<void> updateShippingStatus(int id, String status) async {
+//   await _supabase
+//       .from('shipping_request')
+//       .update({'status': status})
+//       .eq('shipping_id', id);
+// }  
 }
 
 

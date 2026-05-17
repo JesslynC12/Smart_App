@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/dynamic_tab_page.dart';
+import 'package:project_app/vendor/booking_antrian.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -141,8 +143,12 @@ Future<void> _fetchPlanningData() async {
         .select('''
           *,
           master_vendor:nik (vendor_name), 
+          loading:loading (
+            loading_at,
+            loading_by
+          ),
           request:shipping_id (
-            shipping_id, so, rdd, stuffing_date, group_id, storage_location, is_dedicated,
+            shipping_id, so, rdd, status, stuffing_date, group_id, storage_location, is_dedicated,
             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
             delivery_order (
               do_number,
@@ -155,8 +161,8 @@ Future<void> _fetchPlanningData() async {
           )
         ''')
         // .eq('status_assignment', 'accepted')
-        .inFilter('status_assignment', ['accepted', 'check in', 'loading','weighbridge','keluar'])
-        .not('jam_booking', 'is', null)
+        // .inFilter('status_assignment', ['offered','accepted', 'check in', 'loading','weighbridge','keluar','cancel booking','rejected','on going','no response','completed','rejected unit'])
+        // .not('jam_booking', 'is', null)
        .eq('request.stuffing_date', formattedDate)
         .order('jam_booking', ascending: true);
 
@@ -194,37 +200,97 @@ Future<void> _fetchPlanningData() async {
     //     groupedData[key]['request']['delivery_order'] = currentDOs;
     //   }
     // }
-if (!groupedData.containsKey(key)) {
-        groupedData[key] = Map<String, dynamic>.from(item);
-        groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
-        groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
+// if (!groupedData.containsKey(key)) {
+//         groupedData[key] = Map<String, dynamic>.from(item);
+//         groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
+//         groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
         
-        // Inisialisasi rdd_origin
-        if (groupedData[key]['request']['delivery_order'] != null) {
-          for (var d in groupedData[key]['request']['delivery_order']) {
-            d['rdd_origin'] = req['rdd'];
-          }
-        }
-      } else {
-        // Jika sudah ada (Grup), tambahkan ID untuk keperluan update nanti
-        groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
-        groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
+//         // Inisialisasi rdd_origin
+//         if (groupedData[key]['request']['delivery_order'] != null) {
+//           for (var d in groupedData[key]['request']['delivery_order']) {
+//             d['rdd_origin'] = req['rdd'];
+//           }
+//         }
+//       } else {
+//         // Jika sudah ada (Grup), tambahkan ID untuk keperluan update nanti
+//         groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+//         groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
 
-        // --- CEK DUPLIKASI DO SEBELUM MENGGABUNGKAN ---
-        List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
-        List newDOs = req['delivery_order'] ?? [];
+//         // --- CEK DUPLIKASI DO SEBELUM MENGGABUNGKAN ---
+//         List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
+//         List newDOs = req['delivery_order'] ?? [];
 
-        for (var ndo in newDOs) {
-          // Hanya tambahkan jika do_number belum ada di list saat ini
-          bool isDuplicate = currentDOs.any((existing) => 
-            existing['do_number'] == ndo['do_number']);
+//         for (var ndo in newDOs) {
+//           // Hanya tambahkan jika do_number belum ada di list saat ini
+//           bool isDuplicate = currentDOs.any((existing) => 
+//             existing['do_number'] == ndo['do_number']);
           
-          if (!isDuplicate) {
-            ndo['rdd_origin'] = req['rdd'];
-            currentDOs.add(ndo);
-          }
-        }
-        groupedData[key]['request']['delivery_order'] = currentDOs;
+//           if (!isDuplicate) {
+//             ndo['rdd_origin'] = req['rdd'];
+//             currentDOs.add(ndo);
+//           }
+//         }
+//         groupedData[key]['request']['delivery_order'] = currentDOs;
+if (!groupedData.containsKey(key)) {
+  groupedData[key] = Map<String, dynamic>.from(item);
+
+  groupedData[key]['grouped_assignment_ids'] = [
+    item['id_assignment']
+  ];
+
+  groupedData[key]['grouped_shipping_ids'] = [
+    req['shipping_id']
+  ];
+
+  // Pastikan delivery_order tidak null
+  List currentDOs =
+      List.from(groupedData[key]['request']['delivery_order'] ?? []);
+
+  // Tambahkan informasi asal shipment
+  for (var d in currentDOs) {
+    d['rdd_origin'] = req['rdd'];
+    d['parent_so'] = req['so'];
+    d['parent_shipping_id'] = req['shipping_id'];
+  }
+
+  groupedData[key]['request']['delivery_order'] = currentDOs;
+} else {
+  // Tambahkan semua assignment & shipping ID grup
+  groupedData[key]['grouped_assignment_ids']
+      .add(item['id_assignment']);
+
+  groupedData[key]['grouped_shipping_ids']
+      .add(req['shipping_id']);
+
+  // Existing DO dalam card grup
+  List currentDOs =
+      groupedData[key]['request']['delivery_order'] ?? [];
+
+  // DO baru dari shipment lain
+  List newDOs = req['delivery_order'] ?? [];
+
+  for (var ndo in newDOs) {
+    // Tambahkan metadata asal shipment
+    ndo['rdd_origin'] = req['rdd'];
+    ndo['parent_so'] = req['so'];
+    ndo['parent_shipping_id'] = req['shipping_id'];
+
+    // CEK DUPLIKAT BERDASARKAN
+    // DO NUMBER + SHIPPING ID
+    bool isDuplicate = currentDOs.any(
+      (existing) =>
+          existing['do_number'] == ndo['do_number'] &&
+          existing['parent_shipping_id'] == req['shipping_id'],
+    );
+
+    // Tambahkan jika belum ada
+    if (!isDuplicate) {
+      currentDOs.add(ndo);
+    }
+  }
+
+  groupedData[key]['request']['delivery_order'] = currentDOs;
+
       }
     }
     setState(() {
@@ -238,6 +304,20 @@ if (!groupedData.containsKey(key)) {
 }
 
 
+// Mendapatkan warna background status secara dinamis berdasarkan kondisi real-time
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'accepted': return Colors.green.shade700;
+      case 'check in': return Colors.orange.shade700;
+      case 'loading': return Colors.blue.shade700;
+      case 'no response': return Colors.grey.shade700;
+      case 'rejected':
+      case 'rejected unit': return Colors.red.shade800;
+      case 'cancel booking': return Colors.red.shade400;
+      case 'completed': return Colors.teal.shade700;
+      default: return Colors.blueGrey;
+    }
+  }
   // @override
   // Widget build(BuildContext context) {
   //   return Scaffold(
@@ -1726,6 +1806,14 @@ Future<void> _selectSingleDate() async {
 Widget _buildPlanningCard(Map<String, dynamic> item) {
   final Map<String, dynamic> request = item['request'] ?? {};
   final vendor = item['master_vendor'] ?? {};
+//final Map<String, dynamic> requestData = item['request'] ?? {};
+final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
+// --- AMBIL DATA DARI TABEL LOADING HASIL JOIN ---
+  // Jika hasil query berupa List (karena target relasi), ambil indeks pertama [0]
+  // Jika berupa Map langsung, gunakan item['loading']
+  final loadingData = item['loading'] is List 
+      ? (item['loading'] as List).isNotEmpty ? item['loading'][0] : {}
+      : item['loading'] ?? {};
 
   if (request.isEmpty) return const SizedBox.shrink();
   
@@ -1738,6 +1826,9 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
       : "-";
 // Ambil status untuk logika tampilan kondisional
   final String status = item['status_assignment']?.toString().toLowerCase() ?? "";
+  final String vendorName = vendor['vendor_name'] ?? 'Unknown Vendor';
+  final String reasonrejected = item['reason_rejected'] ?? 'Unknown Reason';
+    final String vendorNik = item['nik'] ?? '-';
 
   return Card(
     margin: const EdgeInsets.only(bottom: 16),
@@ -1825,6 +1916,83 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                 ],
               ),
               const SizedBox(height: 8),
+              // --- TRACKING BOX UNTUK CONDITIONAL STATUS (No Response, Rejected, Rejected Unit) ---
+                if (status == 'no response' || status == 'rejected' || status == 'rejected unit' || status == 'cancel booking')
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16, top: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.report_problem, color: Colors.red.shade900, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "KETERANGAN", 
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red.shade900)
+                              ),
+                              const SizedBox(height: 2),
+                     Text(
+  () {
+    if (status == 'no response') {
+      return "Vendor ($vendorName) tidak merespon penugasan hingga batas waktu.";
+    } 
+    
+    else if (status == 'rejected') {
+      // --- PENGECEKAN KONDISI BERDASARKAN STATUS SHIPPING REQUEST ---
+      if (requestStatus == 'waiting assign vendor delivery') {
+        return "Penugasan ditolak oleh Vendor: $vendorName karena $reasonrejected. - Menunggu assignment vendor baru.";
+      } else if (requestStatus == 'waiting vendor approval') {
+        return "Penugasan ditolak oleh Vendor: $vendorName karena $reasonrejected. - Menunggu jawaban vendor baru.";
+      } else {
+        return "Penugasan ditolak oleh Vendor: $vendorName karena $reasonrejected.";
+      }
+    } 
+    
+    else if (status == 'cancel booking') {
+      if (requestStatus == 'waiting assign vendor delivery') {
+        return "Booking dibatalkan oleh Vendor ($vendorName) karena $reasonrejected. - Menunggu assignment vendor baru.";
+      } else if (requestStatus == 'waiting vendor approval') {
+        return "Booking dibatalkan oleh Vendor ($vendorName) karena $reasonrejected. - Menunggu jawaban vendor baru.";
+      } else {
+        return "Booking dibatalkan oleh Vendor ($vendorName) karena $reasonrejected.";
+      }
+    } 
+    
+    else if (status == 'rejected unit') {
+      return "Unit Feasibility Check ditolak untuk Vendor: $vendorName.";
+    } 
+    
+    else {
+      return "Unit Ditolak saat Check In Kelayakan Unit";
+    }
+  }(),
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.red.shade900),
+                              ),
+                              // Text(
+                              //   status == 'no response' 
+                              //     ? "Vendor ($vendorName) tidak merespon penugasan hingga batas waktu."
+                              //     : status == 'rejected'
+                              //     ? "Penugasan ditolak oleh Vendor: $vendorName karena $reasonrejected. - Menunggu assignment vendor baru."
+                              //     : status == 'rejected unit'
+                              //     ? "Unit Feasibility Check ditolak untuk Vendor: $vendorName."
+                              //     : "Booking dibatalkan oleh Vendor ($vendorName) karena $reasonrejected.",
+                              //   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.red.shade900),
+                              // ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 //               Container(
 //                 width: double.infinity,
 //                 padding: const EdgeInsets.all(10),
@@ -1890,7 +2058,8 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
 //                     ),
                  // --- LOGIKA KONDISIONAL CHECK-IN & LOADING ---
               // Hanya muncul jika status BUKAN 'accepted' (berarti sudah check-in/loading/dst)
-              if (status != 'accepted') 
+              //if (status != 'accepted') 
+              if (status != 'accepted' && status != 'offered' && status != 'no response' && status != 'rejected'  && status != 'cancel booking')
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
@@ -1937,7 +2106,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                             const Icon(Icons.hourglass_bottom, size: 14, color: Colors.orange),
                             const SizedBox(width: 6),
                             Text(
-                              "Loading At: ${_formatDateTime(item['loading_at'])}",
+                              "Loading At: ${_formatDateTime(loadingData['loading_at'])}",
                               style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
                             ),
                             const SizedBox(width: 12),
@@ -1945,7 +2114,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                "Checker: ${item['loading_by'] ?? '-'}",
+                                "Checker: ${loadingData['loading_by'] ?? '-'}",
                                 style: TextStyle(fontSize: 11, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1995,7 +2164,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                                Text("SO: ${request['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                Text( "SO: ${doItem['parent_so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                 Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
                                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                               ],
@@ -2017,9 +2186,83 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                         ],
                       ),
                     ),
-                  ],
+                      ],
                 );
               }).toList(),
+                    // --- TOMBOL EDIT JAM UNTUK ADMIN ---
+    // Hanya tampilkan jika status belum masuk ke gerbang (check-in)
+    // if (status == 'accepted')
+    //   SizedBox(
+    //     width: double.infinity,
+    //     child: ElevatedButton.icon(
+    //       onPressed: () {
+    //         // Membuka tab baru untuk edit jam
+    //         DynamicTabPage.of(context)?.openTab(
+    //           "Edit Jam Ship #${request['shipping_id']}",
+    //           ScheduleSelectionPage(
+    //             assignmentId: item['id_assignment'],
+    //             shippingId: request['shipping_id'],
+    //             oldTime: item['jam_booking'],
+    //             // Admin mengedit, nik dikirim dari data item
+    //             vendorNik: item['nik'], 
+    //             onSuccess: () {
+    //               _fetchPlanningData(); // Refresh list setelah berhasil
+    //               _showSnackBar("Jadwal berhasil diperbarui", Colors.green);
+    //             },
+    //           ),
+    //         );
+    //       },
+    //       icon: const Icon(Icons.edit_calendar, size: 18, color: Colors.white),
+    //       label: const Text("EDIT JAM BOOKING", 
+    //           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+    //       style: ElevatedButton.styleFrom(
+    //         backgroundColor: Colors.blue.shade700,
+    //         padding: const EdgeInsets.symmetric(vertical: 12),
+    //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    //       ),
+    //     ),
+    //   ),
+      
+    // const SizedBox(height: 16),
+    // --- TOMBOL AKSI ADMIN (Hanya muncul jika status 'accepted') ---
+              if (status == 'accepted') ...[
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _confirmCancelBooking(item),
+                        icon: const Icon(Icons.cancel, size: 18),
+                        label: const Text("BATALKAN", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openEditTab(item),
+                        icon: const Icon(Icons.edit_calendar, color: Colors.white, size: 18),
+                        label: const Text("EDIT JAM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 16),
+                
 //               SizedBox(
 //   width: double.infinity,
 //   child: ElevatedButton.icon(
@@ -2042,7 +2285,114 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
           );
           
 }
+// 1. Fungsi Navigasi ke Halaman Edit Jam
+void _openEditTab(Map<String, dynamic> item) {
+  final request = item['request'] ?? {};
+  
+  //final List<int> allAssignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
+   final int? groupId = request['group_id'];
+          final int shipId = request['shipping_id'];
+          String tabTitle;
 
+          if (groupId != null) {
+            tabTitle = "Reschedule Grup #$groupId";
+          } else {
+            tabTitle = "Reschedule Shipping #$shipId";
+          }
+  DynamicTabPage.of(context)?.openTab(
+    tabTitle,
+    ScheduleSelectionPage(
+      assignmentId:item['id_assignment'],
+      shippingId: request['shipping_id'],
+      oldTime: item['jam_booking'],
+      vendorNik: item['nik'],
+      onSuccess: () {
+        _fetchPlanningData(); // Refresh list utama
+        _showSnackBar("Jadwal Berhasil Diperbarui", Colors.green);
+      }, 
+    ),
+  );
+}
+
+// Future<void> _saveReschedule(String newTime) async {
+//   try {
+//     final List<int> idsToUpdate = widget.assignmentIds; // List ID dari parameter tadi
+//     final String changedBy = supabase.auth.currentUser?.email ?? 'admin';
+
+//     // 1. Update Jam di penugasan (Bulk Update)
+//     await supabase.from('shipping_assignments').update({
+//       'jam_booking': newTime,
+//       'responded_at': DateTime.now().toIso8601String(),
+//     }).inFilter('id_assignment', idsToUpdate);
+
+//     // 2. Simpan ke History (Satu per satu atau loop)
+//     final List<Map<String, dynamic>> historyData = idsToUpdate.map((id) => {
+//       'id_assignment': id,
+//       'jam_lama': widget.oldTime,
+//       'jam_baru': newTime,
+//       'changed_by': changedBy,
+//       'reason_reschedule': 'Reschedule Grup by Admin',
+//     }).toList();
+
+//     await supabase.from('booking_history').insert(historyData);
+
+//     widget.onSuccess();
+//     Navigator.pop(context);
+//   } catch (e) {
+//     _showSnackBar("Gagal Reschedule Grup: $e", Colors.red);
+//   }
+// }
+// 2. Fungsi Konfirmasi Pembatalan oleh Admin
+void _confirmCancelBooking(Map<String, dynamic> item) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Batalkan Booking?"),
+      content: const Text("Tindakan ini akan menghapus jam booking dan mengembalikan status penugasan ke 'waiting assign vendor'."),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEMBALI")),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () async {
+            Navigator.pop(context);
+            await _executeCancelBooking(item);
+          },
+          child: const Text("YA, BATALKAN", style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
+// 3. Logika Eksekusi Pembatalan ke Database
+Future<void> _executeCancelBooking(Map<String, dynamic> item) async {
+  try {
+    setState(() => _isLoading = true);
+    
+    // Ambil semua ID jika ini adalah grup
+    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
+    final List<int> shippingIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['request']['shipping_id']]);
+
+    // Update Assignment: Hapus jam dan ubah status ke cancel
+    await supabase.from('shipping_assignments').update({
+      'status_assignment': 'cancel booking',
+      'jam_booking': null,
+      'cancelled_at': DateTime.now().toIso8601String(),
+    }).inFilter('id_assignment', assignmentIds);
+
+    // Update Request: Kembalikan ke tahap pemilihan vendor
+    await supabase.from('shipping_request').update({
+      'status': 'waiting assign vendor delivery',
+    }).inFilter('shipping_id', shippingIds);
+
+    _showSnackBar("Booking berhasil dibatalkan", Colors.orange);
+    _fetchPlanningData();
+  } catch (e) {
+    _showSnackBar("Gagal membatalkan: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
 Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

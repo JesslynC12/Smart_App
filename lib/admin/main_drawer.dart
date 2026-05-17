@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
+import 'package:project_app/admin/display/slotantrian_page.dart';
 import 'package:project_app/admin/input%20form/Formppic.dart';
 import 'package:project_app/admin/input%20form/Listloading_page.dart';
+import 'package:project_app/admin/input%20form/pod_page.dart';
 import 'package:project_app/admin/input%20form/posKeluar_page.dart';
 import 'package:project_app/admin/input%20form/weighbridge_page.dart';
 import 'package:project_app/dynamic_tab_page.dart';
@@ -134,7 +136,7 @@ class MainDrawer extends StatelessWidget {
     },
   ),
               if (_hasAccess('PPICForm'))
-              _menuItem(context, Icons.format_align_justify, "PPIC Form", Colors.orange, onTap: () {
+              _menuItem(context, Icons.format_align_justify, "PPIC Form", Colors.pink, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("PPIC Form", PPICFormPage());
               }),
@@ -143,7 +145,11 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Occupancy Form", WarehouseOccupancyForm());
               }),
-           
+           if (_hasAccess('PODForm'))
+              _menuItem(context, Icons.request_quote_rounded, "POD Form", Colors.green, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("POD Form", PODReturnPage());
+              }),
             if (_hasAccess('Complain'))
               _menuItem(context, Icons.report_problem_rounded, "Complain", Colors.redAccent, onTap: () {
                 Navigator.pop(context);
@@ -178,6 +184,11 @@ class MainDrawer extends StatelessWidget {
                _menuItem(context, Icons.confirmation_number_rounded, "List Planning Booking Antrian", Colors.amber.shade800, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("List Planning Booking Antrian", BookingPlanningListPage());
+              }),
+              if (_hasAccess('slotAntrian'))
+               _menuItem(context, Icons.schedule_rounded, "Slot Antrian", Colors.amber.shade800, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Slot Antrian", QueueSlotPage());
               }),
               // _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
               //   Navigator.pop(context);

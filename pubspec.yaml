@@ -41,6 +41,7 @@ dependencies:
   universal_html: ^2.2.4
   file_picker: ^8.0.0+1  # Tambahkan ini
   flutter_local_notifications: ^17.0.0
+  http: ^1.2.0
   
   # supabase_flutter: ^2.12.2
   

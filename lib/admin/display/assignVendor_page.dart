@@ -89,7 +89,17 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
           shipping_assignments(
             status_assignment,
             responded_at,
-            master_vendor(vendor_name)
+            reason_rejected,
+            catatan,
+            id_vendor_details,
+           master_vendor:nik (
+        vendor_name
+        ),
+            vendor_transportasi:id_vendor_details(
+                id,
+                vendor_name,
+                nik
+                )
           )
         ''')
         .eq('shipping_id', widget.shippingId)
@@ -136,7 +146,17 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
             shipping_assignments(
             status_assignment,
             responded_at,
-            master_vendor(vendor_name)
+            reason_rejected,
+              catatan,
+            id_vendor_details,
+             master_vendor:nik (
+        vendor_name
+        ),
+            vendor_transportasi:id_vendor_details(
+                id,
+                vendor_name,
+                nik
+                )
           )
           ''')
           .eq('group_id', groupId);
@@ -157,22 +177,66 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
     // }
     // --- Ambil Riwayat Reject Unik dari seluruh grup ---
     // Gunakan Map untuk memastikan vendor_name bersifat unik
-    Map<String, Map<String, dynamic>> uniqueRejects = {};
+    List allDOs = [];
+      List<String> cities = [];
+      List<String> areas = [];
+      double sumQty = 0;
+      double sumNW = 0;
+    Map<int, Map<String, dynamic>> uniqueRejects = {};
     
     for (var ship in shippingList) {
       final rejects = ship['shipping_assignments'] as List? ?? [];
       for (var r in rejects) {
-        if (r['status_assignment'] == 'rejected') {
-          String vendorName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-          // Masukkan ke Map, jika nama sama maka akan tertimpa (menjadi unik)
-          uniqueRejects[vendorName] = r;
+        //if (r['status_assignment'] == 'rejected') {
+          if (r['status_assignment'] == 'rejected' || r['status_assignment'] == 'rejected unit' || 
+            r['status_assignment'] == 'cancel booking') {
+          // String vendorName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          // // Masukkan ke Map, jika nama sama maka akan tertimpa (menjadi unik)
+          // uniqueRejects[vendorName] = r;
+          int vendorDetailsId = r['id_vendor_details'] ?? 0;
+            uniqueRejects[vendorDetailsId] = r;
         }
       }
-    }
+    
+    // for (var doItem in ship['delivery_order'] ?? []) {
+        List currentShipDOs = List.from(ship['delivery_order'] ?? []);
+         for (var doItem in currentShipDOs) {
+        // SUNTIK RDD ASAL KE TIAP DO AGAR TAMPIL SPESIFIK DI UI
+        doItem['rdd_origin'] = ship['rdd'];
+         doItem['so_origin'] = ship['so'];
+          var cust = doItem['customer'];
+          // Ambil Kota Tujuan
+          String city = doItem['customer']?['city']?.toString().trim().toUpperCase() ?? "";
+          String area = cust['area']?.toString().trim().toUpperCase() ?? "";
+         if (city.isNotEmpty && !cities.contains(city)) cities.add(city);
+        if (area.isNotEmpty && !areas.contains(area)) areas.add(area);
 
+            // Ambil Area (Sesuai kolom area di tabel customer Anda)
+          // Hitung Berat (Logika tidak berubah)
+          for (var det in doItem['do_details'] ?? []) {
+            double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+            // Akses net_weight dari hasil join material
+            double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
+            
+            sumNW += (qty * unitWeight);
+            sumQty += qty;
+          }
+        }
+        allDOs.addAll(currentShipDOs);
+      }
+      
     // Ubah kembali menjadi List untuk disimpan di state
     List<Map<String, dynamic>> combinedRejectHistory = uniqueRejects.values.toList();
+     double tnwCalculated = sumNW / 1000;
+      //String unitRequired = _determineUnitByWeight(tnwCalculated);
+// Panggil fungsi penentu unit dengan parameter lengkap
+      String unitRequired = _determineUnitByWeight(tnwCalculated, cities, areas);
 
+final whData = shippingList.first['warehouse'];
+      String storageLoc = whData != null ? whData['lokasi']?.toString() ?? "" : "";
+String storageLocDisplay = whData != null 
+    ? "${whData['lokasi']} - ${whData['warehouse_name']}" 
+    : "-";
       // if (groupId != null) {
       //   rawData = await supabase
       //       .from('shipping_request')
@@ -192,47 +256,13 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
       //     : [rawData];
 
      // 3. Inisialisasi variabel perhitungan
-      List allDOs = [];
-      List<String> cities = [];
-      List<String> areas = [];
-      double sumQty = 0;
-      double sumNW = 0;
+      
 
       // 4. Loop data untuk mengumpulkan DO, Kota, dan Berat
-      for (var ship in shippingList) {
+      //for (var ship in shippingList) {
         // allDOs.addAll(ship['delivery_order'] ?? []);
-        
-        // for (var doItem in ship['delivery_order'] ?? []) {
-        List currentShipDOs = List.from(ship['delivery_order'] ?? []);
       
-      for (var doItem in currentShipDOs) {
-        // SUNTIK RDD ASAL KE TIAP DO AGAR TAMPIL SPESIFIK DI UI
-        doItem['rdd_origin'] = ship['rdd'];
-          var cust = doItem['customer'];
-          // Ambil Kota Tujuan
-          String city = doItem['customer']?['city']?.toString().trim().toUpperCase() ?? "";
-          if (city.isNotEmpty && !cities.contains(city)) {
-            cities.add(city);
-
-            // Ambil Area (Sesuai kolom area di tabel customer Anda)
-            String area = cust['area']?.toString().trim().toUpperCase() ?? "";
-            if (area.isNotEmpty && !areas.contains(area)) areas.add(area);
-          
-          }
-
-          // Hitung Berat (Logika tidak berubah)
-          for (var det in doItem['do_details'] ?? []) {
-            double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-            // Akses net_weight dari hasil join material
-            double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-            
-            sumNW += (qty * unitWeight);
-            sumQty += qty;
-          }
-        }
-        allDOs.addAll(currentShipDOs);
-      }
-      
+     
 
       // 🔥 3. AMBIL STORAGE LOCATION (Titik Muat)
     // Kita ambil dari baris pertama shipping_request_details
@@ -280,16 +310,9 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
       //   }
       // }
       // }
-      final whData = shippingList.first['warehouse'];
-      String storageLoc = whData != null ? whData['lokasi']?.toString() ?? "" : "";
-String storageLocDisplay = whData != null 
-    ? "${whData['lokasi']} - ${whData['warehouse_name']}" 
-    : "-";
+      
 //String storageLoc = shippingList.first['storage_location']?.toString().trim() ?? "";
-      double tnwCalculated = sumNW / 1000;
-      //String unitRequired = _determineUnitByWeight(tnwCalculated);
-// Panggil fungsi penentu unit dengan parameter lengkap
-      String unitRequired = _determineUnitByWeight(tnwCalculated, cities, areas);
+     
       // 5. Ambil vendor
       final responses = await Future.wait([
         supabase
@@ -308,6 +331,7 @@ String storageLocDisplay = whData != null
             .order('vendor_name', ascending: true)
       ]);
 
+if (mounted) {
       setState(() {
         _shippingData = {
           'group_id': groupId,
@@ -330,6 +354,7 @@ String storageLocDisplay = whData != null
         _allVendors = List<Map<String, dynamic>>.from(responses[1]);
         _isLoading = false;
       });
+}
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnackBar("Error loading data: $e", Colors.red);
@@ -535,15 +560,59 @@ Padding(
                         children: [
                           Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
                           const SizedBox(width: 6),
-                          Text("RIWAYAT REJECT VENDOR:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                          Text("RIWAYAT VENDOR:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
                         ],
                       ),
                       const SizedBox(height: 4),
                       ...rejectList.map((rej) {
                         String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+                       String status = rej['status_assignment'];
+                        
+                        // Menentukan Alasan (Reason) secara dinamis
+                        String reasonText = "";
+                        // if (status == 'rejected unit') {
+                        //   // Jika ditolak saat check-in, ambil dari kolom 'catatan'
+                        //   reasonText = "UNIT DITOLAK SAAT CHECK-IN";
+                        //   if (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) {
+                        //     reasonText += " - ${rej['catatan']}";
+                        //   }
+                        // } else {
+                        //   // Jika ditolak via konfirmasi vendor, ambil dari 'reason_rejected'
+                        //   reasonText = "VENDOR MENOLAK ORDER";
+                        //   if (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) {
+                        //     reasonText += " - ${rej['reason_rejected']}";
+                        //   }
+                        // }
+                        if (status == 'rejected unit') {
+    // Jika ditolak saat check-in kelayakan unit
+    reasonText = "UNIT DITOLAK SAAT CHECK-IN";
+    if (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) {
+      reasonText += " - ${rej['catatan']}";
+    }
+  } 
+  else if (status == 'cancel booking') {
+    // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
+    reasonText = "BOOKING DIBATALKAN";
+    // Mengambil alasan pembatalan (Silakan sesuaikan kolomnya, di sini dicontohkan pakai 'reason_rejected' atau 'catatan')
+    var alasanCancel = rej['reason_rejected'] ?? rej['catatan'];
+    if (alasanCancel != null && alasanCancel.toString().isNotEmpty) {
+      reasonText += " - $alasanCancel";
+    }
+  } 
+  else {
+    // Jika ditolak via konfirmasi penawaran awal oleh vendor (status == 'rejected' atau lainnya)
+    reasonText = "VENDOR MENOLAK ORDER";
+    if (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) {
+      reasonText += " - ${rej['reason_rejected']}";
+    }
+  }
+
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Text("• $vendorName", style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            "• $vendorName: $reasonText",
+                            style: const TextStyle(fontSize: 11, color: Colors.black87, height: 1.3),
+                          ),
                         );
                       }).toList(),
                     ],
@@ -562,7 +631,7 @@ Padding(
           ),
           ...dos.map((doItem) {
             final List doDetails = doItem['do_details'] ?? [];
-            final String soNum = data['so']?.toString() ?? "-";
+            final String soNum = doItem['so_origin']?.toString() ?? "-";
             final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 
             return Padding(
@@ -926,10 +995,14 @@ Future<void> _processToDatabase() async {
     // }
     // 1. Gunakan NIK dari vendor_transportasi (sesuai tabel baru)
     final String? nikVendor = _selectedVendor!['nik']; // Ambil NIK vendor
+final int? idVendorDetails = _selectedVendor!['id'];
 
-    if (nikVendor == null || nikVendor.isEmpty) {
-      throw "Vendor ini tidak memiliki NIK yang valid di database.";
-    }
+    // if (nikVendor == null || nikVendor.isEmpty) {
+    //   throw "Vendor ini tidak memiliki NIK yang valid di database.";
+    // }
+    if (idVendorDetails == null) {
+        throw "Vendor ini tidak memiliki ID valid di database.";
+      }
 
 //     final groupId = _shippingData!['group_id'];
 // final String vendorName = _selectedVendor!['vendor_name'] ?? "Vendor";
@@ -958,7 +1031,8 @@ Future<void> _processToDatabase() async {
     // A. Masukkan data ke shipping_assignments
     final List<Map<String, dynamic>> assignmentData = idsToAssign.map((sid) => {
       'shipping_id': sid,
-      'nik': nikVendor,
+      'nik': nikVendor, // Simpan NIK vendor untuk referensi
+      'id_vendor_details': idVendorDetails,
       'status_assignment': 'offered', // Status awal sesuai schema Anda
       // 'assigned_at': DateTime.now().toIso8601String(),
       'assigned_at': DateTime.now().toIso8601String(),

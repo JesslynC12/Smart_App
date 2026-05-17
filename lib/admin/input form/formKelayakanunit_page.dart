@@ -464,38 +464,98 @@ Future<void> _fetchPlanningData() async {
           ? "GROUP_${req['group_id']}" 
           : "SINGLE_${req['shipping_id']}";
 
-      if (!groupedData.containsKey(key)) {
-        groupedData[key] = Map<String, dynamic>.from(item);
-        groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
-        groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
+      // if (!groupedData.containsKey(key)) {
+      //   groupedData[key] = Map<String, dynamic>.from(item);
+      //   groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
+      //   groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
         
-        // Inisialisasi rdd_origin
-        if (groupedData[key]['request']['delivery_order'] != null) {
-          for (var d in groupedData[key]['request']['delivery_order']) {
-            d['rdd_origin'] = req['rdd'];
-          }
-        }
-      } else {
-        // Jika sudah ada (Grup), tambahkan ID untuk keperluan update nanti
-        groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
-        groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
+      //   // Inisialisasi rdd_origin
+      //   if (groupedData[key]['request']['delivery_order'] != null) {
+      //     for (var d in groupedData[key]['request']['delivery_order']) {
+      //       d['rdd_origin'] = req['rdd'];
+      //     }
+      //   }
+      // } else {
+      //   // Jika sudah ada (Grup), tambahkan ID untuk keperluan update nanti
+      //   groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+      //   groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
 
-        // --- CEK DUPLIKASI DO SEBELUM MENGGABUNGKAN ---
-        List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
-        List newDOs = req['delivery_order'] ?? [];
+      //   // --- CEK DUPLIKASI DO SEBELUM MENGGABUNGKAN ---
+      //   List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
+      //   List newDOs = req['delivery_order'] ?? [];
 
-        for (var ndo in newDOs) {
-          // Hanya tambahkan jika do_number belum ada di list saat ini
-          bool isDuplicate = currentDOs.any((existing) => 
-            existing['do_number'] == ndo['do_number']);
+      //   for (var ndo in newDOs) {
+      //     // Hanya tambahkan jika do_number belum ada di list saat ini
+      //     bool isDuplicate = currentDOs.any((existing) => 
+      //       existing['do_number'] == ndo['do_number']);
           
-          if (!isDuplicate) {
-            ndo['rdd_origin'] = req['rdd'];
-            currentDOs.add(ndo);
-          }
-        }
-        groupedData[key]['request']['delivery_order'] = currentDOs;
-      }
+      //     if (!isDuplicate) {
+      //       ndo['rdd_origin'] = req['rdd'];
+      //       currentDOs.add(ndo);
+      //     }
+      //   }
+      //   groupedData[key]['request']['delivery_order'] = currentDOs;
+      // }
+      if (!groupedData.containsKey(key)) {
+  groupedData[key] = Map<String, dynamic>.from(item);
+
+  groupedData[key]['grouped_assignment_ids'] = [
+    item['id_assignment']
+  ];
+
+  groupedData[key]['grouped_shipping_ids'] = [
+    req['shipping_id']
+  ];
+
+  // Pastikan delivery_order tidak null
+  List currentDOs =
+      List.from(groupedData[key]['request']['delivery_order'] ?? []);
+
+  // Tambahkan informasi asal shipment
+  for (var d in currentDOs) {
+    d['rdd_origin'] = req['rdd'];
+    d['parent_so'] = req['so'];
+    d['parent_shipping_id'] = req['shipping_id'];
+  }
+
+  groupedData[key]['request']['delivery_order'] = currentDOs;
+} else {
+  // Tambahkan semua assignment & shipping ID grup
+  groupedData[key]['grouped_assignment_ids']
+      .add(item['id_assignment']);
+
+  groupedData[key]['grouped_shipping_ids']
+      .add(req['shipping_id']);
+
+  // Existing DO dalam card grup
+  List currentDOs =
+      groupedData[key]['request']['delivery_order'] ?? [];
+
+  // DO baru dari shipment lain
+  List newDOs = req['delivery_order'] ?? [];
+
+  for (var ndo in newDOs) {
+    // Tambahkan metadata asal shipment
+    ndo['rdd_origin'] = req['rdd'];
+    ndo['parent_so'] = req['so'];
+    ndo['parent_shipping_id'] = req['shipping_id'];
+
+    // CEK DUPLIKAT BERDASARKAN
+    // DO NUMBER + SHIPPING ID
+    bool isDuplicate = currentDOs.any(
+      (existing) =>
+          existing['do_number'] == ndo['do_number'] &&
+          existing['parent_shipping_id'] == req['shipping_id'],
+    );
+
+    // Tambahkan jika belum ada
+    if (!isDuplicate) {
+      currentDOs.add(ndo);
+    }
+  }
+
+  groupedData[key]['request']['delivery_order'] = currentDOs;
+}
     }
 
     setState(() {
@@ -891,7 +951,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                                Text("SO: ${request['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                Text( "SO: ${doItem['parent_so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                 Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
                                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                               ],
