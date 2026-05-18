@@ -17,7 +17,7 @@ class _SecurityPosKeluarState extends State<SecurityPosKeluarState> {
   final supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<dynamic> _planningList = [];
-  //String? _currentUser;
+String? _currentUserName;
 final TextEditingController _noSuratJalanController = TextEditingController();
 bool _isSegelSmart = false;
 bool _isSegelPelayaran = false;
@@ -115,6 +115,29 @@ void dispose() {
       ),
     );
   }
+
+  
+Future<void> _getProfileName() async {
+  try {
+    final user = supabase.auth.currentUser;
+    if (user != null) {
+      final data = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+      
+      if (mounted && data['name'] != null) {
+        setState(() {
+          _currentUserName = data['name'];
+        });
+      }
+    }
+  } catch (e) {
+    debugPrint("Error ambil profil: $e");
+  }
+}
+
 Future<void> _submitData(Map<String, dynamic> item, String actionType) async {
   try {
     // 1. Validasi
@@ -139,6 +162,7 @@ Future<void> _submitData(Map<String, dynamic> item, String actionType) async {
       'is_segel_pelayaran': _isSegelPelayaran,
       'keluar_at': DateTime.now().toIso8601String(),
       'status_assignment': 'keluar', 
+      'createdkeluar_by': _currentUserName ?? 'admin',
     }).inFilter('id_assignment', assignmentIds);
 
     // 3. Update Request Utama ke status 'keluar'
@@ -776,10 +800,10 @@ Future<void> _fetchPlanningData() async {
             )
           )
         ''')
-        .eq('status_assignment', 'loading')
+        .eq('status_assignment', 'weighbridge')
         .not('jam_booking', 'is', null)
         .eq('request.stuffing_date', formattedDate)
-        .neq('request.status', 'weighbridge')
+        .neq('request.status', 'keluar')
         .order('jam_booking', ascending: true);
 
     Map<String, dynamic> groupedData = {};

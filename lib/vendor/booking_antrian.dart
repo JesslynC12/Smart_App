@@ -30,7 +30,7 @@ class _ScheduleSelectionPageState extends State<ScheduleSelectionPage> {
   bool _isSaving = false;
   Map<String, dynamic>? _shippingData;
   String? _selectedTime;
-
+final TextEditingController _otherReasonController = TextEditingController(); // Tambahkan ini
   // final List<String> _timeSlots = [
   //   '08:00', '09:00', '10:00', '11:00', 
   //   '13:00', '14:00', '15:00', '16:00'
@@ -65,7 +65,9 @@ Map<String, int> _bookedCounts = {};
   void initState() {
     super.initState();
     _loadInitialData(); // Memuat detail SO/DO saat halaman dibuka
+    
   }
+
 
 // Fungsi baru untuk menjalankan urutan muat data yang benar
   Future<void> _loadInitialData() async {
@@ -1121,34 +1123,63 @@ Future<void> _checkAvailability() async {
 void _showReasonDialog() {
   // Reset pilihan setiap kali dialog dibuka
   _tempSelectedReason = null;
+  _otherReasonController.clear(); 
 
   showDialog(
     context: context,
     builder: (context) {
-      return StatefulBuilder( // Agar UI di dalam dialog bisa update saat radio diklik
+      return StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
             title: const Text(
               "Pilih Alasan Reschedule",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: _rescheduleReasons.map((reason) {
-                return RadioListTile<String>(
-                  title: Text(reason, style: const TextStyle(fontSize: 14)),
-                  value: reason,
-                  groupValue: _tempSelectedReason,
-                  activeColor: Colors.red.shade700,
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (value) {
-                    setStateDialog(() {
-                      _tempSelectedReason = value;
-                    });
-                  },
-                );
-              }).toList(),
+            content: SingleChildScrollView( // Tambahkan scroll agar tidak overflow jika keyboard muncul
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ..._rescheduleReasons.map((reason) {
+                    return RadioListTile<String>(
+                      title: Text(reason, style: const TextStyle(fontSize: 14)),
+                      value: reason,
+                      groupValue: _tempSelectedReason,
+                      activeColor: Colors.red.shade700,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          _tempSelectedReason = value;
+                        });
+                      },
+                    );
+                  }).toList(),
+                  
+                  // TAMPILKAN FIELD JIKA PILIH 'Other'
+                  if (_tempSelectedReason == 'Other')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: TextField(
+                        controller: _otherReasonController,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: "Tulis alasan lainnya...",
+                          hintStyle: const TextStyle(fontSize: 13),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        maxLines: 2,
+                        onChanged: (val) {
+                          // Trigger build agar tombol SIMPAN aktif/nonaktif sesuai isi teks
+                          setStateDialog(() {});
+                        },
+                      ),
+                    ),
+                ],
+              ),
             ),
+          
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),

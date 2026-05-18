@@ -17,7 +17,7 @@ class _WeighbridgeState extends State<WeighbridgeState> {
   final supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<dynamic> _planningList = [];
-  //String? _currentUser;
+String? _currentUserName;
 
 // Variabel Filter Baru
   DateTime _selectedDate = DateTime.now();
@@ -35,7 +35,7 @@ String _statusSegel = ""; // "Terpasang" atau "Tidak Terpasang"
   @override
   void initState() {
     super.initState();
-  
+  _getProfileName();
     _fetchPlanningData();
 
   _channel = supabase
@@ -139,6 +139,7 @@ void dispose() {
       'status_segel': _statusSegel,
       'weighbridge_at': DateTime.now().toIso8601String(), // Timestamp pengerjaan WB
       'status_assignment': 'weighbridge', // Update status internal
+      'createdweighbridge_by': _currentUserName ?? 'admin',
     }).inFilter('id_assignment', assignmentIds);
 
     // 4. Update Status di Tabel Request Utama (untuk sinkronisasi ke modul lain)
@@ -190,6 +191,26 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
 //     }
 //   }
   
+Future<void> _getProfileName() async {
+  try {
+    final user = supabase.auth.currentUser;
+    if (user != null) {
+      final data = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+      
+      if (mounted && data['name'] != null) {
+        setState(() {
+          _currentUserName = data['name'];
+        });
+      }
+    }
+  } catch (e) {
+    debugPrint("Error ambil profil: $e");
+  }
+}
 //   void _navigateToForm(Map<String, dynamic> item, {String? lateReason}) {
 //   setState(() {
 //     _currentActiveContent = CheckInFormPage(

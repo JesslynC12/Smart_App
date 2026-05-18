@@ -188,13 +188,22 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
       final rejects = ship['shipping_assignments'] as List? ?? [];
       for (var r in rejects) {
         //if (r['status_assignment'] == 'rejected') {
-          if (r['status_assignment'] == 'rejected' || r['status_assignment'] == 'rejected unit' || 
-            r['status_assignment'] == 'cancel booking') {
+          // if (r['status_assignment'] == 'rejected' || r['status_assignment'] == 'rejected unit' || 
+          //   r['status_assignment'] == 'cancel booking') {
+          final String statusAss = r['status_assignment']?.toString().toLowerCase() ?? "";
+    
+    // Tambahkan 'no response' ke dalam daftar status yang dipantau
+    const failedStatuses = ['rejected', 'rejected unit', 'cancel booking', 'no response'];
+    if (failedStatuses.contains(statusAss)) {
+      // Gunakan ID Vendor Details + Status sebagai Key agar unik 
+      // namun tetap bisa menampilkan riwayat berbeda dari vendor yang sama
+      String vendorKey = "${r['id_vendor_details']}_$statusAss";
+      uniqueRejects[int.tryParse(vendorKey.split('_')[0]) ?? 0] = r;
           // String vendorName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
           // // Masukkan ke Map, jika nama sama maka akan tertimpa (menjadi unik)
           // uniqueRejects[vendorName] = r;
-          int vendorDetailsId = r['id_vendor_details'] ?? 0;
-            uniqueRejects[vendorDetailsId] = r;
+          // int vendorDetailsId = r['id_vendor_details'] ?? 0;
+          //   uniqueRejects[vendorDetailsId] = r;
         }
       }
     
@@ -590,6 +599,10 @@ Padding(
       reasonText += " - ${rej['catatan']}";
     }
   } 
+  else if (status == 'no response') {
+    // Pesan khusus No Response sesuai permintaan Anda
+    reasonText = "tidak merespon penugasan hingga batas waktu.";
+  }
   else if (status == 'cancel booking') {
     // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
     reasonText = "BOOKING DIBATALKAN";
@@ -610,8 +623,21 @@ Padding(
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text(
-                            "• $vendorName: $reasonText",
-                            style: const TextStyle(fontSize: 11, color: Colors.black87, height: 1.3),
+                            // "• $vendorName: $reasonText",
+                            // style: const TextStyle(fontSize: 11, color: Colors.black87, height: 1.3),
+                            status == 'no response' 
+        ? "• Vendor ($vendorName) $reasonText" 
+        : "• $vendorName: $reasonText",
+      style: TextStyle(
+        fontSize: 11, 
+        color: (status == 'rejected unit' || status == 'no response') 
+            ? Colors.red.shade900 
+            : Colors.black87, 
+        height: 1.3,
+        fontWeight: (status == 'rejected unit' || status == 'no response') 
+            ? FontWeight.bold 
+            : FontWeight.normal
+      ),
                           ),
                         );
                       }).toList(),

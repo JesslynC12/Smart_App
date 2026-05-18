@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/auth/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 // import 'package:project_app/admin/main_drawer.dart';
 // import 'package:project_app/admin/display/listDO_page.dart' show ListDOPage;
 // import 'package:project_app/admin/display/listDOdetailsGBJ_page.dart';
@@ -17,7 +19,10 @@ import 'package:flutter/material.dart';
 // import 'package:project_app/dynamic_tab_page.dart';
 // Gunakan alias 'model' untuk menghindari konflik dengan class User milik package Supabase
 // import '../auth/auth_service.dart' as model;
-import '../auth/auth_service.dart'; 
+// import '../auth/auth_service.dart'; 
+// import 'package:supabase_flutter/supabase_flutter.dart';
+import '../auth/auth_service.dart' as auth_model; // Gunakan alias 'auth_model'
+//import 'package:supabase_flutter/supabase_flutter.dart' as supabase; // Alias untuk supabase
 import '../login.dart';
 // import 'package:project_app/admin/master%20data/manage_user.dart'; 
 
@@ -30,7 +35,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  User? currentUser;
+  auth_model.User? currentUser;
   bool isLoading = true;
 
   @override
@@ -49,6 +54,32 @@ class _HomePageState extends State<HomePage> {
         if (user == null) {
           _handleSessionExpired();
         } else {
+          // TRIGER PEMBERSIHAN OTOMATIS EXPIRED ORDER DI SINI
+          // =========================================================================
+         final supabase = Supabase.instance.client;
+          
+          // 1. Ambil data orderan yang sudah lewat 2 jam dan ubah menjadi 'no response'
+          final expiredAssignments = await supabase
+              .from('shipping_assignments')
+              .update({
+                'status_assignment': 'no response',
+                'responded_at': DateTime.now().toIso8601String(),
+              })
+              .eq('status_assignment', 'offered')
+              .lt('assigned_at', DateTime.now().subtract(const Duration(hours: 2)).toIso8601String())
+              .select('shipping_id');
+
+          // 2. Jika ada yang expired, kembalikan status request-nya agar bisa diassign ulang
+          if (expiredAssignments != null && (expiredAssignments as List).isNotEmpty) {
+            List<int> expiredShippingIds = List<int>.from(expiredAssignments.map((e) => e['shipping_id']));
+            
+            await supabase
+                .from('shipping_request')
+                .update({'status': 'waiting assign vendor delivery'})
+                .inFilter('shipping_id', expiredShippingIds);
+                
+            debugPrint("Berhasil membersihkan ${expiredShippingIds.length} orderan expired secara otomatis.");
+          }
           setState(() {
             currentUser = user;
             isLoading = false;

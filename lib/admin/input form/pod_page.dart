@@ -25,6 +25,7 @@ class _PODReturnPageState extends State<PODReturnPage> {
   DateTime? _tanggalSJKembali;
   DateTime? _tanggalTibaCustomer;
   //DateTime? _tanggalPODAktual;
+  int podAktual = 0;
 
 // Tempat menyimpan daftar hari libur hasil download dari internet
   List<DateTime> _daftarLiburNasional = [];
@@ -324,6 +325,21 @@ int _calculatePODActual() {
 
     setState(() => _isSaving = true);
     try {
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser == null) {
+        _showSnackBar("Sesi Anda telah berakhir, silakan login ulang.", Colors.red);
+        return;
+      }
+
+      // 2. Ambil data 'name' dari tabel 'profiles' berdasarkan UUID user
+      final profileRes = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+      // Gunakan nama dari profile. Jika kosong/null, gunakan email sebagai cadangan
+      final String activeUserName = profileRes?['name'] ?? currentUser.email ?? 'System POD';
       final List<int> shipIds = List<int>.from(_foundData!['all_shipping_ids']);
 
       await supabase.from('shipping_assignments').update({
@@ -333,7 +349,21 @@ int _calculatePODActual() {
         'lead_time_aktual': _calculateLeadTime(),
         'pod_return_aktual': _calculatePODActual(),
         'status_assignment': 'completed',
+        'createdpod_at': DateTime.now().toIso8601String(),
+        'createdpod_by': activeUserName,
       }).inFilter('shipping_id', shipIds);
+
+// B. Update tabel shipping_request menjadi 'completed' (TAMBAHAN BARU)
+      await supabase.from('shipping_request').update({
+        'status': 'completed',
+      }).inFilter('shipping_id', shipIds);
+// Menggunakan DateFormat untuk mengirim tanggal saja ke database
+// await supabase.from('shipping_assignments').update({
+//   'tanggal_bongkar': DateFormat('yyyy-MM-dd').format(_tanggalBongkar!),
+//   'sj_kembali': DateFormat('yyyy-MM-dd').format(_tanggalSJKembali!),
+//   'tanggal_tiba_customer': DateFormat('yyyy-MM-dd').format(_tanggalTibaCustomer!),
+//   // ...
+// });
 
       _showSnackBar("Data POD Berhasil Disimpan", Colors.green);
       setState(() {

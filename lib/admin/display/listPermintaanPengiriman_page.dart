@@ -143,7 +143,7 @@ Future<void> _fetchWarehouse() async {
           //.eq('shipping_assignments.status_assignment', 'rejected'); // Ambil yang pernah direject
           //.or('status_assignment.eq.rejected,decision_for_unit.eq.DITOLAK', referencedTable: 'shipping_assignments');
           .or(
-          'status_assignment.eq.rejected,status_assignment.eq.rejected unit,status_assignment.eq.cancel booking', 
+          'status_assignment.eq.rejected,status_assignment.eq.rejected unit,status_assignment.eq.cancel booking,status_assignment.eq.no response', 
           referencedTable: 'shipping_assignments'
         );
 // .filter('vendor_id', 'is', null);
@@ -188,17 +188,35 @@ Future<void> _fetchWarehouse() async {
 final List assignments = originalRow['shipping_assignments'] as List? ?? [];
 
       for (var a in assignments) {
-        if (a['status_assignment'] == 'rejected'||a['status_assignment'] == 'rejected unit' || a['status_assignment'] == 'cancel booking') {
+        final String statusAss = a['status_assignment']?.toString().toLowerCase() ?? "";
+  
+  // Daftar status yang dianggap sebagai riwayat kegagalan
+  const failedStatuses = ['rejected', 'rejected unit', 'cancel booking', 'no response'];
+
+  if (failedStatuses.contains(statusAss)) {
+        //if (a['status_assignment'] == 'rejected'||a['status_assignment'] == 'rejected unit' || a['status_assignment'] == 'cancel booking') {
           // Gunakan nama vendor sebagai KEY agar otomatis menimpa jika namanya sama (menjadi unik)
           String vName = a['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
           // Menandai tipe penolakan agar UI bisa menyesuaikan warna/teks
           //a['reject_type'] = (a['decision_for_unit'] == 'DITOLAK') ? 'INSPEKSI' : 'KONFIRMASI';
           //a['reject_type'] = (a['status_assignment'] == 'rejected unit') ? 'INSPEKSI' : 'KONFIRMASI';
           // Tentukan tipe reject untuk kebutuhan warna UI
-    if (a['status_assignment'] == 'rejected unit') {
+    // if (a['status_assignment'] == 'rejected unit') {
+    //   a['reject_type'] = 'INSPEKSI';
+    // } else if (a['status_assignment'] == 'cancel booking') {
+    //   a['reject_type'] = 'CANCEL'; // Tipe baru untuk cancel
+    // } else if (a['status_assignment'] == 'no response') {
+    //   a['reject_type'] = 'NO RESPONSE'; // Tipe baru untuk no response
+    // } else {
+    //   a['reject_type'] = 'KONFIRMASI';
+    // }
+    // Tentukan tipe reject untuk warna UI
+    if (statusAss == 'rejected unit') {
       a['reject_type'] = 'INSPEKSI';
-    } else if (a['status_assignment'] == 'cancel booking') {
-      a['reject_type'] = 'CANCEL'; // Tipe baru untuk cancel
+    } else if (statusAss == 'no response') {
+      a['reject_type'] = 'EXPIRED'; // Tipe baru untuk no response
+    } else if (statusAss == 'cancel booking') {
+      a['reject_type'] = 'CANCEL';
     } else {
       a['reject_type'] = 'KONFIRMASI';
     }
@@ -900,6 +918,10 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
       typeText += " - ${rej['catatan']}";
     }
   } 
+  else if (status == 'no response') {
+    // Pesan khusus untuk No Response sesuai permintaan Anda
+    typeText = "tidak merespon penugasan hingga batas waktu.";
+  }
   else if (status == 'cancel booking') {
     // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
    typeText = "BOOKING DIBATALKAN";
@@ -919,11 +941,17 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
           return Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
-              "• $vendorName: $typeText",
-              style: TextStyle(
-                fontSize: 10, 
-                color: rej['reject_type'] == 'INSPEKSI' ? Colors.red.shade800 : Colors.black87,
-                fontWeight: rej['reject_type'] == 'INSPEKSI' ? FontWeight.bold : FontWeight.normal
+              status == 'no response' 
+          ? "• Vendor ($vendorName) $typeText" // Format khusus No Response
+          : "• $vendorName: $typeText",        // Format standar lainnya
+      style: TextStyle(
+        fontSize: 10, 
+        color: (status == 'rejected unit' || status == 'no response') 
+            ? Colors.red.shade800 
+            : Colors.black87,
+        fontWeight: (status == 'rejected unit' || status == 'no response') 
+            ? FontWeight.bold 
+            : FontWeight.normal
               ),
             ),
           );

@@ -212,13 +212,13 @@ Future<void> _importMassalTigaTabel() async {
         'status': 'waiting approval',
         'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
         'stuffing_date': stuffing, // Sudah format ISO
-        'created_by': userDisplayName ?? 'System Import',
+        'createdDO_by': userDisplayName ?? 'System Import',
         // 'group_id' sengaja tidak diisi agar jadi single data
       }).select().single();
 
       final int newShipId = shipRes['shipping_id'];
 
-      // B. Insert ke DELIVERY_ORDER
+      // B. Insert ke DELIVERY_ORDERr
       final doRes = await supabase.from('delivery_order').insert({
         'shipping_id': newShipId,
         'do_number': doNumber,
