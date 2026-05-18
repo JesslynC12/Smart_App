@@ -718,7 +718,7 @@ Widget _buildSafetyFactor() {
           title: "GANJAL RODA",
           icon: Icons.stop_circle_outlined,
           content: _buildModernRadioGroup(
-            ['Standard', 'Tidak Standard', 'Tidak Ada'], 
+            ['1 Standard','2 Standard', '1 Tidak Standard', '2 Tidak Standard','Tidak Ada'], 
             _ganjalRoda, 
             (v) => setState(() => _ganjalRoda = v)
           ),

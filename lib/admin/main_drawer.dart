@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
+import 'package:project_app/admin/display/penilaianVendor_page.dart';
 import 'package:project_app/admin/display/slotantrian_page.dart';
 import 'package:project_app/admin/input%20form/Formppic.dart';
 import 'package:project_app/admin/input%20form/Listloading_page.dart';
@@ -195,7 +196,11 @@ class MainDrawer extends StatelessWidget {
               //   DynamicTabPage.of(context)?.openTab("List Complain", const ComplainPage());
               // }),
             _menuItem(context, Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
-            
+            if (_hasAccess('penilaianVendor'))
+               _menuItem(context, Icons.star_rate_rounded, "Penilaian Vendor", Colors.amber.shade800, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Penilaian Vendor", VendorEvaluationPage());
+              }),
              if (_hasAccess('ListPPIC'))
               _menuItem(context, Icons.padding_outlined, "List PPIC", Colors.orange, onTap: () {
                 Navigator.pop(context);

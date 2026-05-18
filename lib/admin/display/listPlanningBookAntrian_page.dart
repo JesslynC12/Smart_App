@@ -30,6 +30,9 @@ RealtimeChannel? _assignmentsChannel;
   RealtimeChannel? _requestsChannel;
   RealtimeChannel? _loadingChannel;
 
+final TextEditingController _otherReasonController = TextEditingController();
+String? _tempCancelReason;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +105,7 @@ RealtimeChannel? _assignmentsChannel;
 //   _channel?.unsubscribe();
 //   super.dispose();
 // }
+
 
 @override
   void dispose() {
@@ -189,6 +193,14 @@ RealtimeChannel? _assignmentsChannel;
 //     debugPrint("Error Fetch Planning: $e");
 //   }
 // }
+final List<String> _rescheduleReasons = [
+  'Tidak Ada Supir',
+    'Tidak Ada Unit',
+    'Unit Rusak',
+    'Jalan Macet',
+    'Dokumen Expired',
+    'Other'
+];
 
 Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
   try {
@@ -2260,7 +2272,10 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
                   } else if (hStatus == 'rejected') {
                     msg = "Penugasan ditolak oleh Vendor $hVendor karena $hReason.";
                   } else if (hStatus == 'cancel booking') {
-                    msg = "Booking dibatalkan oleh Vendor ($hVendor) karena $hReason.";
+                    //msg = "Booking dibatalkan oleh Vendor ($hVendor) karena $hReason.";
+                    String r = item['cancelled_reason'] ?? log['reason'] ?? 'Tanpa alasan';
+  String by = item['cancelled_by'] ?? 'System';
+  msg = "Booking dibatalkan oleh $by karena $r.";
                   } else if (hStatus == 'rejected unit') {
                     msg = "Unit Feasibility Check ditolak untuk Vendor $hVendor.";
                   }
@@ -2671,31 +2686,96 @@ void _openEditTab(Map<String, dynamic> item) {
 // }
 // 2. Fungsi Konfirmasi Pembatalan oleh Admin
 void _confirmCancelBooking(Map<String, dynamic> item) {
+  _tempCancelReason = null;
+  _otherReasonController.clear();
   showDialog(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Batalkan Booking?"),
-      content: const Text("Tindakan ini akan menghapus jam booking dan mengembalikan status penugasan ke 'waiting assign vendor'."),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEMBALI")),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          onPressed: () async {
-            Navigator.pop(context);
-            await _executeCancelBooking(item);
-          },
-          child: const Text("YA, BATALKAN", style: TextStyle(color: Colors.white)),
+    builder: (context) => StatefulBuilder(
+    // builder: (context) => AlertDialog(
+//       title: const Text("Batalkan Booking?"),
+//       content: const Text("Tindakan ini akan menghapus jam booking dan mengembalikan status penugasan ke 'waiting assign vendor'."),
+//       actions: [
+//         TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEMBALI")),
+//         ElevatedButton(
+//           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//           onPressed: () async {
+//             Navigator.pop(context);
+//             await _executeCancelBooking(item);
+//           },
+//           child: const Text("YA, BATALKAN", style: TextStyle(color: Colors.white)),
+//         ),
+//       ],
+//     ),
+//   );
+// }
+builder: (context, setStateDialog) => AlertDialog(
+        title: const Text("Alasan Pembatalan", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ..._rescheduleReasons.map((reason) => RadioListTile<String>(
+                title: Text(reason, style: const TextStyle(fontSize: 13)),
+                value: reason,
+                groupValue: _tempCancelReason,
+                activeColor: Colors.red,
+                onChanged: (val) => setStateDialog(() => _tempCancelReason = val),
+              )).toList(),
+              if (_tempCancelReason == 'Other')
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: TextField(
+                    controller: _otherReasonController,
+                    decoration: InputDecoration(
+                      hintText: "Tulis alasan pembatalan...",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                    ),
+                    maxLines: 2,
+                  ),
+                ),
+            ],
+          ),
         ),
-      ],
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: _tempCancelReason == null ? null : () async {
+              String finalReason = _tempCancelReason == 'Other' 
+                  ? _otherReasonController.text.trim() 
+                  : _tempCancelReason!;
+              
+              if (finalReason.isEmpty) {
+                _showSnackBar("Alasan tidak boleh kosong!", Colors.orange);
+                return;
+              }
+
+              Navigator.pop(context); // Tutup dialog alasan
+              await _executeCancelBooking(item, finalReason);
+            },
+            child: const Text("KONFIRMASI BATAL", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     ),
   );
 }
 
 // 3. Logika Eksekusi Pembatalan ke Database
-Future<void> _executeCancelBooking(Map<String, dynamic> item) async {
+Future<void> _executeCancelBooking(Map<String, dynamic> item,String reason) async {
   try {
     setState(() => _isLoading = true);
     
+    // Ambil Nama dari Profile (cancelled_by)
+    final currentUser = supabase.auth.currentUser;
+    final profileRes = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', currentUser?.id ?? '')
+        .maybeSingle();
+
+        final String activeUserName = profileRes?['name'] ?? currentUser?.email ?? 'Admin';
     // Ambil semua ID jika ini adalah grup
     final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
     final List<int> shippingIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['request']['shipping_id']]);
@@ -2705,6 +2785,8 @@ Future<void> _executeCancelBooking(Map<String, dynamic> item) async {
       'status_assignment': 'cancel booking',
       'jam_booking': null,
       'cancelled_at': DateTime.now().toIso8601String(),
+      'cancelled_by': activeUserName, // Simpan Nama Pembatal
+      'cancelled_reason': reason,    // Simpan Alasan Pembatalan
     }).inFilter('id_assignment', assignmentIds);
 
     // Update Request: Kembalikan ke tahap pemilihan vendor
