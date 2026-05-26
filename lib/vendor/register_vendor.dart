@@ -172,9 +172,9 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                       validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
                     ),
                     _customTextField(
-                      label: 'Email Perusahaan',
+                      label: 'Email',
                       controller: emailController,
-                      hint: 'email@perusahaan.com',
+                      hint: 'email@gmail.com',
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
                       validator: (v) =>

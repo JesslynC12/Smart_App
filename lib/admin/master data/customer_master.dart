@@ -18,7 +18,7 @@ class CustomerPaginatedPage extends StatefulWidget {
 class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
   final supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
-
+final GlobalKey<PaginatedDataTableState> _tableKey = GlobalKey<PaginatedDataTableState>();
   List<Map<String, dynamic>> _customers = [];
   bool _isLoading = true;
   String _searchQuery = "";
@@ -37,7 +37,10 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
 
   // --- REFRESH / FETCH DATA ---
   Future<void> _fetchData() async {
-  if (!mounted) return;
+  int? currentRowIndex;
+  // if (_tableKey.currentState != null) {
+  //   currentRowIndex = _tableKey.currentState!.pageRowIndex;
+  // }
   setState(() => _isLoading = true);
 
   try {
@@ -64,6 +67,18 @@ class _CustomerPaginatedPageState extends State<CustomerPaginatedPage> {
         _customers = List<Map<String, dynamic>>.from(data);
         _isLoading = false;
       });
+      // 2. Kembalikan ke posisi halaman sebelumnya
+      if (currentRowIndex != null && _customers.isNotEmpty) {
+        // Jika baris yang dihapus adalah baris terakhir di data, pastikan index tidak out of bounds
+        if (currentRowIndex >= _customers.length) {
+          currentRowIndex = (_customers.length - 1).clamp(0, double.infinity).toInt();
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _tableKey.currentState?.pageTo(currentRowIndex!);
+        });
+      }
+    
     }
   } catch (e) {
     debugPrint("Error Fetch: $e");
@@ -433,9 +448,15 @@ Future<void> _importCustomerFromExcel() async {
 //   }
 // }
 
+bool _isExporting = false;
 Future<void> _exportCustomerToExcel() async {
+  if (_isExporting) return;
+
   try {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isExporting = true;
+    });
 
     // 🔥 1. AMBIL SEMUA DATA DARI DATABASE (NO FILTER)
     final data = await supabase
@@ -496,11 +517,14 @@ Future<void> _exportCustomerToExcel() async {
     }
 
     // 🔥 5. SAVE FILE
-    var fileBytes = excel.save();
+    //var fileBytes = excel.save();
     String fileName =
         "Master_Customer_${DateTime.now().millisecondsSinceEpoch}.xlsx";
 
     if (kIsWeb) {
+      final fileBytes = excel.encode(); 
+      
+      if (fileBytes != null) {
       final content = html.Blob(
         [fileBytes],
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -513,30 +537,29 @@ Future<void> _exportCustomerToExcel() async {
         ..click();
 
       html.Url.revokeObjectUrl(url);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Download dimulai..."),
-          backgroundColor: Colors.green,
-        ),
-      );
+      }
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   const SnackBar(
+      //     content: Text("Download dimulai..."),
+      //     backgroundColor: Colors.green,
+      //   ),
+      // );
     } else {
+      final fileBytes = excel.save();
       final directory = await getApplicationDocumentsDirectory();
       String filePath = '${directory.path}/$fileName';
 
       io.File(filePath)
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes!);
-
-      ScaffoldMessenger.of(context).showSnackBar(
+      await OpenFile.open(filePath);
+    }
+     ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("File berhasil disimpan"),
           backgroundColor: Colors.green,
         ),
       );
-
-      await OpenFile.open(filePath);
-    }
   } catch (e) {
     debugPrint("Export Error: $e");
 
@@ -547,7 +570,12 @@ Future<void> _exportCustomerToExcel() async {
       ),
     );
   } finally {
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _isExporting = false;
+      });
+    }
   }
 }
 
@@ -880,23 +908,34 @@ Future<void> _exportCustomerToExcel() async {
                               decoration: InputDecoration(
                                 labelText: "Cari Nama Customer...",
                                 prefixIcon: const Icon(Icons.search),
-                                suffixIcon: value.text.isNotEmpty
+                                // suffixIcon: value.text.isNotEmpty
+                                suffixIcon: _searchController.text.isNotEmpty
                                     ? IconButton(
                                         icon: const Icon(Icons.clear),
                                         onPressed: () {
-                                          _searchController.clear();
-                                        //   _searchQuery = "";
-                                        //   _fetchData();
-                                        // },
-                                        setState(() {
-    _searchQuery = ""; // Reset query
-  });
-  _fetchData(); // Ambil data awal lagi
-},
+//                                           _searchController.clear();
+//                                         //   _searchQuery = "";
+//                                         //   _fetchData();
+//                                         // },
+//                                         setState(() {
+//     _searchQuery = ""; // Reset query
+//   });
+//   _fetchData(); // Ambil data awal lagi
+// },
+setState(() {
+                _searchController.clear(); // Hapus teks di controller
+                _searchQuery = "";         // Reset query pencarian
+              });
+              _fetchData();
+                                        },
                                       )
                                     : null,
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                               ),
+                              onChanged: (val) {
+    // Memanggil setState agar suffixIcon diupdate saat user mengetik
+    setState(() {});
+  },
                               onSubmitted: (val) {
                                 _searchQuery = val;
                                 _fetchData();
@@ -945,6 +984,7 @@ Future<void> _exportCustomerToExcel() async {
                         ),
                       ),
                       child: PaginatedDataTable(
+                        key: _tableKey, 
                         columnSpacing: 12,
                         rowsPerPage: 10,
                         columns: const [

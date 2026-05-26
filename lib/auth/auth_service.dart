@@ -39,10 +39,19 @@ bool hasPermission(String permissionName) {
 
   factory User.fromJson(Map<String, dynamic> json) {
     List<String> privs = [];
-    //if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
-      if (json['profile_privileges'] != null) {
-      for (var item in json['profile_privileges']) {
-        if (item['privileges'] != null) {
+    // //if (json['profile_privileges'] != null && json['profile_privileges'] is List) {
+    //   if (json['profile_privileges'] != null) {
+    //   for (var item in json['profile_privileges']) {
+    //     if (item['privileges'] != null) {
+    //       privs.add(item['privileges']['name'].toString());
+    //     }
+    //   }
+    // }
+    if (json['profile_privileges'] != null) {
+      final List<dynamic> relationList = json['profile_privileges'];
+      for (var item in relationList) {
+        // Cek apakah data privilege dan namanya tersedia
+        if (item['privileges'] != null && item['privileges']['name'] != null) {
           privs.add(item['privileges']['name'].toString());
         }
       }
@@ -240,37 +249,104 @@ class AuthService {
 //   }
 
 
+// static Future<User?> login(String identifier, String password) async {
+//   try {
+//     String emailForAuth = identifier.trim();
+
+//     // 1. Cek jika input user bukan email (asumsi itu adalah NIK)
+//     if (!identifier.contains('@')) {
+//       // Kita cari di tabel profiles: 
+//       // Apakah identifier ada di kolom 'nik' OR kolom 'nik_vendor'
+//       final findUser = await _supabase
+//           .from('profiles')
+//           .select('email')
+//           .or('nik.eq.${identifier.trim()}, nik_vendor.eq.${identifier.trim()}')
+//           .maybeSingle();
+
+//       if (findUser == null) {
+//         throw Exception('NIK tidak terdaftar.');
+//       }
+      
+//       // Jika ketemu, ambil email terkait untuk proses signIn auth
+//       emailForAuth = findUser['email'];
+//     }
+
+//     // 2. Proses Sign In menggunakan email yang ditemukan
+//     final response = await _supabase.auth.signInWithPassword(
+//       email: emailForAuth,
+//       password: password,
+//     );
+
+//     // 3. Validasi Akun setelah Login Sukses
+//     if (response.user != null) {
+//       final user = await getCurrentUser();
+//       if (user != null) {
+//         // Cek apakah akun aktif (Blokir Admin)
+//         if (!user.isActive) {
+//           await logout();
+//           throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
+//         }
+
+//         // Pengecekan khusus status Vendor
+//         final role = user.role?.toLowerCase();
+//         final status = user.status?.toLowerCase();
+
+//         // if (role == 'vendor' && status == 'pending') {
+//         //   await logout();
+//         //   throw Exception('Akun vendor Anda sedang menunggu verifikasi.');
+//         // }
+
+//         return user;
+//       }
+//     }
+//     return null;
+//   } on AuthException catch (e) {
+//     // Pesan error ramah user
+//     String message = e.message;
+//     if (message.contains("Invalid login credentials")) {
+//       message = "Password yang Anda masukkan salah.";
+//     }
+//     throw Exception(message);
+//   } catch (e) {
+//     throw Exception('Terjadi kesalahan: $e');
+//   }
+// }
 static Future<User?> login(String identifier, String password) async {
   try {
     String emailForAuth = identifier.trim();
 
-    // 1. Cek jika input user bukan email (asumsi itu adalah NIK)
+    // 1. Cek jika input user bukan email (asumsi itu adalah NIK atau NIK Vendor)
     if (!identifier.contains('@')) {
-      // Kita cari di tabel profiles: 
-      // Apakah identifier ada di kolom 'nik' OR kolom 'nik_vendor'
-      final findUser = await _supabase
+      final response = await _supabase
           .from('profiles')
           .select('email')
-          .or('nik.eq.${identifier.trim()}, nik_vendor.eq.${identifier.trim()}')
-          .maybeSingle();
+          .or('nik.eq.${identifier.trim()}, nik_vendor.eq.${identifier.trim()}');
 
-      if (findUser == null) {
+      // Pastikan data tidak null dan tidak kosong
+      final List<dynamic> findUserList = response ?? [];
+
+      if (findUserList.isEmpty) {
         throw Exception('NIK tidak terdaftar.');
       }
+
+      // Jika ditemukan lebih dari 1 akun (Biasanya pada NIK Vendor)
+      if (findUserList.length > 1) {
+        throw Exception('NIK ini terhubung ke beberapa akun (Vendor). Silakan gunakan Email untuk login.');
+      }
       
-      // Jika ketemu, ambil email terkait untuk proses signIn auth
-      emailForAuth = findUser['email'];
+      // Ambil email dari satu-satunya baris yang ditemukan
+      emailForAuth = findUserList[0]['email'];
     }
 
-    // 2. Proses Sign In menggunakan email yang ditemukan
-    final response = await _supabase.auth.signInWithPassword(
+    // 2. Proses Sign In ke Supabase Auth
+    final authResponse = await _supabase.auth.signInWithPassword(
       email: emailForAuth,
       password: password,
     );
 
-    // 3. Validasi Akun setelah Login Sukses
-    if (response.user != null) {
+    if (authResponse.user != null) {
       final user = await getCurrentUser();
+      
       if (user != null) {
         // Cek apakah akun aktif (Blokir Admin)
         if (!user.isActive) {
@@ -278,31 +354,26 @@ static Future<User?> login(String identifier, String password) async {
           throw Exception('Akun Anda telah dinonaktifkan oleh Admin.');
         }
 
-        // Pengecekan khusus status Vendor
-        final role = user.role?.toLowerCase();
-        final status = user.status?.toLowerCase();
-
-        // if (role == 'vendor' && status == 'pending') {
-        //   await logout();
-        //   throw Exception('Akun vendor Anda sedang menunggu verifikasi.');
-        // }
+       // Cek status khusus vendor (Jika diberlakukan sistem approval)
+          if (user.role?.toLowerCase() == 'vendor' && user.status?.toLowerCase() == 'pending') {
+             await logout();
+             throw Exception('Silahkan Verifikasi Email Anda.');
+          }
 
         return user;
       }
     }
     return null;
   } on AuthException catch (e) {
-    // Pesan error ramah user
     String message = e.message;
-    if (message.contains("Invalid login credentials")) {
-      message = "Password yang Anda masukkan salah.";
+    if (message.contains("Invalid login credentials")|| message.contains("Email not confirmed")){
+      message = "Email/Password salah atau email Anda belum terverifikasi.";
     }
     throw Exception(message);
   } catch (e) {
     throw Exception('Terjadi kesalahan: $e');
   }
 }
-
 
 
   // 2. USER MANAGEMENT (Menggunakan Edge Function)
@@ -526,7 +597,7 @@ try {
           .from('master_vendor')
           .select()
           .eq('nik', nikInput)
-          .eq('regist_code', registCodeInput)
+          .eq('regist_code', registCodeInput.trim().toUpperCase())
           .maybeSingle();
 
       if (vendorCheck == null) {
@@ -534,7 +605,8 @@ try {
       }
 
       // --- LANGKAH 2: Sign Up Auth ---
-      final res = await _supabase.auth.signUp(
+      //final res = await _supabase.auth.signUp(
+      await _supabase.auth.signUp(
         email: email,
         password: password,
         data: {
@@ -543,7 +615,7 @@ try {
         },
       );
 
-      if (res.user != null) {
+     // if (res.user != null) {
         // --- LANGKAH 3: Update Profile (Karena biasanya Trigger DB hanya insert dasar) ---
       //   await _supabase.from('profiles').update({
       //     'name': name,
@@ -554,17 +626,18 @@ try {
       //     'is_active': true,
       //   }).eq('id', res.user!.id);
       // }
-      await _supabase.from('profiles').upsert({
-          'id': res.user!.id,
-          'email': email,
-          'name': name,
-          'nik_vendor': nikInput,
-          'role': 'vendor',
-          //'status': 'pending', // Menunggu verifikasi admin
-          'status': 'verified',
-          'is_active': true,
-        });
-      }
+      // await _supabase.from('profiles').upsert({
+      //     'id': res.user!.id,
+      //     'email': email,
+      //     'name': name,
+      //     'nik': null, // NIK akun tidak wajib, bisa null
+      //     'nik_vendor': nikInput,
+      //     'role': 'vendor',
+      //     //'status': 'pending', // Menunggu verifikasi admin
+      //     'status': 'pending',
+      //     'is_active': true,
+      //   });
+      //}
     } on AuthException catch (e) {
       throw Exception(e.message);
     } catch (e) {

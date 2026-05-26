@@ -26,7 +26,7 @@ class _VendorRequestPageState extends State<VendorRequestPage> {
   // Filter States
   String _selectedFilterLoc = "SEMUA";
   DateTimeRange? _selectedDateRange;
-String _dateFilterType = "RDD"; // Default filter ke RDD
+String _dateFilterType = "STUFFING"; // Default filter ke RDD
 List<Map<String, dynamic>> _warehouseList = [];
 
   @override
@@ -136,7 +136,8 @@ Future<void> _fetchWarehouse() async {
             decision_for_unit,
             catatan,
             reason_rejected,
-            master_vendor(vendor_name)
+            cancelled_reason,
+             master_vendor(vendor_name)
           )
           ''').eq('status', 'waiting assign vendor delivery')
           //.eq('is_dedicated', 'dedicated') // Filter hanya yang DEDICATED
@@ -926,7 +927,7 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
     // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
    typeText = "BOOKING DIBATALKAN";
     // Mengambil alasan pembatalan (Silakan sesuaikan kolomnya, di sini dicontohkan pakai 'reason_rejected' atau 'catatan')
-    var alasanCancel = rej['reason_rejected'] ?? rej['catatan'];
+    var alasanCancel = rej['cancelled_reason'] ?? rej['catatan'];
     if (alasanCancel != null && alasanCancel.toString().isNotEmpty) {
       typeText += " - $alasanCancel";
     }

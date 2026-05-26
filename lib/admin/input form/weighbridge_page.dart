@@ -24,6 +24,8 @@ String? _currentUserName;
   String _dateFilterType = 'stuffing_date'; // Default: Shipping Date
   //final TextEditingController _searchController = TextEditingController();
 RealtimeChannel? _channel;
+RealtimeChannel? _assignmentsChannel;
+  RealtimeChannel? _requestsChannel;
 int? _expandedId; // Melacak ID yang sedang di-expand
 int? _selectedSLoc; // Untuk nilai dropdown di form
 List<dynamic> _warehouseList = []; // Pastikan Anda memanggil data warehouse di initState
@@ -31,33 +33,94 @@ final TextEditingController _noSegelController = TextEditingController();
 //final TextEditingController _noGanjalController = TextEditingController();
 String _statusSegel = ""; // "Terpasang" atau "Tidak Terpasang"
 //String _statusGanjal = ""; // "Pengambilan" atau "Pengembalian"
+final TextEditingController _searchController = TextEditingController();
+  List<dynamic> _filteredPlanningList = [];
 
-  @override
+ @override
   void initState() {
     super.initState();
-  _getProfileName();
-    _fetchPlanningData();
-
-  _channel = supabase
-      .channel('shipping_assignments_changes')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'shipping_assignments',
-        callback: (payload) async {
-          await _fetchPlanningData();
-        },
-      )
-      .subscribe();
-
+   _searchController.addListener(_filterDataBySearch);
+    _getProfileName();
+    // Memuat data awal dengan spinner loading
+    _fetchPlanningData(showGlobalLoading: true);
+    // Mengaktifkan sistem pendengar realtime
+    _initRealtimeStreams();
   }
 
 @override
-void dispose() {
-  _channel?.unsubscribe();
-  super.dispose();
-}
+  void dispose() {
+    // Menghapus semua channel realtime
+    _assignmentsChannel?.unsubscribe();
+    _requestsChannel?.unsubscribe();
+    if (_assignmentsChannel != null) supabase.removeChannel(_assignmentsChannel!);
+    if (_requestsChannel != null) supabase.removeChannel(_requestsChannel!);
+    
+    _noSegelController.dispose();
+     _searchController.dispose();
+    super.dispose();
+  }
+  
+  void _filterDataBySearch() {
+    String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      setState(() {
+        _filteredPlanningList = List.from(_planningList);
+      });
+      return;
+    }
 
+    setState(() {
+      _filteredPlanningList = _planningList.where((item) {
+        // Ambil data Vendor
+        final vendor = item['master_vendor'] ?? {};
+        final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
+        final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
+
+        // Ambil list DO dari request
+        final request = item['request'] ?? {};
+        final List dos = request['delivery_order'] as List? ?? [];
+        
+        // Cek apakah ada salah satu nomor DO yang cocok
+        bool matchDO = dos.any((doItem) {
+          final String doNumber = (doItem['do_number'] ?? '').toString().toLowerCase();
+          return doNumber.contains(query);
+        });
+
+        // Return true jika salah satu kondisi terpenuhi
+        return matchDO || vendorName.contains(query) || nikVendor.contains(query);
+      }).toList();
+    });
+  }
+void _initRealtimeStreams() {
+    // 1. Listen ke tabel shipping_assignments
+    _assignmentsChannel = supabase
+        .channel('weighbridge_assignments_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_assignments',
+          callback: (payload) async {
+            debugPrint("Realtime Update: Perubahan di Penugasan Terdeteksi");
+            // Refresh data diam-diam tanpa memunculkan loading spinner di tengah layar
+            await _fetchPlanningData(showGlobalLoading: false);
+          },
+        )
+        .subscribe();
+
+    // 2. Listen ke tabel shipping_request (Penting jika Admin membatalkan dari kantor)
+    _requestsChannel = supabase
+        .channel('weighbridge_requests_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_request',
+          callback: (payload) async {
+            debugPrint("Realtime Update: Perubahan di Request Terdeteksi");
+            await _fetchPlanningData(showGlobalLoading: false);
+          },
+        )
+        .subscribe();
+  }
 // // Fungsi untuk memproses Check-in
 // Future<void> _handleCheckIn(Map<String, dynamic> item) async {
 //   final request = item['request'] ?? {};
@@ -520,10 +583,50 @@ Future<void> _getProfileName() async {
 //     debugPrint("Error Fetch Planning: $e");
 //   }
 // }
+String _getCheckInTime(String? timeSlot) {
+  // 1. Cek keamanan awal: jika null, kosong, atau tidak mengandung pemisah " - "
+  if (timeSlot == null || timeSlot.isEmpty || timeSlot == "-" || !timeSlot.contains(" - ")) {
+    return "00:00 - 00:00";
+  }
 
-Future<void> _fetchPlanningData() async {
   try {
-    setState(() => _isLoading = true);
+    // 2. Pecah string (misal: "19:00 - 21:00")
+    List<String> parts = timeSlot.split(" - ");
+    if (parts.length < 2) return "00:00 - 00:00";
+
+    String startTimeStr = parts[0]; // "19:00"
+    String endTimeStr = parts[1];   // "21:00"
+
+    // 3. Ambil jam (handle jika split ":" gagal)
+    List<String> startSplit = startTimeStr.split(":");
+    List<String> endSplit = endTimeStr.split(":");
+    
+    if (startSplit.isEmpty || endSplit.isEmpty) return "00:00 - 00:00";
+
+    int startHour = int.parse(startSplit[0]);
+    int endHour = int.parse(endSplit[0]);
+
+    // 4. Kurangi 2 jam (dengan logika putaran 24 jam agar tidak negatif)
+    // Misal: jam 1 pagi dikurang 2 jam menjadi jam 23 malam
+    int newStart = (startHour - 2) < 0 ? (24 + (startHour - 2)) : (startHour - 2);
+    int newEnd = (endHour - 2) < 0 ? (24 + (endHour - 2)) : (endHour - 2);
+
+    // 5. Kembalikan format HH:00
+    String checkInStart = "${newStart.toString().padLeft(2, '0')}:00";
+    String checkInEnd = "${newEnd.toString().padLeft(2, '0')}:00";
+
+    return "$checkInStart - $checkInEnd";
+  } catch (e) {
+    // Jika ada eror parsing di tengah jalan, tampilkan default alih-alih crash
+    debugPrint("Error kalkulasi jam check-in: $e");
+    return "00:00 - 00:00";
+  }
+}
+Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
+  try {
+    if (showGlobalLoading) {
+        setState(() => _isLoading = true);
+      }
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
     
@@ -532,6 +635,12 @@ Future<void> _fetchPlanningData() async {
         .select('''
           *,
           master_vendor:nik (vendor_name), 
+           vendor_transportasi:id_vendor_details (
+        qcf,
+        city,
+        area,
+        type_unit
+      ),
           loading!id_assignment (
             loading_at,
             loading_by,
@@ -671,11 +780,13 @@ Future<void> _fetchPlanningData() async {
   groupedData[key]['request']['delivery_order'] = currentDOs;
 }
     }
-
+if (mounted) {
     setState(() {
       _planningList = groupedData.values.toList();
       _isLoading = false;
     });
+    _filterDataBySearch();
+}
   } catch (e) {
     setState(() => _isLoading = false);
     debugPrint("Error Fetch Planning: $e");
@@ -717,19 +828,34 @@ Future<void> _fetchPlanningData() async {
             child:  _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  onRefresh: _fetchPlanningData,
-                  child: _planningList.isEmpty
+                  // onRefresh: _fetchPlanningData,
+                  // child: _planningList.isEmpty
+                  //     ? _buildEmptyState()
+                  //     : ListView.builder(
+                  //         padding: const EdgeInsets.all(12),
+                  //         itemCount: _planningList.length,
+                  //         itemBuilder: (context, index) {
+                  //         final item = _planningList[index];
+                  //           final request = item['request'] ?? {};
+                  //           // Mengambil ID unik untuk toggle expand
+                  //           final int sid = request['group_id'] ?? request['shipping_id'] ?? 0;
+                  //           final bool isExpanded = _expandedId == sid;
+                  //             return _buildPlanningCard(item, sid, isExpanded);
+                  onRefresh: () => _fetchPlanningData(showGlobalLoading: false),
+                  // PERBAIKAN: Gunakan list terfilter untuk mendeteksi kondisi kosong
+                  child: _filteredPlanningList.isEmpty 
                       ? _buildEmptyState()
                       : ListView.builder(
                           padding: const EdgeInsets.all(12),
-                          itemCount: _planningList.length,
+                          itemCount: _filteredPlanningList.length, // PERBAIKAN: Gunakan length list terfilter
                           itemBuilder: (context, index) {
-                          final item = _planningList[index];
+                            // PERBAIKAN: Ambil data spesifik dari list terfilter
+                            final item = _filteredPlanningList[index]; 
                             final request = item['request'] ?? {};
-                            // Mengambil ID unik untuk toggle expand
                             final int sid = request['group_id'] ?? request['shipping_id'] ?? 0;
                             final bool isExpanded = _expandedId == sid;
-                              return _buildPlanningCard(item, sid, isExpanded);
+                            
+                            return _buildPlanningCard(item, sid, isExpanded);
                           },
                         ),
                 ),
@@ -842,6 +968,96 @@ Future<void> _fetchPlanningData() async {
 //     ),
 //   );
 // }
+
+// Widget _buildTopFilterBar() {
+//   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
+//                  DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+//   return Container(
+//     padding: const EdgeInsets.all(12),
+//     color: Colors.white,
+//     child: Row(
+//       children: [
+//         Expanded(
+//           flex: 4,
+//           child: Container(
+//             decoration: BoxDecoration(
+//               color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+//               borderRadius: BorderRadius.circular(10),
+//             ),
+//             child: InkWell(
+//               onTap: _selectSingleDate,
+//               child: Padding(
+//                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+//                 child: Row(
+//                   children: [
+//                     Icon(
+//                       Icons.calendar_today,
+//                       size: 16,
+//                       color: !isToday ? Colors.white : Colors.black87,
+//                     ),
+//                     const SizedBox(width: 12),
+//                     Text(
+//                       "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+//                       style: TextStyle(
+//                         fontSize: 12,
+//                         fontWeight: FontWeight.bold,
+//                         color: !isToday ? Colors.white : Colors.black87,
+//                       ),
+//                     ),
+//                     const Spacer(),
+//                     Icon(
+//                       Icons.arrow_drop_down,
+//                       color: !isToday ? Colors.white : Colors.black87,
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ),
+//           ),
+//         ),
+//         const SizedBox(width: 10),
+//          Expanded(
+//             flex: 5, // Proporsi lebar widget search
+//             child: Container(
+//               height: 44,
+//               decoration: BoxDecoration(
+//                 color: Colors.grey.shade100,
+//                 borderRadius: BorderRadius.circular(10),
+//                 border: Border.all(color: Colors.grey.shade300, width: 1),
+//               ),
+//               child: TextField(
+//                 controller: _searchController,
+//                 style: const TextStyle(fontSize: 12),
+//                 decoration: InputDecoration(
+//                   hintText: "Cari DO, Vendor, NIK...",
+//                   prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+//                   suffixIcon: _searchController.text.isNotEmpty
+//                       ? InkWell(
+//                           onTap: () => _searchController.clear(),
+//                           child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+//                         )
+//                       : null,
+//                   border: InputBorder.none,
+//                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
+//                 ),
+//               ),
+//             ),
+//           ),
+//         if (!isToday)
+//           IconButton(
+//             icon: const Icon(Icons.refresh, color: Colors.red),
+//             onPressed: () {
+//               setState(() {
+//                 _selectedDate = DateTime.now();
+//               });
+//               _fetchPlanningData();
+//             },
+//           ),
+//       ],
+//     ),
+//   );
+// }
 Widget _buildTopFilterBar() {
   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
                  DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -849,56 +1065,145 @@ Widget _buildTopFilterBar() {
   return Container(
     padding: const EdgeInsets.all(12),
     color: Colors.white,
-    child: Row(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: InkWell(
-              onTap: _selectSingleDate,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 16,
-                      color: !isToday ? Colors.white : Colors.black87,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        // Jika layar kecil (HP), gunakan susunan Vertikal (Column)
+        if (constraints.maxWidth < 600) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: InkWell(
+                  onTap: _selectSingleDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 16, color: !isToday ? Colors.white : Colors.black87),
+                            const SizedBox(width: 12),
+                            Text(
+                              "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isToday ? Colors.white : Colors.black87),
+                            ),
+                          ],
+                        ),
+                        Icon(Icons.arrow_drop_down, color: !isToday ? Colors.white : Colors.black87),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: !isToday ? Colors.white : Colors.black87,
-                      ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10), // Jarak antar filter di HP
+              Container(
+                height: 44,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: "Cari DO, Vendor, NIK...",
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? InkWell(
+                            onTap: () => _searchController.clear(),
+                            child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // Jika layar lebar (Laptop/Tablet), tetap gunakan Row (Horizontal)
+        return Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: InkWell(
+                  onTap: _selectSingleDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 16, color: !isToday ? Colors.white : Colors.black87),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isToday ? Colors.white : Colors.black87),
+                          ),
+                        ),
+                        Icon(Icons.arrow_drop_down, color: !isToday ? Colors.white : Colors.black87),
+                      ],
                     ),
-                    const Spacer(),
-                    Icon(
-                      Icons.arrow_drop_down,
-                      color: !isToday ? Colors.white : Colors.black87,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        if (!isToday)
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.red),
-            onPressed: () {
-              setState(() {
-                _selectedDate = DateTime.now();
-              });
-              _fetchPlanningData();
-            },
-          ),
-      ],
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 5,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: "Cari DO, Vendor, NIK...",
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? InkWell(
+                            onTap: () => _searchController.clear(),
+                            child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+            if (!isToday)
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.red),
+                onPressed: () {
+                  setState(() {
+                    _selectedDate = DateTime.now();
+                  });
+                  _fetchPlanningData();
+                },
+              ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -981,24 +1286,47 @@ final String checkerName = checkerData != null ? checkerData['checker_name'] : "
       children: [
         // Header (Jam & Label)
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+         child: Wrap(
+    spacing: 12, // Jarak horizontal antar elemen jika sejajar
+    runSpacing: 8, // Jarak vertikal otomatis jika teks melipat ke bawah
+    alignment: WrapAlignment.spaceBetween,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+              // Row(
+              //   children: [
+              //     const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
+              //     const SizedBox(width: 8),
+              //     Text(
+              //       item['jam_booking'] ?? "-",
+              //       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              //     ),
+              //   ],
+              // ),
               Row(
-                children: [
-                  const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    item['jam_booking'] ?? "-",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ],
+                mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.access_time_filled, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Flexible( // Flexible memastikan teks menyesuaikan ruang yang ada
+              child: Text(
+                "CHECK-IN: ${_getCheckInTime(item['jam_booking'])} | LOADING: ${item['jam_booking'] ?? "-"}",
+                overflow: TextOverflow.ellipsis, // Jika terlalu panjang, akan jadi titik-titik (...)
+                style: const TextStyle(
+                  color: Colors.white, 
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 14, // Ukuran sedikit diperkecil agar pas
+                ),
               ),
+            ),
+          ],
+        ),
+      
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -1045,21 +1373,41 @@ final String checkerName = checkerData != null ? checkerData['checker_name'] : "
               const Divider(height: 24),
 
               // Info Vendor
-              Row(
+             Row(
                 children: [
                   const Icon(Icons.store, size: 18, color: Colors.red),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
+                   child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+                    Text(
                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
-                  ),
-                 // _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
-                  //_infoBox("CHECK-IN AT", _formatDateTime(item['checkIn_at'])),
+                              // --- TAMBAHKAN DETAIL VENDOR TRANSPORTASI DI SINI ---
+          if (item['vendor_transportasi'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap( // Gunakan Wrap agar rapi saat dibuka di HP
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  //_miniVendorDetail("QCF: ${item['vendor_transportasi']['qcf'] ?? '-'}"),
+                  _miniVendorDetail("City: ${item['vendor_transportasi']['city'] ?? '-'}"),
+                  _miniVendorDetail("Area: ${item['vendor_transportasi']['area'] ?? '-'}"),
+                  _miniVendorDetail("Unit: ${item['vendor_transportasi']['type_unit'] ?? '-'}"),
                 ],
               ),
-              const SizedBox(height: 8),
+            ),
+                           
+        ],
+                   ),
+              ),
+                  //_infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
+                ],
+              ),
+              const SizedBox(height: 14),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
@@ -1587,6 +1935,26 @@ Widget _buildActionForm(Map<String, dynamic> item) {
       // ],
     ),
 
+  );
+}
+
+// Fungsi helper untuk teks detail vendor yang kecil di bawah nama
+Widget _miniVendorDetail(String text) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: Colors.grey.shade300, width: 0.5),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        color: Colors.blueGrey.shade700,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
   );
 }
 Widget _buildModernCheckbox({

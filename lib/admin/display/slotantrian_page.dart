@@ -15,6 +15,8 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   bool _isLoading = true;
 
   DateTime _selectedDate = DateTime.now();
+RealtimeChannel? _assignmentsChannel;
+  RealtimeChannel? _requestsChannel;
 
   final List<String> _timeSlots = [
     '07:00 - 09:00',
@@ -53,12 +55,53 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   /// }
   Map<String, dynamic> _slotData = {};
 
-  @override
+ @override
   void initState() {
     super.initState();
-    _loadSlotData();
+    // Memuat data awal dengan loading spinner
+    _loadSlotData(showGlobalLoading: true);
+    // Jalankan sistem pendengar realtime
+    _initRealtimeStreams();
   }
 
+  @override
+  void dispose() {
+    // Hapus channel agar tidak memory leak
+    _assignmentsChannel?.unsubscribe();
+    _requestsChannel?.unsubscribe();
+    if (_assignmentsChannel != null) supabase.removeChannel(_assignmentsChannel!);
+    if (_requestsChannel != null) supabase.removeChannel(_requestsChannel!);
+    super.dispose();
+  }
+void _initRealtimeStreams() {
+    // 1. Listen perubahan pada penugasan
+    _assignmentsChannel = supabase
+        .channel('queue_slot_assignments_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_assignments',
+          callback: (payload) async {
+            debugPrint("Realtime Update: Perubahan slot terdeteksi");
+            // Refresh data diam-diam tanpa loading spinner
+            await _loadSlotData(showGlobalLoading: false);
+          },
+        )
+        .subscribe();
+
+    // 2. Listen perubahan pada request utama
+    _requestsChannel = supabase
+        .channel('queue_slot_requests_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_request',
+          callback: (payload) async {
+            await _loadSlotData(showGlobalLoading: false);
+          },
+        )
+        .subscribe();
+  }
   int _getMaxCapacity(int warehouseId, String timeSlot) {
     bool isRestTime = timeSlot == '11:00 - 13:00';
 
@@ -198,9 +241,11 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   //     );
   //   }
   // }
-Future<void> _loadSlotData() async {
+Future<void> _loadSlotData({bool showGlobalLoading = false}) async {
   try {
-    setState(() => _isLoading = true);
+    if (showGlobalLoading) {
+        setState(() => _isLoading = true);
+      }
     String filterDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
     final response = await supabase
@@ -222,7 +267,7 @@ Future<void> _loadSlotData() async {
           )
         ''')
        // .eq('status_assignment', 'accepted')
-       .inFilter('status_assignment', ['accepted', 'check in', 'loading','weighbridge','keluar'])
+       .inFilter('status_assignment', ['accepted', 'check in', 'loading', 'kelayakan unit', 'weighbridge','keluar'])
         .eq('request.stuffing_date', filterDate)
         .not('jam_booking', 'is', null);
 

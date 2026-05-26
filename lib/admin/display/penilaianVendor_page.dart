@@ -1,7 +1,13 @@
+import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/material.dart';
+import 'package:open_file_plus/open_file_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html; 
 class VendorEvaluationPage extends StatefulWidget {
   const VendorEvaluationPage({super.key});
 
@@ -17,6 +23,42 @@ class _VendorEvaluationPageState extends State<VendorEvaluationPage> {
   String? _selectedNik;
   DateTimeRange? _selectedDateRange;
   List<Map<String, dynamic>> _evaluationData = [];
+  String _selectedCarFilter = "Tidak Ada"; // Default dropdown
+RealtimeChannel? _evaluationChannel;
+
+@override
+  void initState() {
+    super.initState();
+    // Inisialisasi pendengar data
+    _initRealtimeStreams();
+  }
+
+  @override
+  void dispose() {
+    // Tutup koneksi realtime agar tidak memory leak
+    _evaluationChannel?.unsubscribe();
+    if (_evaluationChannel != null) supabase.removeChannel(_evaluationChannel!);
+    _vendorSearchController.dispose();
+    super.dispose();
+  }
+
+  void _initRealtimeStreams() {
+    _evaluationChannel = supabase
+        .channel('vendor_evaluation_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_assignments',
+          callback: (payload) async {
+            debugPrint("Realtime Update: Performa Vendor Berubah");
+            // Hanya fetch ulang jika user sudah memilih Vendor & Periode
+            if (_selectedNik != null && _selectedDateRange != null) {
+              await _fetchEvaluationData(isSilent: true);
+            }
+          },
+        )
+        .subscribe();
+  }
 
 Future<List<Map<String, dynamic>>> _getVendorSuggestions(String query) async {
   var request = supabase.from('master_vendor').select('nik, vendor_name');
@@ -29,8 +71,9 @@ Future<List<Map<String, dynamic>>> _getVendorSuggestions(String query) async {
   return List<Map<String, dynamic>>.from(response);
 }
 
-Future<void> _fetchEvaluationData() async {
+Future<void> _fetchEvaluationData({bool isSilent = false}) async {
   if (_selectedNik == null || _selectedDateRange == null) return;
+  if (!isSilent) setState(() => _isLoading = true);
 
   setState(() => _isLoading = true);
   try {
@@ -45,6 +88,13 @@ Future<void> _fetchEvaluationData() async {
           lead_time_aktual,
           pod_return_aktual,
       id_vendor_details,
+      booking_history (
+            id_history,
+            jam_lama,
+            jam_baru,
+            created_at,
+            changed_by
+          ),
           vendor_transportasi!fk_vendor_transport_details (
             lead_time,
             pod_return
@@ -67,11 +117,12 @@ Future<void> _fetchEvaluationData() async {
           )
         ''')
         .inFilter('status_assignment', [
+          'accepted', 
       'check in', 
       'loading', 
       'weighbridge', 
       'keluar', 
-      'completed'
+      'completed','cancel booking'
     ])
         .eq('nik', _selectedNik!)
         // Filter berdasarkan stuffing_date di tabel shipping_request sesuai filter UI Anda
@@ -322,6 +373,22 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
             ),
           ),
         ),
+        const SizedBox(width: 8),
+
+        // 3. TOMBOL EKSPOR (BARU)
+        Container(
+          height: 55,
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: IconButton(
+            onPressed: _exportToExcel, // Panggil fungsi export
+            icon: const Icon(Icons.file_download, color: Colors.green, size: 26),
+            tooltip: "Export Excel",
+          ),
+        ),
       ],
     ),
   );
@@ -410,6 +477,46 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
 //     return 0.0;
 //   }
 // }
+double hitungKetepatanJumlahPemasukan(Map<String, dynamic> data) {
+  try {
+    String? status = data['status_assignment']?.toString().toLowerCase();
+
+    // Logika Utama: Hanya memproses data yang berstatus cancel booking
+    if (status == 'cancel booking') {
+      dynamic cancelledRaw = data['cancelled_at'];
+      dynamic assignedRaw = data['assigned_at'];
+      dynamic respondedRaw = data['responded_at'];
+
+      if (cancelledRaw == null) return 5.0; // Angka default aman jika data tanggal tidak lengkap
+
+      DateTime cancelledAt = DateTime.parse(cancelledRaw.toString());
+      
+      // Ambil acuan tanggal pembanding awal (prioritaskan assigned_at, fallback ke responded_at)
+      dynamic baselineRaw = assignedRaw ?? respondedRaw;
+      if (baselineRaw == null) return 5.0;
+      
+      DateTime baselineDate = DateTime.parse(baselineRaw.toString());
+
+      // Bandingkan hanya komponen tahun, bulan, dan hari (mengabaikan komponen jam)
+      DateTime cancelledDay = DateTime(cancelledAt.year, cancelledAt.month, cancelledAt.day);
+      DateTime baselineDay = DateTime(baselineDate.year, baselineDate.month, baselineDate.day);
+
+      // Jika hari pembatalan melewati hari penugasan (H+1 atau lebih)
+      if (cancelledDay.isAfter(baselineDay)) {
+        return 1.0; // Poin penalti ketepatan jumlah pemasukan harian
+      } else {
+        // Jika dibatalkan pada hari yang sama, maka baris tersebut dibebaskan (tidak dihitung penalti)
+        return 5.0; 
+      }
+    }
+
+    // Jika trip berstatus normal (check in, loading, dll) dan berhasil dijalankan, beri poin penuh 5
+    return 5.0;
+  } catch (e) {
+    debugPrint("Error Hitung Jumlah Pemasukan: $e");
+    return 5.0;
+  }
+}
 double hitungPengembalianPOD(Map<String, dynamic> data) {
   try {
     // 1. Ambil POD Return Aktual (Gunakan int? agar bisa mendeteksi null)
@@ -478,43 +585,238 @@ double hitungKetepatanWaktuKirim(Map<String, dynamic> data) {
   }
 }
 
+// double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
+//   try {
+//     // 1. Ambil jam_booking (Contoh: "15:00 - 17:00")
+//     String? jamBookingRaw = data['jam_booking'];
+//     // 2. Ambil checkIn_at (Timestamptz dari Supabase)
+//     dynamic checkInRaw = data['checkIn_at'];
+
+//     if (jamBookingRaw == null || checkInRaw == null) return 0.0;
+
+//     // --- PROSES JAM BOOKING ---
+//     // Ambil bagian depan "15:00", lalu ambil angka jamnya saja "15"
+//     // split(' - ')[0] mengambil "15:00"
+//     // split(':')[0] mengambil "15"
+//     String jamDepanStr = jamBookingRaw.split(' - ')[0].split(':')[0];
+//     int jamBookingBatas = int.parse(jamDepanStr);
+
+//     // --- PROSES JAM CHECK-IN ---
+//     DateTime checkInAt = DateTime.parse(checkInRaw.toString());
+//     int jamCheckIn = checkInAt.hour;
+//     int menitCheckIn = checkInAt.minute;
+
+//     // --- LOGIKA PENILAIAN ---
+//     // Sesuai aturan: Datang sebelum atau pas di jam booking depan = 5
+//     // Jika jam check-in lebih kecil dari jam booking batas -> Poin 5
+//     if (jamCheckIn < jamBookingBatas) {
+//       return 5.0;
+//     } 
+//     // Jika jam sama, tapi menit ke-0 (tepat waktu) -> Poin 5
+//     else if (jamCheckIn == jamBookingBatas && menitCheckIn == 0) {
+//       return 5.0;
+//     } 
+//     // Selebihnya (jam lebih besar atau jam sama tapi menit > 0) -> Poin 1
+//     else {
+//       return 1.0;
+//     }
+//   } catch (e) {
+//     debugPrint("Error Hitung Waktu: $e");
+//     return 0.0;
+//   }
+// }
+
+// double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
+//   try {
+//     // 1. Ambil jam_booking saat ini (atau jam booking asli jika tersedia)
+//     String? jamBookingRaw = data['jam_booking'];
+//     if (jamBookingRaw == null) return 0.0;
+
+//     // --- PROSES RENTANG CHECK-IN (2 Jam Sebelum) ---
+//     // Misal jamBookingRaw = "11:00 - 13:00"
+//     String startTimeStr = jamBookingRaw.split(" - ")[0]; // "11:00"
+//     int startHour = int.parse(startTimeStr.split(":")[0]); // 11
+
+//     // Batas bawah check-in: 11 - 2 = 09:00
+//     int batasCheckInStart = startHour - 2;
+//     // Batas atas check-in: 11:00
+//     int batasCheckInEnd = startHour;
+
+//     // --- LOGIKA PENGECEKAN HISTORY ---
+//     // Cari apakah ada aktivitas reschedule oleh Admin di jam kritis
+//     List historyReschedule = data['booking_history'] is List ? data['booking_history'] : [];
+//     bool terlambatKarenaRescheduleAdmin = false;
+
+//     for (var history in historyReschedule) {
+//       if (history['created_at'] == null) continue;
+
+//       DateTime createdAt = DateTime.parse(history['created_at'].toString());
+//       String changedBy = history['changed_by'] ?? '';
+      
+//       // Cek apakah yang mengubah BUKAN vendor (berarti Admin)
+//       bool isNotVendor = changedBy.toLowerCase() != 'vendor';
+
+//       // Cek apakah waktu perubahan ada di dalam range check-in (2 jam sebelum booking)
+//       // Contoh: Booking jam 11, range check-in 09:00-11:00. 
+//       // Jika Admin reschedule di jam 10:30, maka masuk kondisi ini.
+//       bool isWithinCriticalRange = createdAt.hour >= batasCheckInStart && 
+//                                    createdAt.hour < batasCheckInEnd;
+
+//       if (isNotVendor && isWithinCriticalRange) {
+//         terlambatKarenaRescheduleAdmin = true;
+//         break; 
+//       }
+//     }
+
+//     // --- PENILAIAN ---
+//     if (terlambatKarenaRescheduleAdmin) {
+//       return 1.0; // Terlambat karena di-reschedule admin di jam kritis
+//     } else {
+//       return 5.0; // Tidak ada pelanggaran reschedule
+//     }
+
+//   } catch (e) {
+//     debugPrint("Error Hitung Waktu Reschedule: $e");
+//     return 0.0;
+//   }
+// }
+
+// double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
+//   try {
+//     // 1. Ambil jam_booking saat ini (misal: "11:00 - 13:00")
+//     String? jamBookingRaw = data['jam_booking'];
+//     if (jamBookingRaw == null) return 0.0;
+
+//     String startTimeStr = jamBookingRaw.split(" - ")[0]; // "11:00"
+//     List<String> timeParts = startTimeStr.split(":");
+//     int startHour = int.parse(timeParts[0]);
+//     int startMinute = int.parse(timeParts[1]);
+
+//     // --- LOGIKA PENGECEKAN HISTORY ---
+//     List historyReschedule = data['booking_history'] is List ? data['booking_history'] : [];
+//     bool terlambatKarenaRescheduleAdmin = false;
+
+//     for (var history in historyReschedule) {
+//       if (history['created_at'] == null) continue;
+
+//       // Waktu ketika Admin melakukan reschedule
+//       DateTime createdAt = DateTime.parse(history['created_at'].toString());
+//       String changedBy = history['changed_by'] ?? '';
+      
+//       // Cek apakah yang mengubah BUKAN vendor (berarti Admin)
+//       bool isNotVendor = changedBy.toLowerCase() != 'vendor';
+
+//       if (isNotVendor) {
+//         // Buat objek DateTime target booking pada HARI YANG SAMA dengan history dibuat
+//         DateTime bookingDateTime = DateTime(
+//           createdAt.year,
+//           createdAt.month,
+//           createdAt.day,
+//           startHour,
+//           startMinute,
+//         );
+
+//         // Hitung selisih waktu antara jadwal booking dengan waktu admin mengubahnya
+//         // Jika diubah sebelum jam booking, hasilnya positif.
+//         Duration selisihWaktu = bookingDateTime.difference(createdAt);
+
+//         // --- ATURAN BARU: 2 JAM ATAU LEBIH ---
+//         // Bersifat kritis jika dilakukan tepat pada waktu booking atau sebelumnya, 
+//         // dengan jarak maksimal sampai kapan pun (>= 2 jam sebelum).
+//         // selisihWaktu.inMinutes >= 120 artinya: diubah 2 jam (120 menit) atau lebih sebelum booking.
+//         bool isWithinCriticalRange = selisihWaktu.inMinutes >= 120;
+
+//         if (isWithinCriticalRange) {
+//           terlambatKarenaRescheduleAdmin = true;
+//           break; 
+//         }
+//       }
+//     }
+
+//     // --- PENILAIAN ---
+//     if (terlambatKarenaRescheduleAdmin) {
+//       return 1.0; // Terlambat/Kena penalti karena di-reschedule admin 2 jam atau lebih sebelum booking
+//     } else {
+//       return 5.0; // Aman (di-reschedule mepet di bawah 2 jam, atau tidak ada reschedule admin)
+//     }
+
+//   } catch (e) {
+//     debugPrint("Error Hitung Waktu Reschedule: $e");
+//     return 0.0;
+//   }
+// }
 double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
   try {
-    // 1. Ambil jam_booking (Contoh: "15:00 - 17:00")
+    // 1. Ambil data jam_booking saat ini (atau gunakan data booking awal jika ada)
     String? jamBookingRaw = data['jam_booking'];
-    // 2. Ambil checkIn_at (Timestamptz dari Supabase)
-    dynamic checkInRaw = data['checkIn_at'];
+    if (jamBookingRaw == null) return 0.0;
 
-    if (jamBookingRaw == null || checkInRaw == null) return 0.0;
+    // 2. Ambil stuffing_date (Hari H Pelaksanaan)
+    String? stuffingDateRaw = data['shipping_request']?['stuffing_date']?.toString();
+    if (stuffingDateRaw == null) return 0.0;
+    DateTime stuffingDate = DateTime.parse(stuffingDateRaw.split('T')[0]);
 
-    // --- PROSES JAM BOOKING ---
-    // Ambil bagian depan "15:00", lalu ambil angka jamnya saja "15"
-    // split(' - ')[0] mengambil "15:00"
-    // split(':')[0] mengambil "15"
-    String jamDepanStr = jamBookingRaw.split(' - ')[0].split(':')[0];
-    int jamBookingBatas = int.parse(jamDepanStr);
+    // 3. Ekstrak Jam Masuk Booking Awal (Misal "11:00")
+    String startTimeStr = jamBookingRaw.split(" - ")[0]; // "11:00"
+    List<String> timeParts = startTimeStr.split(":");
+    int startHour = int.parse(timeParts[0]);
+    int startMinute = int.parse(timeParts[1]);
 
-    // --- PROSES JAM CHECK-IN ---
-    DateTime checkInAt = DateTime.parse(checkInRaw.toString());
-    int jamCheckIn = checkInAt.hour;
-    int menitCheckIn = checkInAt.minute;
+    // Gabungkan tanggal stuffing dan jam booking untuk membuat target waktu absolut
+    DateTime targetBookingTime = DateTime(
+      stuffingDate.year,
+      stuffingDate.month,
+      stuffingDate.day,
+      startHour,
+      startMinute,
+    );
 
-    // --- LOGIKA PENILAIAN ---
-    // Sesuai aturan: Datang sebelum atau pas di jam booking depan = 5
-    // Jika jam check-in lebih kecil dari jam booking batas -> Poin 5
-    if (jamCheckIn < jamBookingBatas) {
-      return 5.0;
-    } 
-    // Jika jam sama, tapi menit ke-0 (tepat waktu) -> Poin 5
-    else if (jamCheckIn == jamBookingBatas && menitCheckIn == 0) {
-      return 5.0;
-    } 
-    // Selebihnya (jam lebih besar atau jam sama tapi menit > 0) -> Poin 1
-    else {
-      return 1.0;
+    // Batas akhir vendor bisa ubah mandiri adalah 2 jam sebelum targetBookingTime
+    // Contoh: Booking jam 11:00, maka batasnya adalah jam 09:00
+    DateTime batasMandiriVendor = targetBookingTime.subtract(const Duration(hours: 2));
+
+    // 4. --- PROSES PENGECEKAN HISTORY RESCHEDULE MALING/TERAKHIR ---
+    List historyReschedule = data['booking_history'] is List ? data['booking_history'] : [];
+    
+    bool telatDanDiambilAlihAdmin = false;
+
+    for (var history in historyReschedule) {
+      if (history['created_at'] == null) continue;
+
+      DateTime createdAt = DateTime.parse(history['created_at'].toString());
+      String changedBy = history['changed_by'] ?? '';
+      
+      // Cek apakah yang melakukan perubahan adalah selain Vendor (berarti Admin)
+      bool isChangedByAdmin = changedBy.toLowerCase() != 'vendor';
+
+      if (isChangedByAdmin) {
+        // KONDISI PENALTI (Nilai 1):
+        // Admin terpaksa melakukan reschedule pada HARI YANG SAMA dengan tanggal stuffing
+        // DAN waktu eksekusi klik admin terjadi SETELAH batas mandiri vendor habis (>= jam 09:00 hingga lewat jam booking)
+        bool isSameDay = createdAt.year == stuffingDate.year &&
+                         createdAt.month == stuffingDate.month &&
+                         createdAt.day == stuffingDate.day;
+
+        // createdAt.isAfter(batasMandiriVendor) artinya:
+        // Jika booking jam 11:00, admin ngeklik tombol di jam 09:01, 10:30, atau bahkan lewat jam 11:00
+        bool terjadiDiWaktuKritis = createdAt.isAfter(batasMandiriVendor);
+
+        if (isSameDay && terjadiDiWaktuKritis) {
+          telatDanDiambilAlihAdmin = true;
+          break; // Sudah terbukti telat, keluar dari loop
+        }
+      }
     }
+
+    // 5. --- PENILAIAN ---
+    if (telatDanDiambilAlihAdmin) {
+      return 1.0; // Terlambat karena di-reschedule admin di dalam range check-in / waktu kritis
+    } else {
+      return 5.0; // Tepat waktu (Vendor datang tepat waktu ATAU vendor reschedule mandiri sebelum jam 09:00)
+    }
+
   } catch (e) {
-    debugPrint("Error Hitung Waktu: $e");
+    debugPrint("Error Hitung Ketepatan Waktu Masuk: $e");
     return 0.0;
   }
 }
@@ -529,10 +831,11 @@ List<DataColumn> _buildColumns() {
       _buildLabel('Ketepatan Jumlah Pemasukan Harian', 70),
       _buildLabel('Ketepatan Waktu Pengiriman', 70),
       _buildLabel('Pengembalian Dokumen Pengiriman', 80),
-      _buildLabel('Temuan Kasus/CAR', 60),
+      //_buildLabel('Temuan Kasus/CAR', 60),
       _buildLabel('Kelayakan Unit', 70),
+      // _buildLabel('Nilai LK3', 60),
+      _buildLabel('Total Nilai', 60),
       _buildLabel('Nilai LK3', 60),
-      _buildLabel('Nilai Akhir', 60),
     ];
   }
 
@@ -540,7 +843,7 @@ List<DataColumn> _buildColumns() {
     return DataColumn(
       label: SizedBox(
         width: width,
-        child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, softWrap: true),
+        child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), textAlign: TextAlign.center, softWrap: true),
       ),
     );
   }
@@ -1009,321 +1312,683 @@ List<DataColumn> _buildColumns() {
 //     },
 //   );
 // }
-Widget _buildTableArea() {
-    final List<Map<String, dynamic>> displayData = _getGroupedDisplayData(_evaluationData);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Column(
-          children: [
-            // 1. HEADER (FIXED)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
-                headingTextStyle: const TextStyle(color: Colors.white),
-                headingRowHeight: 80,
-                columnSpacing: 22,
-                horizontalMargin: 12,
-                columns: _buildColumns(),
-                rows: const [],
-              ),
-            ),
-            // 2. BODY (SCROLLABLE)
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowHeight: 0,
-                    dataRowMaxHeight: double.infinity,
-                    dataRowMinHeight: 60,
-                    columnSpacing: 20,
-                    horizontalMargin: 12,
-                    columns: _buildColumns(),
-                    rows: displayData.map((data) {
-                      double skorKelayakan = hitungKelayakanKendaraan(data);
-                      double nilaiLK3 = hitungNilaiLK3(data);
-                      double poinWaktuMasuk = hitungKetepatanWaktuMasuk(data);
-                      double poinDocBalik = hitungPengembalianPOD(data);
-                      double poinWaktuKirim = hitungKetepatanWaktuKirim(data);
-                      double nilaiAkhir = hitungNilaiAkhir(data);
-                      final List dos = data['collective_dos'] ?? [];
+// Widget _buildTableArea() {
+//     final List<Map<String, dynamic>> displayData = _getGroupedDisplayData(_evaluationData);
+
+//     return LayoutBuilder(
+//       builder: (context, constraints) {
+//         return Column(
+//           children: [
+//             // 1. HEADER (FIXED)
+//             SingleChildScrollView(
+//               scrollDirection: Axis.horizontal,
+//               child: DataTable(
+//                 headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
+//                 headingTextStyle: const TextStyle(color: Colors.white),
+//                 headingRowHeight: 80,
+//                 columnSpacing: 22,
+//                 horizontalMargin: 12,
+//                 columns: _buildColumns(),
+//                 rows: const [],
+//               ),
+//             ),
+//             // 2. BODY (SCROLLABLE)
+//             Expanded(
+//               child: SingleChildScrollView(
+//                 scrollDirection: Axis.vertical,
+//                 child: SingleChildScrollView(
+//                   scrollDirection: Axis.horizontal,
+//                   child: DataTable(
+//                     headingRowHeight: 0,
+//                     dataRowMaxHeight: double.infinity,
+//                     dataRowMinHeight: 60,
+//                     columnSpacing: 20,
+//                     horizontalMargin: 12,
+//                     columns: _buildColumns(),
+//                     rows: displayData.map((data) {
+//                       double skorKelayakan = hitungKelayakanKendaraan(data);
+//                       double nilaiLK3 = hitungNilaiLK3(data);
+//                       double poinWaktuMasuk = hitungKetepatanWaktuMasuk(data);
+//                       double poinDocBalik = hitungPengembalianPOD(data);
+//                       double poinWaktuKirim = hitungKetepatanWaktuKirim(data);
+//                       double nilaiAkhir = hitungNilaiAkhir(data);
+//                       final List dos = data['collective_dos'] ?? [];
                       
-                      Set<String> uniqueDOs = dos.map((d) => d['do_number']?.toString() ?? "").toSet();
-                      Set<String> uniqueCusts = dos.map((d) => d['customer']?['customer_name']?.toString() ?? "").toSet();
+//                       Set<String> uniqueDOs = dos.map((d) => d['do_number']?.toString() ?? "").toSet();
+//                       Set<String> uniqueCusts = dos.map((d) => d['customer']?['customer_name']?.toString() ?? "").toSet();
 
-                      return DataRow(
-                        color: WidgetStateProperty.all(data['shipping_request']?['group_id'] != null ? Colors.blue.shade50.withOpacity(0.4) : null),
-                        cells: [
-                          _buildValueCell((data['all_shipping_ids'] as Set).toList().join(", "), 40),
-                          _buildValueCell(_formatDate(data['shipping_request']?['stuffing_date']), 60),
-                          _buildValueCell(data['no_polisi']?.toString() ?? "-", 95),
-                          DataCell(SizedBox(width: 60, child: _buildNestedColumn(uniqueDOs.toList()))),
-                          DataCell(SizedBox(width: 180, child: _buildNestedColumn(uniqueCusts.toList()))),
-                         // _buildScoreCell(data['ketepatan_waktu_pemasukan_harian'], 70),
-                         // KOLOM KETEPATAN WAKTU MASUK
-    DataCell(
-  SizedBox(
-    width: 70,
-    child: Center(
-      child: Container(
-        // Perkecil padding agar seragam (horizontal 4, vertical 2)
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        // Tambahkan constraints agar ukuran kotak konsisten
-        constraints: const BoxConstraints(minWidth: 18),
-        decoration: BoxDecoration(
-          color: poinWaktuMasuk == 5 ? Colors.green.shade50 : Colors.red.shade50,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            width: 0.8, // Garis lebih tipis agar halus
-            color: poinWaktuMasuk == 5 ? Colors.green.shade200 : Colors.red.shade200,
-          ),
-        ),
-        child: Text(
-          poinWaktuMasuk == 0 ? "-" : poinWaktuMasuk.toStringAsFixed(0),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12, // Samakan ukuran font ke 9
-            color: poinWaktuMasuk == 5 ? Colors.green.shade900 : Colors.red.shade900,
-          ),
-        ),
-      ),
-    ),
-  ),
-),
-                          _buildScoreCell(data['ketepatan_jumlah_pemasukan_harian'], 75),
-                          //_buildScoreCell(data['ketepatan_waktu_pengiriman'], 70),
-                          // KOLOM KETEPATAN WAKTU PENGIRIMAN
-    DataCell(
-      SizedBox(
-        width: 70,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            constraints: const BoxConstraints(minWidth: 18),
-            decoration: BoxDecoration(
-              // Hijau untuk poin 5, Merah untuk poin 1
-              color: poinWaktuKirim == 5 ? Colors.green.shade50 : 
-                     (poinWaktuKirim == 1 ? Colors.red.shade50 : Colors.grey.shade50),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                width: 0.8,
-                color: poinWaktuKirim == 5 ? Colors.green.shade200 : 
-                       (poinWaktuKirim == 1 ? Colors.red.shade200 : Colors.grey.shade200),
-              ),
-            ),
-            child: Text(
-              poinWaktuKirim == 0 ? "-" : poinWaktuKirim.toStringAsFixed(0),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: poinWaktuKirim == 5 ? Colors.green.shade900 : 
-                       (poinWaktuKirim == 1 ? Colors.red.shade900 : Colors.grey.shade900),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-                          //_buildScoreCell(data['pengembalian_dokumen_pengiriman'], 70),
-                          // KOLOM DOC BALIK
-    DataCell(
-      SizedBox(
-        width: 70,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            constraints: const BoxConstraints(minWidth: 18),
-            decoration: BoxDecoration(
-              color: poinDocBalik == 5 ? Colors.green.shade50 : 
-                     (poinDocBalik == 3 ? Colors.orange.shade50 : Colors.red.shade50),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                width: 0.8,
-                color: poinDocBalik == 5 ? Colors.green.shade200 : 
-                       (poinDocBalik == 3 ? Colors.orange.shade200 : Colors.red.shade200),
-              ),
-            ),
-            child: Text(
-              poinDocBalik == 0 ? "-" : poinDocBalik.toStringAsFixed(0),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: poinDocBalik == 5 ? Colors.green.shade900 : 
-                       (poinDocBalik == 3 ? Colors.orange.shade900 : Colors.red.shade900),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-                          _buildValueCell("0", 65),
-                          // DataCell(SizedBox(width: 70, child: Center(child: _buildBadge(skorKelayakan.toStringAsFixed(0), skorKelayakan > 0 ? Colors.red : Colors.green)))),
-                          // DataCell(SizedBox(width: 65, child: Center(child: Text(nilaiLK3.toStringAsFixed(0), style: TextStyle(fontWeight: FontWeight.bold, color: nilaiLK3 < 30 ? Colors.orange : Colors.blue))))),
-                          // 1. KOLOM KELAYAKAN UNIT
-DataCell(
-  SizedBox(
-    width: 70,
-    child: Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        constraints: const BoxConstraints(minWidth: 18),
-        decoration: BoxDecoration(
-          // Tambahkan logika: jika 0 maka warna abu-abu netral
-          color: skorKelayakan == 5 ? Colors.green.shade50 : 
-                 skorKelayakan == 3 ? Colors.orange.shade50 : 
-                 skorKelayakan == 1 ? Colors.red.shade50 : 
-                 Colors.grey.shade50, // Untuk nilai 0
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            width: 0.8,
-            color: skorKelayakan == 5 ? Colors.green.shade200 : 
-                   skorKelayakan == 3 ? Colors.orange.shade200 : 
-                   skorKelayakan == 1 ? Colors.red.shade200 : 
-                   Colors.grey.shade300, // Untuk nilai 0
-          ),
-        ),
-        child: Text(
-          // LOGIKA UTAMA: Jika 0 maka tampilkan "-"
-          skorKelayakan == 0 ? "-" : skorKelayakan.toStringAsFixed(0),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12, // Sesuaikan dengan standar yang tadi (9)
-            color: skorKelayakan == 5 ? Colors.green.shade900 : 
-                   skorKelayakan == 3 ? Colors.orange.shade900 : 
-                   skorKelayakan == 1 ? Colors.red.shade900 : 
-                   Colors.grey.shade600, // Warna teks untuk nilai 0
-          ),
-        ),
-      ),
-    ),
-  ),
-),
+//                       return DataRow(
+//                         color: WidgetStateProperty.all(data['shipping_request']?['group_id'] != null ? Colors.blue.shade50.withOpacity(0.4) : null),
+//                         cells: [
+//                           _buildValueCell((data['all_shipping_ids'] as Set).toList().join(", "), 40),
+//                           _buildValueCell(_formatDate(data['shipping_request']?['stuffing_date']), 60),
+//                           _buildValueCell(data['no_polisi']?.toString() ?? "-", 95),
+//                           DataCell(SizedBox(width: 60, child: _buildNestedColumn(uniqueDOs.toList()))),
+//                           DataCell(SizedBox(width: 180, child: _buildNestedColumn(uniqueCusts.toList()))),
+//                          // _buildScoreCell(data['ketepatan_waktu_pemasukan_harian'], 70),
+//                          // KOLOM KETEPATAN WAKTU MASUK
+//     DataCell(
+//   SizedBox(
+//     width: 70,
+//     child: Center(
+//       child: Container(
+//         // Perkecil padding agar seragam (horizontal 4, vertical 2)
+//         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+//         // Tambahkan constraints agar ukuran kotak konsisten
+//         constraints: const BoxConstraints(minWidth: 18),
+//         decoration: BoxDecoration(
+//           color: poinWaktuMasuk == 5 ? Colors.green.shade50 : Colors.red.shade50,
+//           borderRadius: BorderRadius.circular(4),
+//           border: Border.all(
+//             width: 0.8, // Garis lebih tipis agar halus
+//             color: poinWaktuMasuk == 5 ? Colors.green.shade200 : Colors.red.shade200,
+//           ),
+//         ),
+//         child: Text(
+//           poinWaktuMasuk == 0 ? "-" : poinWaktuMasuk.toStringAsFixed(0),
+//           textAlign: TextAlign.center,
+//           style: TextStyle(
+//             fontWeight: FontWeight.bold,
+//             fontSize: 12, // Samakan ukuran font ke 9
+//             color: poinWaktuMasuk == 5 ? Colors.green.shade900 : Colors.red.shade900,
+//           ),
+//         ),
+//       ),
+//     ),
+//   ),
+// ),
+//                           _buildScoreCell(data['ketepatan_jumlah_pemasukan_harian'], 75),
+//                           //_buildScoreCell(data['ketepatan_waktu_pengiriman'], 70),
+//                           // KOLOM KETEPATAN WAKTU PENGIRIMAN
+//     DataCell(
+//       SizedBox(
+//         width: 70,
+//         child: Center(
+//           child: Container(
+//             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+//             constraints: const BoxConstraints(minWidth: 18),
+//             decoration: BoxDecoration(
+//               // Hijau untuk poin 5, Merah untuk poin 1
+//               color: poinWaktuKirim == 5 ? Colors.green.shade50 : 
+//                      (poinWaktuKirim == 1 ? Colors.red.shade50 : Colors.grey.shade50),
+//               borderRadius: BorderRadius.circular(4),
+//               border: Border.all(
+//                 width: 0.8,
+//                 color: poinWaktuKirim == 5 ? Colors.green.shade200 : 
+//                        (poinWaktuKirim == 1 ? Colors.red.shade200 : Colors.grey.shade200),
+//               ),
+//             ),
+//             child: Text(
+//               poinWaktuKirim == 0 ? "-" : poinWaktuKirim.toStringAsFixed(0),
+//               textAlign: TextAlign.center,
+//               style: TextStyle(
+//                 fontWeight: FontWeight.bold,
+//                 fontSize: 12,
+//                 color: poinWaktuKirim == 5 ? Colors.green.shade900 : 
+//                        (poinWaktuKirim == 1 ? Colors.red.shade900 : Colors.grey.shade900),
+//               ),
+//             ),
+//           ),
+//         ),
+//       ),
+//     ),
+//                           //_buildScoreCell(data['pengembalian_dokumen_pengiriman'], 70),
+//                           // KOLOM DOC BALIK
+//     DataCell(
+//       SizedBox(
+//         width: 70,
+//         child: Center(
+//           child: Container(
+//             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+//             constraints: const BoxConstraints(minWidth: 18),
+//             decoration: BoxDecoration(
+//               color: poinDocBalik == 5 ? Colors.green.shade50 : 
+//                      (poinDocBalik == 3 ? Colors.orange.shade50 : Colors.red.shade50),
+//               borderRadius: BorderRadius.circular(4),
+//               border: Border.all(
+//                 width: 0.8,
+//                 color: poinDocBalik == 5 ? Colors.green.shade200 : 
+//                        (poinDocBalik == 3 ? Colors.orange.shade200 : Colors.red.shade200),
+//               ),
+//             ),
+//             child: Text(
+//               poinDocBalik == 0 ? "-" : poinDocBalik.toStringAsFixed(0),
+//               textAlign: TextAlign.center,
+//               style: TextStyle(
+//                 fontWeight: FontWeight.bold,
+//                 fontSize: 12,
+//                 color: poinDocBalik == 5 ? Colors.green.shade900 : 
+//                        (poinDocBalik == 3 ? Colors.orange.shade900 : Colors.red.shade900),
+//               ),
+//             ),
+//           ),
+//         ),
+//       ),
+//     ),
+//                           _buildValueCell("0", 65),
+//                           // DataCell(SizedBox(width: 70, child: Center(child: _buildBadge(skorKelayakan.toStringAsFixed(0), skorKelayakan > 0 ? Colors.red : Colors.green)))),
+//                           // DataCell(SizedBox(width: 65, child: Center(child: Text(nilaiLK3.toStringAsFixed(0), style: TextStyle(fontWeight: FontWeight.bold, color: nilaiLK3 < 30 ? Colors.orange : Colors.blue))))),
+//                           // 1. KOLOM KELAYAKAN UNIT
+// DataCell(
+//   SizedBox(
+//     width: 70,
+//     child: Center(
+//       child: Container(
+//         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+//         constraints: const BoxConstraints(minWidth: 18),
+//         decoration: BoxDecoration(
+//           // Tambahkan logika: jika 0 maka warna abu-abu netral
+//           color: skorKelayakan == 5 ? Colors.green.shade50 : 
+//                  skorKelayakan == 3 ? Colors.orange.shade50 : 
+//                  skorKelayakan == 1 ? Colors.red.shade50 : 
+//                  Colors.grey.shade50, // Untuk nilai 0
+//           borderRadius: BorderRadius.circular(4),
+//           border: Border.all(
+//             width: 0.8,
+//             color: skorKelayakan == 5 ? Colors.green.shade200 : 
+//                    skorKelayakan == 3 ? Colors.orange.shade200 : 
+//                    skorKelayakan == 1 ? Colors.red.shade200 : 
+//                    Colors.grey.shade300, // Untuk nilai 0
+//           ),
+//         ),
+//         child: Text(
+//           // LOGIKA UTAMA: Jika 0 maka tampilkan "-"
+//           skorKelayakan == 0 ? "-" : skorKelayakan.toStringAsFixed(0),
+//           textAlign: TextAlign.center,
+//           style: TextStyle(
+//             fontWeight: FontWeight.bold,
+//             fontSize: 12, // Sesuaikan dengan standar yang tadi (9)
+//             color: skorKelayakan == 5 ? Colors.green.shade900 : 
+//                    skorKelayakan == 3 ? Colors.orange.shade900 : 
+//                    skorKelayakan == 1 ? Colors.red.shade900 : 
+//                    Colors.grey.shade600, // Warna teks untuk nilai 0
+//           ),
+//         ),
+//       ),
+//     ),
+//   ),
+// ),
 
-// 2. KOLOM NILAI LK3
-DataCell(
-  SizedBox(
-    width: 65,
-    child: Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        constraints: const BoxConstraints(minWidth: 18),
-        decoration: BoxDecoration(
-          color: nilaiLK3 == 5 ? Colors.green.shade50 : 
-                 nilaiLK3 >= 3 ? Colors.orange.shade50 : 
-                 nilaiLK3 > 0 ? Colors.red.shade50 : 
-                 Colors.grey.shade50, // Untuk nilai 0
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            width: 0.8,
-            color: nilaiLK3 == 5 ? Colors.green.shade200 : 
-                   nilaiLK3 >= 3 ? Colors.orange.shade200 : 
-                   nilaiLK3 > 0 ? Colors.red.shade200 : 
-                   Colors.grey.shade300,
-          ),
-        ),
-        child: Text(
-          nilaiLK3 == 0 ? "-" : nilaiLK3.toStringAsFixed(0),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-            color: nilaiLK3 == 5 ? Colors.green.shade900 : 
-                   nilaiLK3 >= 3 ? Colors.orange.shade900 : 
-                   nilaiLK3 > 0 ? Colors.red.shade900 : 
-                   Colors.grey.shade600,
-          ),
+// // 2. KOLOM NILAI LK3
+// DataCell(
+//   SizedBox(
+//     width: 65,
+//     child: Center(
+//       child: Container(
+//         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+//         constraints: const BoxConstraints(minWidth: 18),
+//         decoration: BoxDecoration(
+//           color: nilaiLK3 == 5 ? Colors.green.shade50 : 
+//                  nilaiLK3 >= 3 ? Colors.orange.shade50 : 
+//                  nilaiLK3 > 0 ? Colors.red.shade50 : 
+//                  Colors.grey.shade50, // Untuk nilai 0
+//           borderRadius: BorderRadius.circular(4),
+//           border: Border.all(
+//             width: 0.8,
+//             color: nilaiLK3 == 5 ? Colors.green.shade200 : 
+//                    nilaiLK3 >= 3 ? Colors.orange.shade200 : 
+//                    nilaiLK3 > 0 ? Colors.red.shade200 : 
+//                    Colors.grey.shade300,
+//           ),
+//         ),
+//         child: Text(
+//           nilaiLK3 == 0 ? "-" : nilaiLK3.toStringAsFixed(0),
+//           textAlign: TextAlign.center,
+//           style: TextStyle(
+//             fontWeight: FontWeight.bold,
+//             fontSize: 12,
+//             color: nilaiLK3 == 5 ? Colors.green.shade900 : 
+//                    nilaiLK3 >= 3 ? Colors.orange.shade900 : 
+//                    nilaiLK3 > 0 ? Colors.red.shade900 : 
+//                    Colors.grey.shade600,
+//           ),
+//         ),
+//       ),
+//     ),
+//   ),
+// ),
+//                           // KOLOM NILAI AKHIR (Final Score)
+//     DataCell(
+//       SizedBox(
+//         width: 60,
+//         child: Center(
+//           child: Container(
+//             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+//             constraints: const BoxConstraints(minWidth: 25),
+//             decoration: BoxDecoration(
+//               // Warna Biru untuk hasil akhir agar menonjol
+//               color: nilaiAkhir == 0 ? Colors.grey.shade50 : Colors.blue.shade50,
+//               borderRadius: BorderRadius.circular(4),
+//               border: Border.all(
+//                 width: 0.8,
+//                 color: nilaiAkhir == 0 ? Colors.grey.shade300 : Colors.blue.shade200,
+//               ),
+//             ),
+//             child: Text(
+//               nilaiAkhir == 0 ? "-" : nilaiAkhir.toStringAsFixed(2),
+//               textAlign: TextAlign.center,
+//               style: TextStyle(
+//                 fontWeight: FontWeight.bold,
+//                 fontSize: 12,
+//                 color: nilaiAkhir == 0 ? Colors.grey.shade600 : Colors.blue.shade900,
+//               ),
+//             ),
+//           ),
+//         ),
+//       ),
+//     ),
+//                         ],
+//                       );
+//                     }).toList(),
+//                   ),
+//                 ),
+//               ),
+//             ),
+//           ],
+//         );
+//       },
+//     );
+//   }
+Widget _buildTableArea() {
+  final List<Map<String, dynamic>> displayData = _getGroupedDisplayData(_evaluationData);
+
+  return Column(
+    children: [
+      // --- 1. HEADER (STAY DI ATAS / STICKY) ---
+      // Bagian ini tidak dibungkus SingleChildScrollView vertikal agar tidak ikut naik
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
+          headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          headingRowHeight: 80,
+          columnSpacing: 22,
+          horizontalMargin: 12,
+          columns: _buildColumns(),
+          rows: const [], // Hanya header
         ),
       ),
-    ),
-  ),
-),
-                          // KOLOM NILAI AKHIR (Final Score)
-    DataCell(
-      SizedBox(
-        width: 60,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            constraints: const BoxConstraints(minWidth: 25),
-            decoration: BoxDecoration(
-              // Warna Biru untuk hasil akhir agar menonjol
-              color: nilaiAkhir == 0 ? Colors.grey.shade50 : Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                width: 0.8,
-                color: nilaiAkhir == 0 ? Colors.grey.shade300 : Colors.blue.shade200,
-              ),
-            ),
-            child: Text(
-              nilaiAkhir == 0 ? "-" : nilaiAkhir.toStringAsFixed(2),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: nilaiAkhir == 0 ? Colors.grey.shade600 : Colors.blue.shade900,
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
+
+      // --- 2. BODY & SUMMARY (BISA DI-SCROLL VERTIKAL) ---
+      Expanded(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical, // Scroll naik-turun
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal, // Scroll kiri-kanan
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tabel Data
+                DataTable(
+                  headingRowHeight: 0, // Header asli disembunyikan
+                  dataRowMaxHeight: double.infinity,
+                  dataRowMinHeight: 60,
+                  columnSpacing: 22,
+                  horizontalMargin: 12,
+                  columns: _buildColumns(),
+                  rows: displayData.map((data) {
+                    // ... (Logika perhitungan poin tetap sama seperti sebelumnya) ...
+                    double pWaktuMasuk = hitungKetepatanWaktuMasuk(data);
+                    double pWaktuKirim = hitungKetepatanWaktuKirim(data);
+                    double pJumlahPemasukan = hitungKetepatanJumlahPemasukan(data);
+                    double pDocBalik = hitungPengembalianPOD(data);
+                    double pKelayakan = hitungKelayakanKendaraan(data);
+                    double pLK3 = hitungNilaiLK3(data);
+                    double pAkhir = hitungNilaiAkhir(data);
+
+                    final List dos = data['collective_dos'] ?? [];
+                    Set<String> uDOs = dos.map((d) => d['do_number']?.toString() ?? "").toSet();
+                    Set<String> uCusts = dos.map((d) => d['customer']?['customer_name']?.toString() ?? "").toSet();
+
+                    return DataRow(
+                      cells: [
+                        _buildValueCell((data['all_shipping_ids'] as Set).toList().join(", "), 60),
+                        _buildValueCell(_formatDate(data['shipping_request']?['stuffing_date']), 70),
+                        _buildValueCell(data['no_polisi']?.toString() ?? "-", 85),
+                        DataCell(SizedBox(width: 60, child: _buildNestedColumn(uDOs.toList()))),
+                        DataCell(SizedBox(width: 190, child: _buildNestedColumn(uCusts.toList()))),
+                        _buildScoreBadge(pWaktuMasuk, 70),
+                        //_buildScoreBadge(double.tryParse(data['ketepatan_jumlah_pemasukan_harian']?.toString() ?? "0") ?? 0, 70),
+                        _buildScoreBadge(pJumlahPemasukan, 70),
+                        _buildScoreBadge(pWaktuKirim, 70),
+                        _buildScoreBadge(pDocBalik, 80),
+                        //_buildValueCell("0", 60),
+                        _buildScoreBadge(pKelayakan, 70),
+                        _buildScoreBadge(pAkhir, 60, isFinal: true),
+                        _buildScoreBadge(pLK3, 60),
+                      ],
+                    );
+                  }).toList(),
                 ),
+                
+                // --- 3. SUMMARY RATA-RATA (DIPASANG DI BAWAH TABEL) ---
+                // Karena diletakkan di sini, dia akan ikut ter-scroll vertical
+                _buildSummaryAverage(displayData),
+                const SizedBox(height: 20), // Memberi ruang di paling bawah
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+// --- SCORE BADGE WIDGET ---
+  DataCell _buildScoreBadge(double val, double width, {bool isFinal = false}) {
+    Color bg = Colors.grey.shade50;
+    Color border = Colors.grey.shade300;
+    Color text = Colors.grey.shade600;
+
+    if (val > 0) {
+      if (isFinal) {
+        bg = Colors.blue.shade50; border = Colors.blue.shade200; text = Colors.blue.shade900;
+      } else {
+        if (val >= 5) { bg = Colors.green.shade50; border = Colors.green.shade200; text = Colors.green.shade900; }
+        else if (val >= 3) { bg = Colors.orange.shade50; border = Colors.orange.shade200; text = Colors.orange.shade900; }
+        else { bg = Colors.red.shade50; border = Colors.red.shade200; text = Colors.red.shade900; }
+      }
+    }
+
+    return DataCell(
+      SizedBox(
+        width: width,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4), border: Border.all(width: 0.8, color: border)),
+            child: Text(
+              val == 0 ? "-" : (isFinal ? val.toStringAsFixed(2) : val.toStringAsFixed(0)),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: text),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+Widget _buildSummaryAverage(List<Map<String, dynamic>> displayData) {
+  const double labelWidth = 180.0; // Lebar tetap untuk semua label teks
+  const double paddingKiri = 415.0;
+  double grandTotal = _calculateGrandTotal(displayData);
+  
+  // Hitung Persentase: (GrandTotal - 1) / 4 * 100
+  double finalPercentage = grandTotal > 0 ? ((grandTotal - 1) / 4) * 100 : 0;
+  if (finalPercentage < 0) finalPercentage = 0;
+  if (finalPercentage > 100) finalPercentage = 100;
+  String grade = _calculateGrade(finalPercentage);
+  return Container(
+    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade50, // Latar belakang lembut
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            const SizedBox(width: 415),
+            const Text(
+              
+              "RATA-RATA PERFORMA:",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.red),
+        ),
+        const SizedBox(width: 13),
+        _avgBox("", _calculateColumnAvg(displayData, 'waktu_masuk')),
+        const SizedBox(width: 28),
+         _avgBox("", _calculateColumnAvg(displayData, 'jumlah_masuk')),
+         const SizedBox(width: 25),
+        _avgBox("", _calculateColumnAvg(displayData, 'waktu_kirim')),
+        const SizedBox(width: 29),
+        _avgBox("", _calculateColumnAvg(displayData, 'doc_balik')),
+        const SizedBox(width: 30),
+        _avgBox("", _calculateColumnAvg(displayData, 'kelayakan')),
+        const SizedBox(width: 15),
+        _avgBox("", _calculateColumnAvg(displayData, 'akhir'), isFinal: true),
+        const SizedBox(width: 20),
+        _avgBox("", _calculateColumnAvg(displayData, 'lk3'), isFinal: true),
+        
+      ],
+    ),
+ const SizedBox(height: 20),
+
+        // --- BARIS 2: DROPDOWN TEMUAN KASUS ---
+        Row(
+          children: [
+            const SizedBox(width: 330),
+            const Text("TEMUAN KASUS / CAR:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+            const SizedBox(width: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade400),
+              ),
+              child: DropdownButton<String>(
+                value: _selectedCarFilter,
+                underline: const SizedBox(),
+                style: const TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
+                items: ["Tidak Ada", "1 - 2 CAR", "> 2 CAR"].map((String val) {
+                  return DropdownMenuItem<String>(value: val, child: Text(val));
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedCarFilter = value!;
+                  });
+                },
               ),
             ),
           ],
-        );
-      },
-    );
-  }
-  Widget _buildAvgBox(String label, double value, {bool isFinal = false}) {
-  return Container(
-    margin: const EdgeInsets.only(right: 12),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: isFinal ? Colors.blue.shade700 : Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: isFinal ? Colors.blue.shade900 : Colors.grey.shade300),
-      boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
-      ],
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12, 
-            fontWeight: FontWeight.bold, 
-            color: isFinal ? Colors.white70 : Colors.grey.shade600
-          ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          value == 0 ? "-" : value.toStringAsFixed(2),
-          style: TextStyle(
-            fontSize: 12, 
-            fontWeight: FontWeight.bold, 
-            color: isFinal ? Colors.white : Colors.black87
+        const SizedBox(height: 15),
+
+        // --- BARIS 3: GRAND TOTAL (NILAI AKHIR EVALUASI) ---
+        Row(
+  children: [
+    const SizedBox(width: paddingKiri),
+    SizedBox(
+      width: labelWidth,
+      child: const Text(
+        "NILAI AKHIR EVALUASI:",
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blue),
+        textAlign: TextAlign.right,
+      ),
+    ),
+    const SizedBox(width: 15),
+    
+    // KOTAK SOLID (Nilai + Persentase)
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade900, // Warna kotak solid biru tua
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Angka Nilai Akhir
+          Text(
+            grandTotal.toStringAsFixed(2),
+            style: const TextStyle(
+              fontSize: 16, 
+              fontWeight: FontWeight.bold, 
+              color: Colors.white, // Putih agar terbaca di bg biru
+            ),
+          ),
+          const SizedBox(width: 8), // Jarak antara angka dan persen
+          // Persentase
+          Text(
+            "(${finalPercentage.toStringAsFixed(1)}%)",
+            style: TextStyle(
+              fontSize: 13, 
+              fontWeight: FontWeight.bold, 
+              color: Colors.white, // Hijau terang agar kontras
+            ),
+          ),
+        ],
+      ),
+    ),
+    
+    const SizedBox(width: 25),
+            // Peringkat / Grade
+            const Text("PERINGKAT: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getGradeColor(grade),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                grade,
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
         ),
       ],
     ),
   );
 }
+     
+// Widget khusus untuk kotak Nilai Akhir yang paling bawah
+Widget _buildGrandTotalBox(double value) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade900,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      value.toStringAsFixed(2),
+      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+    ),
+  );
+}
+
+// Widget _avgBox(String label, double val, {bool isFinal = false}) {
+//     return Container(
+//       margin: const EdgeInsets.only(left: 10),
+//       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+//       decoration: BoxDecoration(color: isFinal ? Colors.blue.shade700 : Colors.grey.shade100, borderRadius: BorderRadius.circular(6)),
+//       child: Column(
+//         children: [
+//           Text(label, style: TextStyle(fontSize: 12, color: isFinal ? Colors.white70 : Colors.grey.shade600)),
+//           Text(val == 0 ? "-" : val.toStringAsFixed(2), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isFinal ? Colors.white : Colors.black)),
+//         ],
+//       ),
+//     );
+//   }
+Widget _avgBox(String label, double val, {bool isFinal = false}) {
+  // Hitung persentase: (Nilai - 1) / 4
+  // Jika nilai 5 -> 100%, Jika nilai 1 -> 0%
+  double percentage = 0.0;
+  if (val > 0) {
+    percentage = ((val - 1) / 4) * 100;
+    if (percentage < 0) percentage = 0; // Guard agar tidak negatif
+    if (percentage > 100) percentage = 100; // Guard agar tidak lebih dari 100
+  }
+
+  return Container(
+    margin: const EdgeInsets.only(left: 10),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(
+      color: isFinal ? Colors.blue.shade700 : Colors.grey.shade100, 
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: isFinal ? Colors.blue.shade900 : Colors.grey.shade300),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (label.isNotEmpty)
+          Text(label, style: TextStyle(fontSize: 10, color: isFinal ? Colors.white70 : Colors.grey.shade600)),
+        
+        // Baris Nilai Rata-rata
+        Text(
+          val == 0 ? "-" : val.toStringAsFixed(2),
+          style: TextStyle(
+            fontSize: 14, 
+            fontWeight: FontWeight.bold, 
+            color: isFinal ? Colors.white : Colors.black
+          ),
+        ),
+        
+        // Baris Persentase (Muncul tepat di bawahnya)
+        if (val > 0)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: isFinal ? Colors.blue.shade900.withOpacity(0.5) : Colors.white,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              "${percentage.toStringAsFixed(1)}%",
+              style: TextStyle(
+                fontSize: 10, 
+                fontWeight: FontWeight.bold, 
+                color: isFinal ? Colors.white : Colors.green.shade700
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+double _calculateGrandTotal(List<Map<String, dynamic>> displayData) {
+  double avgAkhir = _calculateColumnAvg(displayData, 'akhir');
+  double avgLK3 = _calculateColumnAvg(displayData, 'lk3');
+  
+  double minusPoin = 0;
+  if (_selectedCarFilter == "1 - 2 CAR") minusPoin = 0.8;
+  if (_selectedCarFilter == "> 2 CAR") minusPoin = 1.2;
+
+  double total = (avgAkhir * 0.85) + (avgLK3 * 0.15) - minusPoin;
+  return total < 0 ? 0 : total; // Guard agar tidak minus
+}
+//   Widget _buildAvgBox(String label, double value, {bool isFinal = false}) {
+//   return Container(
+//     margin: const EdgeInsets.only(right: 12),
+//     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+//     decoration: BoxDecoration(
+//       color: isFinal ? Colors.blue.shade700 : Colors.white,
+//       borderRadius: BorderRadius.circular(8),
+//       border: Border.all(color: isFinal ? Colors.blue.shade900 : Colors.grey.shade300),
+//       boxShadow: [
+//         BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
+//       ],
+//     ),
+//     child: Column(
+//       mainAxisSize: MainAxisSize.min,
+//       children: [
+//         Text(
+//           label,
+//           style: TextStyle(
+//             fontSize: 12, 
+//             fontWeight: FontWeight.bold, 
+//             color: isFinal ? Colors.white70 : Colors.grey.shade600
+//           ),
+//         ),
+//         const SizedBox(height: 2),
+//         Text(
+//           value == 0 ? "-" : value.toStringAsFixed(2),
+//           style: TextStyle(
+//             fontSize: 12, 
+//             fontWeight: FontWeight.bold, 
+//             color: isFinal ? Colors.white : Colors.black87
+//           ),
+//         ),
+//       ],
+//     ),
+//   );
+// }
   // --- UI HELPERS ---
-  DataCell _buildValueCell(String txt, double width) => DataCell(SizedBox(width: width, child: Text(txt, style: const TextStyle(fontSize: 11), textAlign: TextAlign.center)));
+  DataCell _buildValueCell(String txt, double width) => DataCell(SizedBox(width: width, child: Text(txt, style: const TextStyle(fontSize: 12), textAlign: TextAlign.center)));
 
   DataCell _buildScoreCell(dynamic score, double width) => DataCell(SizedBox(width: width, child: Center(child: _buildScoreText(score))));
 
@@ -1689,7 +2354,7 @@ double hitungNilaiLK3(Map<String, dynamic> data) {
 double hitungNilaiAkhir(Map<String, dynamic> data) {
   // 1. Ambil semua poin dari fungsi yang sudah ada
   double pWaktuMasuk = hitungKetepatanWaktuMasuk(data);
-  double pJumlahMasuk = double.tryParse(data['ketepatan_jumlah_pemasukan_harian']?.toString() ?? "0") ?? 0;
+  double pJumlahMasuk = hitungKetepatanJumlahPemasukan(data);
   double pWaktuKirim = hitungKetepatanWaktuKirim(data);
   double pDocBalik = hitungPengembalianPOD(data);
   double pKelayakan = hitungKelayakanKendaraan(data);
@@ -1720,7 +2385,9 @@ double _calculateColumnAvg(List<Map<String, dynamic>> displayData, String type) 
     
     switch (type) {
       case 'waktu_masuk': point = hitungKetepatanWaktuMasuk(data); break;
-      case 'jumlah_masuk': point = double.tryParse(data['ketepatan_jumlah_pemasukan_harian']?.toString() ?? "0") ?? 0; break;
+      // case 'jumlah_masuk': point = double.tryParse(data['ketepatan_jumlah_pemasukan_harian']?.toString() ?? "0") ?? 0; break;
+      // Ubah case 'jumlah_masuk' agar langsung memanggil fungsi perhitungan terstruktur:
+      case 'jumlah_masuk': point = hitungKetepatanJumlahPemasukan(data); break;
       case 'waktu_kirim': point = hitungKetepatanWaktuKirim(data); break;
       case 'doc_balik': point = hitungPengembalianPOD(data); break;
       case 'kelayakan': point = hitungKelayakanKendaraan(data); break;
@@ -1739,14 +2406,352 @@ double _calculateColumnAvg(List<Map<String, dynamic>> displayData, String type) 
   // Menghasilkan rata-rata hanya dari baris yang sudah dinilai
   return countFilledRows > 0 ? totalPoints / countFilledRows : 0.0;
 }
-// Widget Helper untuk teks dalam Column agar rapi
-Widget _buildCellText(String? text) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Text(text ?? "-", style: const TextStyle(fontSize: 12)),
-  );
+String _calculateGrade(double percentage) {
+  if (percentage >= 95) return "A";
+  if (percentage >= 85) return "B";
+  if (percentage >= 75) return "C";
+  if (percentage >= 65) return "D";
+  return "E";
 }
 
+Color _getGradeColor(String grade) {
+  switch (grade) {
+    case "A": return Colors.green.shade700;
+    case "B": return Colors.blue.shade700;
+    case "C": return Colors.orange.shade700;
+    case "D": return Colors.deepOrange;
+    case "E": return Colors.red;
+    default: return Colors.grey;
+  }
+}
+
+// Widget Helper untuk teks dalam Column agar rapi
+// Widget _buildCellText(String? text) {
+//   return Padding(
+//     padding: const EdgeInsets.symmetric(vertical: 2),
+//     child: Text(text ?? "-", style: const TextStyle(fontSize: 12)),
+//   );
+// }
+
+// Future<void> _exportToExcel() async {
+//     if (_evaluationData.isEmpty) {
+//       _showSnackBar("Pilih data terlebih dahulu", Colors.orange);
+//       return;
+//     }
+
+//     try {
+//       setState(() => _isLoading = true);
+//       var excel = Excel.createExcel();
+//       Sheet sheetObject = excel['Evaluasi_Vendor'];
+//       excel.delete('Sheet1');
+
+//       // 1. Header
+//       sheetObject.appendRow([
+//         TextCellValue('Ship ID'),
+//         TextCellValue('Stuffing'),
+//         TextCellValue('No Polisi'),
+//         TextCellValue('No DO'),
+//         TextCellValue('Customer'),
+//         TextCellValue('Wkt Masuk'),
+//         TextCellValue('Jml Masuk'),
+//         TextCellValue('Wkt Kirim'),
+//         TextCellValue('Doc Balik'),
+//         TextCellValue('Unit'),
+//         TextCellValue('Total Nilai'),
+//         TextCellValue('Nilai LK3')
+//       ]);
+
+//       final List<Map<String, dynamic>> displayData = _getGroupedDisplayData(_evaluationData);
+
+//       // 2. Data Rows
+//       for (var data in displayData) {
+//         final List dos = data['collective_dos'] ?? [];
+//         sheetObject.appendRow([
+//           TextCellValue((data['all_shipping_ids'] as Set).toList().join(", ")),
+//           TextCellValue(_formatDate(data['shipping_request']?['stuffing_date'])),
+//           TextCellValue(data['no_polisi']?.toString() ?? "-"),
+//           TextCellValue(dos.map((d) => d['do_number']?.toString() ?? "").join(", ")),
+//           TextCellValue(dos.map((d) => d['customer']?['customer_name']?.toString() ?? "").join(", ")),
+//           DoubleCellValue(hitungKetepatanWaktuMasuk(data)),
+//           DoubleCellValue(double.tryParse(data['ketepatan_jumlah_pemasukan_harian']?.toString() ?? "0") ?? 0),
+//           DoubleCellValue(hitungKetepatanWaktuKirim(data)),
+//           DoubleCellValue(hitungPengembalianPOD(data)),
+//           DoubleCellValue(hitungKelayakanKendaraan(data)),
+//           DoubleCellValue(hitungNilaiAkhir(data)),
+//           DoubleCellValue(hitungNilaiLK3(data)),
+//         ]);
+//       }
+
+//       // 3. Simpan / Download
+//       var fileBytes = excel.save();
+//       String fileName = "Evaluasi_Vendor_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+
+//       if (kIsWeb) {
+//         final content = html.Blob([fileBytes!], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+//         final url = html.Url.createObjectUrlFromBlob(content);
+//         html.AnchorElement(href: url)
+//           ..setAttribute("download", fileName)
+//           ..click();
+//         html.Url.revokeObjectUrl(url);
+//       } else {
+//         final directory = await getApplicationDocumentsDirectory();
+//         String filePath = '${directory.path}/$fileName';
+//         io.File(filePath)
+//           ..createSync(recursive: true)
+//           ..writeAsBytesSync(fileBytes!);
+//         await OpenFile.open(filePath);
+//       }
+//       _showSnackBar("Ekspor berhasil", Colors.green);
+//     } catch (e) {
+//       _showSnackBar("Gagal ekspor: $e", Colors.red);
+//     } finally {
+//       setState(() => _isLoading = false);
+//     }
+//   }
+// Future<void> _exportToExcel() async {
+//   if (_evaluationData.isEmpty) {
+//     _showSnackBar("Pilih data terlebih dahulu", Colors.orange);
+//     return;
+//   }
+
+//   try {
+//     setState(() => _isLoading = true);
+//     var excel = Excel.createExcel();
+//     Sheet sheetObject = excel['Evaluasi_Vendor'];
+//     excel.delete('Sheet1');
+
+//     // --- 1. TAMBAHKAN INFORMASI HEADER DI DALAM FILE ---
+//     String vendorName = _vendorSearchController.text.isNotEmpty 
+//         ? _vendorSearchController.text 
+//         : "Semua Vendor";
+    
+//     String periodeText = _selectedDateRange == null 
+//         ? "Semua Periode" 
+//         : "${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.start)} s.d ${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.end)}";
+
+//     sheetObject.appendRow([TextCellValue('LAPORAN PENILAIAN VENDOR')]);
+//     sheetObject.appendRow([TextCellValue('Nama Vendor:'), TextCellValue(vendorName)]);
+//     sheetObject.appendRow([TextCellValue('Periode:'), TextCellValue(periodeText)]);
+//     sheetObject.appendRow([TextCellValue('')]); // Baris Kosong Pemisah
+
+//     // --- 2. HEADER TABEL ---
+//     sheetObject.appendRow([
+//       TextCellValue('Ship ID'),
+//       TextCellValue('Stuffing'),
+//       TextCellValue('No Polisi'),
+//       TextCellValue('No DO'),
+//       TextCellValue('Customer'),
+//       TextCellValue('Wkt Masuk'),
+//       TextCellValue('Jml Masuk'),
+//       TextCellValue('Wkt Kirim'),
+//       TextCellValue('Doc Balik'),
+//       TextCellValue('Unit'),
+//       TextCellValue('Total Nilai'),
+//       TextCellValue('Nilai LK3')
+//     ]);
+
+//     final List<Map<String, dynamic>> displayData = _getGroupedDisplayData(_evaluationData);
+
+//     // --- 3. DATA ROWS ---
+//     for (var data in displayData) {
+//       final List dos = data['collective_dos'] ?? [];
+//       sheetObject.appendRow([
+//         TextCellValue((data['all_shipping_ids'] as Set).toList().join(", ")),
+//         TextCellValue(_formatDate(data['shipping_request']?['stuffing_date'])),
+//         TextCellValue(data['no_polisi']?.toString() ?? "-"),
+//         TextCellValue(dos.map((d) => d['do_number']?.toString() ?? "").join(", ")),
+//         TextCellValue(dos.map((d) => d['customer']?['customer_name']?.toString() ?? "").join(", ")),
+//         DoubleCellValue(hitungKetepatanWaktuMasuk(data)),
+//         DoubleCellValue(hitungKetepatanJumlahPemasukan(data)),
+//         DoubleCellValue(hitungKetepatanWaktuKirim(data)),
+//         DoubleCellValue(hitungPengembalianPOD(data)),
+//         DoubleCellValue(hitungKelayakanKendaraan(data)),
+//         DoubleCellValue(hitungNilaiAkhir(data)),
+//         DoubleCellValue(hitungNilaiLK3(data)),
+//       ]);
+//     }
+
+//     // --- 4. PENYUSUNAN NAMA FILE ---
+//     // Membersihkan nama vendor dari karakter yang tidak diperbolehkan untuk nama file
+//     String safeVendorName = vendorName.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
+//     String fileName = "Penilaian_Vendor_${safeVendorName}_Periode_${periodeText.replaceAll(' ', '_')}.xlsx";
+
+//     // --- 5. SIMPAN / DOWNLOAD ---
+//     var fileBytes = excel.save();
+//     if (fileBytes == null) throw "Gagal membuat data Excel";
+
+//     if (kIsWeb) {
+//       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+//       final url = html.Url.createObjectUrlFromBlob(content);
+//       html.AnchorElement(href: url)
+//         ..setAttribute("download", fileName)
+//         ..click();
+//       html.Url.revokeObjectUrl(url);
+//     } else {
+//       final directory = await getApplicationDocumentsDirectory();
+//       String filePath = '${directory.path}/$fileName';
+//       io.File(filePath)
+//         ..createSync(recursive: true)
+//         ..writeAsBytesSync(fileBytes);
+      
+//       await OpenFile.open(filePath);
+//     }
+//     _showSnackBar("Ekspor berhasil: $fileName", Colors.green);
+//   } catch (e) {
+//     debugPrint("Error Export: $e");
+//     _showSnackBar("Gagal ekspor: $e", Colors.red);
+//   } finally {
+//     setState(() => _isLoading = false);
+//   }
+// }
+
+Future<void> _exportToExcel() async {
+  if (_evaluationData.isEmpty) {
+    _showSnackBar("Pilih data terlebih dahulu", Colors.orange);
+    return;
+  }
+if (_isLoading) return;
+  try {
+    setState(() => _isLoading = true);
+    var excel = Excel.createExcel();
+    Sheet sheetObject = excel['Evaluasi_Vendor'];
+    excel.delete('Sheet1');
+
+    // --- 1. INFORMASI HEADER (NIK, NAMA, PERIODE) ---
+    // Pastikan _selectedNik dan _vendorSearchController berisi data yang benar
+    // String vendorDisplay = "${_selectedNik ?? '-'} ";
+    // --- 1. INFORMASI HEADER (NIK, NAMA, PERIODE) ---
+    // Kita buat agar menampilkan NIK sekaligus Nama Vendor untuk Laporan & Nama File
+    String vendorDisplay = _selectedNik ?? "-";
+    if (_evaluationData.isNotEmpty) {
+      // Mengambil nama vendor dari data yang berhasil di-fetch jika controller kosong
+      final firstRow = _evaluationData.first;
+      final vendorName = firstRow['master_vendor']?['vendor_name'] ?? '';
+      if (vendorName.isNotEmpty) {
+        vendorDisplay = "$_selectedNik - $vendorName";
+      }
+    }
+    String periodeText = _selectedDateRange == null 
+        ? "Semua Periode" 
+        : "${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.start)} s.d ${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.end)}";
+
+    sheetObject.appendRow([TextCellValue('LAPORAN PENILAIAN PERFORMA VENDOR')]);
+    sheetObject.appendRow([TextCellValue('Vendor:'), TextCellValue(vendorDisplay)]);
+    sheetObject.appendRow([TextCellValue('Periode:'), TextCellValue(periodeText)]);
+    sheetObject.appendRow([TextCellValue('')]); // Baris Kosong Pemisah
+
+    // --- 2. HEADER TABEL DATA ---
+    sheetObject.appendRow([
+      TextCellValue('Ship ID'),
+      TextCellValue('Stuffing'),
+      TextCellValue('No Polisi'),
+      TextCellValue('No DO'),
+      TextCellValue('Customer'),
+      TextCellValue('Ketepatan Waktu Pemasukan'),
+      TextCellValue('Ketepatan Jumlah Pemasukan'),
+      TextCellValue('Ketepatan Waktu Pengiriman'),
+      TextCellValue('Pengembalian POD'),
+      TextCellValue('Kelayakan Kendaraan'),
+      TextCellValue('Total Nilai'),
+      TextCellValue('Nilai LK3')
+    ]);
+
+    final List<Map<String, dynamic>> displayData = _getGroupedDisplayData(_evaluationData);
+
+    // --- 3. LOOP DATA ROWS ---
+    for (var data in displayData) {
+      final List dos = data['collective_dos'] ?? [];
+      sheetObject.appendRow([
+        TextCellValue((data['all_shipping_ids'] as Set).toList().join(", ")),
+        TextCellValue(_formatDate(data['shipping_request']?['stuffing_date'])),
+        TextCellValue(data['no_polisi']?.toString() ?? "-"),
+        TextCellValue(dos.map((d) => d['do_number']?.toString() ?? "").join(", ")),
+        TextCellValue(dos.map((d) => d['customer']?['customer_name']?.toString() ?? "").join(", ")),
+        DoubleCellValue(hitungKetepatanWaktuMasuk(data)),
+        // DoubleCellValue(double.tryParse(data['ketepatan_jumlah_pemasukan_harian']?.toString() ?? "0") ?? 0),
+        // Gunakan fungsi perhitungan baru untuk kolom ke-7 di dalam berkas Excel Anda
+DoubleCellValue(hitungKetepatanJumlahPemasukan(data)),
+        DoubleCellValue(hitungKetepatanWaktuKirim(data)),
+        DoubleCellValue(hitungPengembalianPOD(data)),
+        DoubleCellValue(hitungKelayakanKendaraan(data)),
+        DoubleCellValue(hitungNilaiAkhir(data)),
+        DoubleCellValue(hitungNilaiLK3(data)),
+      ]);
+    }
+
+    // --- 4. SUMMARY / RATA-RATA (DI BAWAH TABEL) ---
+    sheetObject.appendRow([TextCellValue('')]); // Spasi
+    
+    // Perhitungan Summary
+    double avgAkhir = _calculateColumnAvg(displayData, 'akhir');
+    double avgLK3 = _calculateColumnAvg(displayData, 'lk3');
+    double grandTotal = _calculateGrandTotal(displayData);
+    double finalPercentage = grandTotal > 0 ? ((grandTotal - 1) / 4) * 100 : 0;
+    String grade = _calculateGrade(finalPercentage.clamp(0, 100));
+
+    // Tambahkan baris Rata-Rata Per Kolom
+    sheetObject.appendRow([
+      TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''),
+      TextCellValue('TOTAL RATA-RATA:'),
+      DoubleCellValue(_calculateColumnAvg(displayData, 'waktu_masuk')),
+      DoubleCellValue(_calculateColumnAvg(displayData, 'jumlah_masuk')),
+      DoubleCellValue(_calculateColumnAvg(displayData, 'waktu_kirim')),
+      DoubleCellValue(_calculateColumnAvg(displayData, 'doc_balik')),
+      DoubleCellValue(_calculateColumnAvg(displayData, 'kelayakan')),
+      DoubleCellValue(avgAkhir),
+      DoubleCellValue(avgLK3),
+    ]);
+
+    sheetObject.appendRow([TextCellValue('')]); // Spasi lagi
+
+    // Tambahkan Detail Hasil Akhir yang dipilih user di UI
+    sheetObject.appendRow([TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue('')]);
+    sheetObject.appendRow([TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue('Temuan Kasus/CAR:'), TextCellValue(_selectedCarFilter)]);
+    sheetObject.appendRow([TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue('Nilai Akhir Evaluasi:'), DoubleCellValue(double.parse(grandTotal.toStringAsFixed(2)))]);
+    sheetObject.appendRow([TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue('Persentase:'), TextCellValue("${finalPercentage.toStringAsFixed(1)}%")]);
+    sheetObject.appendRow([TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue('Peringkat (Grade):'), TextCellValue(grade)]);
+
+    // --- 5. PENYUSUNAN NAMA FILE ---
+    String safeName = vendorDisplay.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
+    String fileName = "Penilaian_${safeName}_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    // --- 6. SAVE & DOWNLOAD ---
+    //var fileBytes = excel.save();
+    //var fileBytes = excel.save(fileName: fileName);
+    //if (fileBytes == null) throw "Gagal membuat data Excel";
+
+    if (kIsWeb) {
+      // final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      // final url = html.Url.createObjectUrlFromBlob(content);
+      // html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      // html.Url.revokeObjectUrl(url);
+      excel.save(fileName: fileName);
+    } else {
+     var fileBytes = excel.save();
+      if (fileBytes == null) throw "Gagal merender byte data Excel";
+
+      final directory = await getApplicationDocumentsDirectory();
+      String filePath = '${directory.path}/$fileName';
+      
+      io.File file = io.File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+      
+      await file.create(recursive: true);
+      await file.writeAsBytes(fileBytes);
+      
+      // Buka dokumen secara otomatis di HP/Desktop
+      await OpenFile.open(filePath);
+    }
+    _showSnackBar("Ekspor berhasil", Colors.green);
+  } catch (e) {
+    debugPrint("Error Export: $e");
+    _showSnackBar("Gagal ekspor: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
   // UI Helper: Pewarnaan skor otomatis
   Widget _buildScoreText(dynamic score) {
     double val = double.tryParse(score?.toString() ?? "0") ?? 0;

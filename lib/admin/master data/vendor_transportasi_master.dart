@@ -820,16 +820,24 @@ Row(
         decoration: InputDecoration(
           labelText: "Cari Nama atau No Vendor...",
           prefixIcon: const Icon(Icons.search),
-          suffixIcon: IconButton(
+          suffixIcon: _searchController.text.isNotEmpty
+        ? IconButton(
             icon: const Icon(Icons.clear),
             onPressed: () {
-              _searchController.clear();
-              _searchQuery = "";
-              _fetchData();
+              setState(() {
+                _searchController.clear(); // Hapus teks di controller
+                _searchQuery = "";         // Reset query pencarian
+              });
+              _fetchData();            // Refresh data setelah direset
             },
-          ),
+          )
+        : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
+        onChanged: (val) {
+    // Memanggil setState agar suffixIcon diupdate saat user mengetik
+    setState(() {});
+  },
         onSubmitted: (val) {
           _searchQuery = val;
           _fetchData();

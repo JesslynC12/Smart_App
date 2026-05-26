@@ -33,11 +33,50 @@ String _currentUserName = 'admin';
   @override
   void initState() {
     super.initState();
-    _shippingData = widget.item;
+    //_shippingData = widget.item;
+    _loadData();
     _getProfileName();
     _fetchCheckers();
   }
 
+// Cari di dalam class _CheckInFormPageState
+Future<void> _loadData() async {
+  try {
+    final assignmentId = widget.item['id_assignment'];
+    
+    // Kita ambil data ulang dari view/table penugasan lengkap dengan vendornya
+    final response = await supabase
+        .from('shipping_assignments')
+        .select('''
+          *,
+          vendor_transportasi:id_vendor_details(*),
+          request:shipping_id (
+            *,
+            rdd,
+            so,
+            warehouse:warehouse_id(*),
+            delivery_order(
+              *,
+              customer(*),
+              do_details(
+                qty,
+                material:material_id(*)
+              )
+            )
+          )
+        ''')
+        .eq('id_assignment', assignmentId)
+        .single();
+
+    if (mounted) {
+      setState(() {
+        _shippingData = response;
+      });
+    }
+  } catch (e) {
+    debugPrint("Error load data vendor: $e");
+  }
+}
 Future<void> _getProfileName() async {
   try {
     final user = supabase.auth.currentUser;
@@ -411,8 +450,17 @@ Future<void> _submitLoadingData() async {
 
   // 2. Jika OKE, wajib isi data teknis
   if (_rekomendasiLogistic == 'OKE') {
-    if (!_formKey.currentState!.validate() || _ganjalBan == null) {
-      _showSnackBar("Data Ganjal Ban & Checker wajib diisi!", Colors.orange);
+  //   if (!_formKey.currentState!.validate() || _ganjalBan == null) {
+  //     _showSnackBar("Data Ganjal Ban & Checker wajib diisi!", Colors.orange);
+  //     return;
+  //   }
+  // }
+  bool isFormValid = _formKey.currentState!.validate();
+    // Validasi manual untuk Radio Group Ganjal Ban
+    bool isGanjalValid = _ganjalBan != null;
+
+    if (!isFormValid || !isGanjalValid) {
+      _showSnackBar("Mohon lengkapi Checker, No Segel, dan Ganjal Ban!", Colors.orange);
       return;
     }
   }
@@ -493,6 +541,8 @@ Future<void> _submitLoadingData() async {
           
           // GANJAL BAN
           _buildLabelField("Ganjal Ban"),
+          if (_ganjalBan == null && _rekomendasiLogistic == 'OKE')
+              const Text(" *Wajib", style: TextStyle(color: Colors.red, fontSize: 10)),
           _buildModernRadioGroup(
             ['Terpasang', 'Tidak Terpasang'], 
             _ganjalBan, 
@@ -523,6 +573,13 @@ Future<void> _submitLoadingData() async {
                   controller: _noSegelController,
                   style: const TextStyle(fontSize: 12),
                   decoration: _inputDecoration("No Segel SMART", Icons.qr_code_scanner_rounded),
+                  // VALIDATOR TEXT FIELD
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return "Isi No Segel";
+                  }
+                  return null;
+                },
                 ),
               ),
             ],
@@ -672,10 +729,12 @@ Widget _resultRowGroup(String title, List<Widget> children) {
 
   Widget _buildDetailedSummary() {
 
-    final data = _shippingData ?? {};
+    final data = _shippingData?? widget.item;
 
     final request = data['request'] ?? {};
-
+// Ambil RDD dan SO dari level request (shipping_request)
+    final String rddGlobal = _formatDate(request['rdd']);
+    final String soGlobal = request['so']?.toString() ?? "-";
     final bool isGroup = request['group_id'] != null;
 
     final List dos = request['delivery_order'] ?? [];
@@ -687,8 +746,29 @@ Widget _resultRowGroup(String title, List<Widget> children) {
         ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
 
         : "-";
+// AMBIL DATA DETAIL VENDOR DARI HASIL JOIN SHIPPING REQUEST / ASSIGNMENTS
+    // Menyesuaikan struktur data map penugasan aktif dari widget.item
+    Map<String, dynamic>? vendorDetails;
+   // Cek di root data (untuk single)
+    if (data['vendor_transportasi'] != null) {
+      vendorDetails = data['vendor_transportasi'];
+    } 
+    // Cek di dalam request -> assignments (untuk group)
+    else if (request['shipping_assignments'] != null && (request['shipping_assignments'] as List).isNotEmpty) {
+      // Ambil dari assignment pertama dalam list
+      var firstAssign = request['shipping_assignments'][0];
+      vendorDetails = firstAssign['vendor_transportasi'];
+    }
+    // Cek jika vendor_transportasi malah ada di dalam request langsung
+    else if (request['vendor_transportasi'] != null) {
+      vendorDetails = request['vendor_transportasi'];
+    }
 
-
+    final String vVendorName = vendorDetails?['vendor_name'] ?? '-';
+    final String vCity = vendorDetails?['city'] ?? '-';
+    final String vArea = vendorDetails?['area'] ?? '-';
+    final String vUnit = vendorDetails?['type_unit'] ?? '-';
+    final String vendorNikDisplay = data['nik'] ?? request['nik'] ?? vendorDetails?['nik'] ?? '-';
 
     return Container(
 
@@ -725,7 +805,7 @@ Widget _resultRowGroup(String title, List<Widget> children) {
                     Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", 
 
                       style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-
+_buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                   ],
 
                 ),
@@ -735,18 +815,30 @@ Widget _resultRowGroup(String title, List<Widget> children) {
                 Text(isGroup ? "ID Grup: ${request['group_id']}" : "ID Shipping: ${request['shipping_id']}", 
 
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-
+ 
                 const SizedBox(height: 16),
+
+ Text(
+                 "$vendorNikDisplay - $vVendorName",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(height: 1, color: Color(0xFFE0E0E0)),
+                ),
 
                 Row(
 
                   children: [
 
                     _infoBox("Stuffing Date", _formatDate(request['stuffing_date'])),
+                     _infoBox("Type Unit", vUnit),
+                    _infoBox("City", vCity),
+                    _infoBox("Area", vArea),
 
-                    const Spacer(),
+                   // const Spacer(),
 
-                    _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
+                   
 
                   ],
 
@@ -776,11 +868,11 @@ Widget _resultRowGroup(String title, List<Widget> children) {
 
             final List doDetails = doItem['do_details'] ?? [];
 
-            final String soNum = doItem['so']?.toString() ?? 
-                               doItem['parent_so']?.toString() ?? 
-                               "-";
+            // final String soNum = doItem['so']?.toString() ?? 
+            //                    doItem['parent_so']?.toString() ?? 
+            //                    "-";
 
-            final String rddSpesifik = _formatDate(doItem['rdd_origin']);
+            // final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 
 
 
@@ -802,7 +894,7 @@ Widget _resultRowGroup(String title, List<Widget> children) {
 
                       const SizedBox(width: 6),
 
-                      Text("RDD: $rddSpesifik",
+                      Text("RDD: $rddGlobal",
 
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
 
@@ -824,7 +916,7 @@ Widget _resultRowGroup(String title, List<Widget> children) {
 
                       const SizedBox(width: 20),
 
-                      Text("SO: $soNum", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text("SO: $soGlobal", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
 
                     ],
 
@@ -982,9 +1074,11 @@ isOke ? "KONFIRMASI SELESAI (OKE)" : "CATAT RIWAYAT (BELUM OKE)",
     );
   }
 
-  Widget _infoBox(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]);
+ Widget _infoBox(String label, String value) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))]));
+ 
   Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.all(8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 10, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)));
   Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color)), child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)));
-  void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
+  
+   void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
   String _formatDate(String? s) => s == null || s.isEmpty ? "-" : DateFormat('dd/MM/yy').format(DateTime.parse(s));
 }

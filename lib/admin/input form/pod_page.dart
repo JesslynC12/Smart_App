@@ -224,7 +224,57 @@ int _calculatePODActual() {
       }
 
       final int shipId = doRes['shipping_id'];
+// 2. Query ke tabel shipping_assignments untuk cek apakah sudah ada yang 'completed'
+      // Kita ambil semua baris yang terkait dengan shipping_id tersebut
+      final assignmentCheck = await supabase
+          .from('shipping_assignments')
+          .select('status_assignment')
+          .eq('shipping_id', shipId);
 
+      final List assignmentsList = assignmentCheck as List;
+      
+      // Validasi: Jika ada salah satu baris penugasan yang statusnya 'completed'
+      bool alreadyCompleted = assignmentsList.any((a) => 
+        a['status_assignment']?.toString().toLowerCase() == 'completed'
+      );
+
+      if (alreadyCompleted) {
+        setState(() => _isSearching = false);
+        _searchController.clear(); // Bersihkan input agar tidak membingungkan
+
+        // MUNCULKAN POP-UP DIALOG
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 28),
+                  SizedBox(width: 10),
+                  Text("Data Sudah Ada", style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: const Text(
+                "POD untuk nomor DO ini sudah pernah diinput sebelumnya dan berstatus Completed.",
+                style: TextStyle(fontSize: 14),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade800,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text("TUTUP", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+        }
+        return; // Berhenti di sini, jangan lanjut ambil data form
+      }
       // 2. Ambil group_id
       final shipRes = await supabase
           .from('shipping_request')

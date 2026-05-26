@@ -180,7 +180,10 @@ Future<void> _importMassalTigaTabel() async {
         "stuffing": row[6]?.value?.toString(), // Jika ada di kolom G
       });
     }
-
+// List untuk menampung No DO yang duplikat / sudah ada di DB
+    List<String> duplicateDOs = [];
+    List<String> materialNotFoundDOs = []; 
+    int successCount = 0;
     // --- LANGKAH 2: Eksekusi ke Database ---
     for (var entry in groupedByDO.entries) {
       String doNumber = entry.key;
@@ -197,9 +200,39 @@ Future<void> _importMassalTigaTabel() async {
   if (existingDO != null) {
     // JIKA SUDAH ADA, TAMPILKAN PESAN ATAU LANJUTKAN KE DO BERIKUTNYA
     print("No DO $doNumber sudah ada, melewati baris ini.");
+    duplicateDOs.add(doNumber);
     continue; // Melewati No DO ini agar tidak duplikat
   }
-  
+  // 2. CEK APAKAH SEMUA MATERIAL ID DI DALAM DO INI ADA DI DATABASE
+      bool allMaterialsValid = true;
+      List<int> invalidMaterialIds = [];
+
+      for (var item in items) {
+        final int? matId = item['mat_id'];
+        if (matId == null) {
+          allMaterialsValid = false;
+          break;
+        }
+
+        // Pengecekan ke master table 'material'. 
+        // NOTE: Ubah 'material' sesuai nama tabel database Anda jika berbeda (misal: 'materials')
+        final checkMat = await supabase
+            .from('material') 
+            .select('material_id')
+            .eq('material_id', matId)
+            .maybeSingle();
+
+        if (checkMat == null) {
+          allMaterialsValid = false;
+          invalidMaterialIds.add(matId);
+        }
+      }
+
+      if (!allMaterialsValid) {
+        print("No DO $doNumber dilewati karena material id $invalidMaterialIds tidak ditemukan.");
+        materialNotFoundDOs.add("$doNumber (Mat: $invalidMaterialIds)");
+        continue; // Skip proses insert untuk DO ini jika ada material yang tidak valid
+      }
       // Bersihkan tanggal
       String rddRaw = firstItem['rdd']?.toString() ?? '';
       //String? stuffingFinal = formatTanggal(firstItem['stuffing']);
@@ -235,11 +268,44 @@ Future<void> _importMassalTigaTabel() async {
       }).toList();
 
       await supabase.from('do_details').insert(detailsToInsert);
+      successCount++;
     }
 
-    _showSnackBar("Berhasil import data!", Colors.green);
+    //_showSnackBar("Berhasil import data!", Colors.green);
     _fetchShippingRequests();
+    // if (duplicateDOs.isNotEmpty) {
+    //   // Jika ada yang sukses DAN ada yang duplikat
+    //   if (successCount > 0) {
+    //     _showSnackBar(
+    //       "Berhasil import $successCount data. Namun, No DO berikut dilewati karena sudah ada: ${duplicateDOs.join(', ')}",
+    //       Colors.orange
+    //     );
+    //   } else {
+    //     // Jika semuanya gagal karena duplikat
+    //     _showSnackBar(
+    //       "Gagal Import! Semua No DO berikut sudah terdaftar: ${duplicateDOs.join(', ')}",
+    //       Colors.red
+    //     );
+    //   }
+    // } else {
+    //   // Jika semua data sukses tanpa ada duplikat
+    //   _showSnackBar("Berhasil import massal semua data!", Colors.green);
+    // }
+// Gabungkan semua pesan peringatan jika ada data yang di-skip
+    if (duplicateDOs.isNotEmpty || materialNotFoundDOs.isNotEmpty) {
+      String feedbackMessage = "Berhasil import $successCount data. \n";
+      
+      if (duplicateDOs.isNotEmpty) {
+        feedbackMessage += "⚠️ DO Duplikat (Dilewati): ${duplicateDOs.join(', ')}\n";
+      }
+      if (materialNotFoundDOs.isNotEmpty) {
+        feedbackMessage += "❌ Material Tidak Ditemukan (Dilewati): ${materialNotFoundDOs.join(', ')}";
+      }
 
+      _showSnackBar(feedbackMessage.trim(), Colors.orange.shade900);
+    } else {
+      _showSnackBar("Berhasil import massal semua data tanpa kendala!", Colors.green);
+    }
   } catch (e) {
     debugPrint("Error: $e");
     _showSnackBar("Gagal: $e", Colors.red);
@@ -2009,9 +2075,30 @@ Future<void> _splitGroup() async {
     }
   }
 
-  void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
-  }
+  // void _showSnackBar(String msg, Color color) {
+  //   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  // }
+  void _showSnackBar(String msg, Color color, {Duration duration = const Duration(seconds: 4)}) {
+  // Bersihkan snackbar yang sedang aktif agar tidak menumpuk
+  ScaffoldMessenger.of(context).hideCurrentSnackBar(); 
+  
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      duration: duration, // Menggunakan durasi dinamis sesuai parameter
+      action: duration.inSeconds > 10 
+          ? SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            )
+          : null, // Jika durasinya lama (1 menit), kita beri tombol 'OK' untuk tutup manual
+    ),
+  );
+}
 
   bool _isExporting = false;
 

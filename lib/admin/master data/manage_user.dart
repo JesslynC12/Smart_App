@@ -37,10 +37,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
 // Letakkan di dalam _UserManagementPageState
 final Map<String, List<String>> roleTemplates = {
-  'admin': ['Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain', 'Master', 'Occupancy', 'VendorRequest'],
-  'logistik': ['CheckIn', 'Loading', 'ListDO', 'DOdetailsGBJ', 'ListPermintaanPengiriman'],
-  'supervisor': ['Master', 'Loading', 'CheckIn','InputDO', 'ListDO', 'Complain', 'ListComplain'],
-  'gudang': ['Loading', 'Occupancy', 'ListDO', 'DOdetailsGBJ'],
+  'admin': ['Loading', 'KelayakanUnit','InputDO', 'ListDO', 'Complain', 'ListComplain','Occupancy','VendorRequest','slotAntrian'],
+  'logistik': ['KelayakanUnit', 'Loading', 'ListDO','VendorRequest', 'InputDO', 'PODForm','planningAntrian', 'penilaianVendor','slotAntrian'],
+  'supervisor': ['Master','OccupancyForm','Weighbridge','PosKeluar','PPICForm', 'ListPPIC','Loading', 'KelayakanUnit','InputDO', 'ListDO', 'Occupancy','DOdetailsGBJ','Complain', 'ListComplain','VendorRequest','slotAntrian','PODForm','planningAntrian', 'penilaianVendor'],
+  'gudang': ['Loading', 'OccupancyForm','Occupancy','DOdetailsGBJ'],
+  'ppic': ['PPICForm', 'ListPPIC','Occupancy'],
+  'satpam': ['PosKeluar','slotAntrian'],
   // Tambahkan role lainnya...
 };
 
@@ -214,16 +216,24 @@ final Map<String, List<String>> roleTemplates = {
                   decoration: InputDecoration(
                     labelText: "Cari NIK, Nama, atau Email...",
                     prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        _searchQuery = "";
-                        _fetchData();
-                      },
-                    ),
+                   suffixIcon: _searchController.text.isNotEmpty
+        ? IconButton(
+            icon: const Icon(Icons.clear),
+            onPressed: () {
+              setState(() {
+                _searchController.clear(); // Hapus teks di controller
+                _searchQuery = "";         // Reset query pencarian
+              });
+              _fetchData();            // Refresh data setelah direset
+            },
+          )
+        : null,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
+                  onChanged: (val) {
+    // Memanggil setState agar suffixIcon diupdate saat user mengetik
+    setState(() {});
+  },
                   onSubmitted: (val) { _searchQuery = val; _fetchData(); },
                 ),
                 const SizedBox(height: 20),
@@ -362,17 +372,18 @@ final Map<String, List<String>> roleTemplates = {
       CheckboxListTile(
         title: const Text("PILIH SEMUA", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
         activeColor: Colors.red,
-        value: selectedPrivilegeIds.length == _masterPrivileges.length && _masterPrivileges.isNotEmpty,
+        value: _masterPrivileges.isNotEmpty && 
+         selectedPrivilegeIds.length == _masterPrivileges.length,
         onChanged: (val) {
           setDialogState(() {
             if (val == true) {
               // Tambahkan semua ID dari master ke set
               for (var priv in _masterPrivileges) {
-                print("Membandingkan DB: ${priv['name']} dengan Template: ${roleTemplates[selectedRole] ?? []}");
-  if (roleTemplates[selectedRole]?.contains(priv['name']) == true) {
-    print("COCOK! Menambah ID: ${priv['id']}");
+  //               print("Membandingkan DB: ${priv['name']} dengan Template: ${roleTemplates[selectedRole] ?? []}");
+  // if (roleTemplates[selectedRole]?.contains(priv['name']) == true) {
+  //   print("COCOK! Menambah ID: ${priv['id']}");
                 selectedPrivilegeIds.add(priv['id']);
-              }
+              //}
               }
             } else {
               // Kosongkan semua

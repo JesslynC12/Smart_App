@@ -202,6 +202,18 @@ Future<void> _loadData() async {
           *,
           so, 
           warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+          shipping_assignments!inner(
+            id_assignment,
+            id_vendor_details,
+            nik,
+            vendor_transportasi:id_vendor_details(
+              qcf,
+              city,
+              area,
+              type_unit,
+              vendor_name
+            )
+          ),
           delivery_order(
             *,
             customer(*),
@@ -211,6 +223,8 @@ Future<void> _loadData() async {
             )
           )
         ''');
+// Filter agar hanya mengambil assignment milik vendor yang sedang login/dipilih
+    query = query.eq('shipping_assignments.nik', widget.vendorNik);
 
     dynamic response;
     if (groupId != null) {
@@ -430,8 +444,10 @@ Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
         }
 
         // Jika vendor -> tetap pakai nik vendor
+        // else {
+        //   changedBy = widget.vendorNik;
         else {
-          changedBy = widget.vendorNik;
+          changedBy = 'vendor'; // Opsional: Bisa juga simpan 'vendor' saja untuk menyederhanakan data
         }
       }
     }
@@ -439,15 +455,39 @@ Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
     // =====================================================
     // AMBIL ASSIGNMENT ID
     // =====================================================
-    final assignmentRes = await supabase
-        .from('shipping_assignments')
-        .select('id_assignment')
-        .inFilter('shipping_id', shipIds)
-        .eq('nik', widget.vendorNik);
+    // final assignmentRes = await supabase
+    //     .from('shipping_assignments')
+    //     .select('id_assignment')
+    //     .inFilter('shipping_id', shipIds)
+    //     .eq('nik', widget.vendorNik);
 
-    final List<int> assignmentIds = (assignmentRes as List)
-        .map((e) => e['id_assignment'] as int)
-        .toList();
+    // final List<int> assignmentIds = (assignmentRes as List)
+    //     .map((e) => e['id_assignment'] as int)
+    //     .toList();
+    List<int> assignmentIds = [];
+
+    // Jika ini adalah Group Shipment, kita harus cari id_assignment yang berstatus 'offered' atau 'accepted' 
+    // pada shipping group tersebut, agar ID lama yang 'rejected' atau 'cancel booking' TIDAK IKUT TERBAWA.
+    if (_shippingData?['group_id'] != null) {
+      final assignmentRes = await supabase
+          .from('shipping_assignments')
+          .select('id_assignment')
+          .inFilter('shipping_id', shipIds)
+          .eq('nik', widget.vendorNik)
+          .inFilter('status_assignment', ['offered', 'accepted']); // Kunci utama: Abaikan status reject/cancel lama!
+
+      assignmentIds = (assignmentRes as List)
+          .map((e) => e['id_assignment'] as int)
+          .toList();
+          
+      // Amankan jika list kosong, minimal masukkan ID assignment yang dibawa dari halaman sebelumnya
+      if (!assignmentIds.contains(widget.assignmentId)) {
+        assignmentIds.add(widget.assignmentId);
+      }
+    } else {
+      // Jika Single Shipment, langsung pakai ID assignment tunggal yang di-pass ke page ini (Sangat Aman)
+      assignmentIds = [widget.assignmentId];
+    }
 
     // =====================================================
     // INSERT HISTORY
@@ -561,6 +601,17 @@ Widget _buildDetailedSummary() {
         ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
         : "-";
 
+// AMBIL DATA DETAIL VENDOR DARI HASIL JOIN
+    Map<String, dynamic>? vendorDetails;
+    final List assignments = data['shipping_assignments'] ?? [];
+    if (assignments.isNotEmpty) {
+      vendorDetails = assignments[0]['vendor_transportasi'];
+    }
+    final String vVendorName = vendorDetails?['vendor_name'] ?? '-';
+    final String vCity = vendorDetails?['city'] ?? '-';
+    final String vArea = vendorDetails?['area'] ?? '-';
+    final String vUnit = vendorDetails?['type_unit'] ?? '-';
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -596,14 +647,25 @@ Widget _buildDetailedSummary() {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
                 ),
                 const SizedBox(height: 16),
+                // INFO UTAMA VENDOR (NIK & NAMA VENDOR)
+                Text(
+                  "${widget.vendorNik} - $vVendorName",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(height: 1, color: Color(0xFFE0E0E0)),
+                ),
                 Row(
                   children: [
                    // _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
                     _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _infoBox("Type Unit", vUnit),
+                    _infoBox("City", vCity),
+                    _infoBox("Area", vArea),
                   ],
                 ),
-
                 // --- BAGIAN RIWAYAT REJECT (DARI ASSIGNVENDORPAGE) ---
                 if (rejectList.isNotEmpty) ...[
                   const SizedBox(height: 16),
@@ -838,127 +900,241 @@ Widget _buildDetailedSummary() {
   //   );
   // }
 
-  Widget _buildTimePickerGrid() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 90, vertical: 10),
+//   Widget _buildTimePickerGrid() {
+//     return Padding(
+//       padding: const EdgeInsets.symmetric(horizontal: 90, vertical: 10),
       
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          childAspectRatio: 2.0,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: _timeSlots.length,
-        itemBuilder: (context, index) {
-          final time = _timeSlots[index];
-        final int booked = _bookedCounts[time] ?? 0;
-        final int maxCap = _getMaxCapacity(time);
-        final bool isFull = booked >= maxCap;
-        final bool isSelected = _selectedTime == time;
+//       child: GridView.builder(
+//         shrinkWrap: true,
+//         physics: const NeverScrollableScrollPhysics(),
+//         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+//           crossAxisCount: 4,
+//           childAspectRatio: 2.0,
+//           crossAxisSpacing: 10,
+//           mainAxisSpacing: 10,
+//         ),
+//         itemCount: _timeSlots.length,
+//         itemBuilder: (context, index) {
+//           final time = _timeSlots[index];
+//         final int booked = _bookedCounts[time] ?? 0;
+//         final int maxCap = _getMaxCapacity(time);
+//         final bool isFull = booked >= maxCap;
+//         final bool isSelected = _selectedTime == time;
 
-final bool isCurrentBooking = widget.oldTime == time;
-        // Menghitung sisa slot
-  final int remaining = maxCap - booked;
-List<String> timeParts = time.split(" - ");
-          return InkWell(
-  //           onTap: () => setState(() => _selectedTime = time),
-  //           child: Container(
-  //             decoration: BoxDecoration(
-  //               color: isSelected ? Colors.red.shade700 : Colors.white,
-  //               borderRadius: BorderRadius.circular(8),
-  //               border: Border.all(color: isSelected ? Colors.red : Colors.grey.shade300),
-  //             ),
-  //             alignment: Alignment.center,
-  //             child: Text(time, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-  //           ),
-  //         );
-  //       },
-  //     ),
-  //   );
-  // }
-  // Jika penuh, onTap dinonaktifkan
-          onTap: isFull ? null : () => setState(() => _selectedTime = time),
-          child: Container(
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              // Warna: Merah (Terpilih), Abu Terang (Penuh), Putih (Tersedia)
-              color: isSelected 
-                  ? Colors.red.shade700 
-                  : (isCurrentBooking 
-                ? Colors.yellow.shade100 // Warna berbeda untuk jam yang sedang aktif
-                : (isFull ? Colors.grey.shade200 : Colors.white)),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isSelected 
-                    ? Colors.red 
-                    : (isFull ? Colors.grey.shade300 : Colors.grey.shade300),
-                    width: isSelected ? 2 : 1,
-              ),
-              boxShadow: isSelected ? [BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 4)] : null,
-            ),
-            //alignment: Alignment.center,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-             // crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                //const Spacer(),
-                // TAMPILAN JAM SEJAJAR KE SAMPING (TANPA -)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                Text(
-                      timeParts[0],
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isFull ? Colors.grey.shade500 : (isSelected ? Colors.white : Colors.black),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      timeParts[1],
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isFull ? Colors.grey.shade500 : (isSelected ? Colors.white : Colors.black),
-                      ),
-                    ),
-                  ],
-                ),
+// final bool isCurrentBooking = widget.oldTime == time;
+//         // Menghitung sisa slot
+//   final int remaining = maxCap - booked;
+// List<String> timeParts = time.split(" - ");
+//           return InkWell(
+//   //           onTap: () => setState(() => _selectedTime = time),
+//   //           child: Container(
+//   //             decoration: BoxDecoration(
+//   //               color: isSelected ? Colors.red.shade700 : Colors.white,
+//   //               borderRadius: BorderRadius.circular(8),
+//   //               border: Border.all(color: isSelected ? Colors.red : Colors.grey.shade300),
+//   //             ),
+//   //             alignment: Alignment.center,
+//   //             child: Text(time, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+//   //           ),
+//   //         );
+//   //       },
+//   //     ),
+//   //   );
+//   // }
+//   // Jika penuh, onTap dinonaktifkan
+//           onTap: isFull ? null : () => setState(() => _selectedTime = time),
+//           child: Container(
+//             alignment: Alignment.center,
+//             decoration: BoxDecoration(
+//               // Warna: Merah (Terpilih), Abu Terang (Penuh), Putih (Tersedia)
+//               color: isSelected 
+//                   ? Colors.red.shade700 
+//                   : (isCurrentBooking 
+//                 ? Colors.yellow.shade100 // Warna berbeda untuk jam yang sedang aktif
+//                 : (isFull ? Colors.grey.shade200 : Colors.white)),
+//               borderRadius: BorderRadius.circular(8),
+//               border: Border.all(
+//                 color: isSelected 
+//                     ? Colors.red 
+//                     : (isFull ? Colors.grey.shade300 : Colors.grey.shade300),
+//                     width: isSelected ? 2 : 1,
+//               ),
+//               boxShadow: isSelected ? [BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 4)] : null,
+//             ),
+//             //alignment: Alignment.center,
+//             child: Column(
+//               mainAxisAlignment: MainAxisAlignment.center,
+//              // crossAxisAlignment: CrossAxisAlignment.center,
+//               children: [
+//                 //const Spacer(),
+//                 // TAMPILAN JAM SEJAJAR KE SAMPING (TANPA -)
+//                 Row(
+//                   mainAxisAlignment: MainAxisAlignment.center,
+//                   children: [
+//                 Text(
+//                       timeParts[0],
+//                       style: TextStyle(
+//                         fontSize: 16,
+//                         fontWeight: FontWeight.bold,
+//                         color: isFull ? Colors.grey.shade500 : (isSelected ? Colors.white : Colors.black),
+//                       ),
+//                     ),
+//                     const SizedBox(width: 4),
+//                     Text(
+//                       timeParts[1],
+//                       style: TextStyle(
+//                         fontSize: 16,
+//                         fontWeight: FontWeight.bold,
+//                         color: isFull ? Colors.grey.shade500 : (isSelected ? Colors.white : Colors.black),
+//                       ),
+//                     ),
+//                   ],
+//                 ),
               
-                // --- BAGIAN YANG DIUBAH MENJADI FORMAT 2/14 ---
-          Text(
-            isFull ? "FULL" : "$remaining/$maxCap", // Contoh: 2/14
-            style: TextStyle(
-              fontSize: 16,
-              color: isFull 
-                  ? Colors.red.shade300 
-                  : (isSelected ? Colors.white70 : Colors.green.shade700),
-              fontWeight: FontWeight.bold,
-              ),
+//                 // --- BAGIAN YANG DIUBAH MENJADI FORMAT 2/14 ---
+//           Text(
+//             isFull ? "FULL" : "$remaining/$maxCap", // Contoh: 2/14
+//             style: TextStyle(
+//               fontSize: 16,
+//               color: isFull 
+//                   ? Colors.red.shade300 
+//                   : (isSelected ? Colors.white70 : Colors.green.shade700),
+//               fontWeight: FontWeight.bold,
+//               ),
+//           ),
+//          const SizedBox(height: 14),
+//          // const Spacer(),
+//           //       const Divider(height: 1, indent: 8, endIndent: 8),
+//                 // KETERANGAN CHECK-IN (2 JAM SEBELUM)
+//                 Text(
+//                     "Check-in Kedatangan:\n${_getCheckInTime(time)}",
+//                     textAlign: TextAlign.center,
+//                     style: TextStyle(
+//                       fontSize: 14, // Ukuran kecil agar tidak memenuhi kotak
+//                       fontStyle: FontStyle.italic,
+//                       color: isFull ? Colors.grey.shade400 : (isSelected ? Colors.white60 : Colors.blueGrey),
+//                     ),
+//                 ),
+//               ],
+//             ),
+//           ),
+//         );
+//       },
+//     ),
+//   );
+// }
+Widget _buildTimePickerGrid() {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      // Menentukan jumlah kolom berdasarkan lebar layar
+      // Laptop/Layar Lebar (> 900px): 4 kolom
+      // Tablet/Layar Sedang (> 600px): 3 kolom
+      // HP/Layar Kecil: 2 kolom
+      int crossAxisCount = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 600 ? 3 : 2);
+      
+      // Mengatur rasio kotak agar pas (makin lebar layar, makin pendek kotaknya)
+      double aspectRatio = constraints.maxWidth > 600 ? 1.8 : 1.4;
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: aspectRatio,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
           ),
-         const SizedBox(height: 14),
-         // const Spacer(),
-          //       const Divider(height: 1, indent: 8, endIndent: 8),
-                // KETERANGAN CHECK-IN (2 JAM SEBELUM)
-                Text(
-                    "Check-in Kedatangan:\n${_getCheckInTime(time)}",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14, // Ukuran kecil agar tidak memenuhi kotak
-                      fontStyle: FontStyle.italic,
-                      color: isFull ? Colors.grey.shade400 : (isSelected ? Colors.white60 : Colors.blueGrey),
-                    ),
+          itemCount: _timeSlots.length,
+          itemBuilder: (context, index) {
+            final time = _timeSlots[index];
+            final int booked = _bookedCounts[time] ?? 0;
+            final int maxCap = _getMaxCapacity(time);
+            final bool isFull = booked >= maxCap;
+            final bool isSelected = _selectedTime == time;
+            final bool isCurrentBooking = widget.oldTime == time;
+            final int remaining = maxCap - booked;
+            List<String> timeParts = time.split(" - ");
+
+            return InkWell(
+              onTap: isFull ? null : () => setState(() => _selectedTime = time),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: isSelected 
+                      ? Colors.red.shade700 
+                      : (isCurrentBooking 
+                          ? Colors.yellow.shade100 
+                          : (isFull ? Colors.grey.shade100 : Colors.white)),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected 
+                        ? Colors.red 
+                        : (isFull ? Colors.grey.shade300 : Colors.grey.shade300),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  boxShadow: isSelected ? [BoxShadow(color: Colors.red.withOpacity(0.2), blurRadius: 4)] : null,
                 ),
-              ],
-            ),
-          ),
-        );
-      },
-    ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Baris Jam
+                      FittedBox( // Mencegah teks meluap ke samping
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(timeParts[0], style: _slotStyle(isSelected, isFull, fontSize: 13)),
+                            Text(" - ", style: _slotStyle(isSelected, isFull, fontSize: 13)),
+                            Text(timeParts[1], style: _slotStyle(isSelected, isFull, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Baris Kapasitas
+                      Text(
+                        isFull ? "PENUH" : "$remaining/$maxCap Tersedia",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isFull ? Colors.red.shade400 : (isSelected ? Colors.white : Colors.green.shade700),
+                        ),
+                      ),
+                      const Divider(height: 12, indent: 10, endIndent: 10),
+                      // Info Check-in
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          "Check-in: ${_getCheckInTime(time)}",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                            color: isSelected ? Colors.white70 : Colors.blueGrey,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+
+// Fungsi bantu untuk style teks slot
+TextStyle _slotStyle(bool isSelected, bool isFull, {double fontSize = 14}) {
+  return TextStyle(
+    fontSize: fontSize,
+    fontWeight: FontWeight.bold,
+    color: isFull ? Colors.grey.shade400 : (isSelected ? Colors.white : Colors.black),
   );
 }
 
@@ -1005,7 +1181,8 @@ Future<void> _checkAvailability() async {
         .inFilter('status_assignment', [
           'accepted', 
           'on going', 
-          'check in', 
+          'check in',
+          'kelayakan unit',
           'loading', 
           'weighbridge', 
           'keluar'

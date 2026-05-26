@@ -47,13 +47,14 @@ serve(async (req) => {
     const userId = authData.user.id
 
     // 3. Simpan Profil
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
       id: userId,
       nik,
       name,
       email,
       lokasi,
       role,
+      status: 'verified',
       is_active: true // Pastikan status aktif saat dibuat
     })
 

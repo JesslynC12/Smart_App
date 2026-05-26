@@ -23,6 +23,8 @@ class _HomepageVendorState extends State<HomepageVendor> {
   bool _isOrderLoading = false;
 Timer? _timer;
 
+// tambahkan variabel subscription untuk mengontrol realtime stream
+  StreamSubscription? _realtimeSubscription;
   // Variabel Statistik
   int totalRequests = 0;
   int ongoingCount = 0;
@@ -45,6 +47,8 @@ Timer? _timer;
 @override
   void dispose() {
     _timer?.cancel();
+    // WAJIB: Batalkan subscription realtime agar tidak terjadi kebocoran memori (memory leak)
+    _realtimeSubscription?.cancel();
     super.dispose();
   }
   // Memastikan User terisi sebelum mengambil statistik
@@ -55,7 +59,29 @@ Timer? _timer;
         _fetchStatistics(),
         _fetchNewOrders(),
       ]);
+      // 2. Setup listener realtime setelah data user (NIK) tersedia
+      _setupRealtime();
     }
+  }
+// Fungsi baru untuk setup Realtime menggunakan Supabase Stream
+  void _setupRealtime() {
+    final nik = currentUser?.nikVendor;
+    if (nik == null) return;
+
+    // Batalkan subscription lama jika ada sebelum membuat yang baru
+    _realtimeSubscription?.cancel();
+
+    // Memantau tabel shipping_assignments secara realtime
+    _realtimeSubscription = supabase
+        .from('shipping_assignments')
+        .stream(primaryKey: ['id_assignment'])
+        .eq('nik', nik) // Filter agar hanya memantau data milik vendor ini saja
+        .listen((_) {
+          debugPrint("Realtime Update Terdeteksi di shipping_assignments!");
+          // Jalankan fetch data ulang setiap kali ada perubahan data (INSERT/UPDATE/DELETE) di database
+          _fetchStatistics();
+          _fetchNewOrders();
+        });
   }
 
   Future<void> _loadUserData() async {
@@ -330,6 +356,12 @@ Future<void> _fetchNewOrders() async {
     // Ambil data assignment
     final response = await supabase.from('shipping_assignments').select('''
           *,
+           vendor_transportasi:id_vendor_details (
+        qcf,
+        city,
+        area,
+        type_unit
+      ),
           request:shipping_id (
             *,
             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
@@ -347,10 +379,12 @@ Future<void> _fetchNewOrders() async {
     if (mounted) {
       List<Map<String, dynamic>> rawList = [];
       for (var e in (response as List)) {
+        if (e['request'] == null) continue;
         final Map<String, dynamic> req = Map<String, dynamic>.from(e['request']);
         // Simpan assignment_id asli ke dalam request untuk tracking
         req['id_assignment'] = e['id_assignment'];
         req['assigned_at'] = e['assigned_at'];
+        req['vendor_transportasi'] = e['vendor_transportasi'];
         rawList.add(req);
       }
 
@@ -421,6 +455,7 @@ if (mounted) {
           final status = item['status_assignment']?.toString().toLowerCase();
           return status == 'accepted' || 
                  status == 'check in' || 
+                 status == 'kelayakan unit' || 
                  status == 'loading' || 
                  status == 'weighbridge' || 
                  status == 'keluar';
@@ -481,48 +516,117 @@ if (mounted) {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final primaryColor = Colors.red.shade700;
-    final bool isApproved = currentUser?.status == 'verified';
+  // @override
+  // Widget build(BuildContext context) {
+  //   final primaryColor = Colors.red.shade700;
+  //   final bool isApproved = currentUser?.status == 'verified';
 
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      body: isLoading
-          ? Center(child: CircularProgressIndicator(color: primaryColor))
-          : RefreshIndicator(
-              onRefresh: _loadInitialData,
+  //   return Scaffold(
+  //     backgroundColor: Colors.grey.shade50,
+  //     body: isLoading
+  //         ? Center(child: CircularProgressIndicator(color: primaryColor))
+  //         : RefreshIndicator(
+  //             onRefresh: _loadInitialData,
+  //             color: primaryColor,
+  //             child: SingleChildScrollView(
+  //               physics: const AlwaysScrollableScrollPhysics(),
+  //               child: Column(
+  //                 children: [
+  //                   _buildHeaderSection(primaryColor),
+  //                   Padding(
+  //                     padding: const EdgeInsets.all(20.0),
+  //                     child: Column(
+  //                       crossAxisAlignment: CrossAxisAlignment.start,
+  //                       children: [
+  //                         //_buildStatusBanner(isApproved),
+  //                         //const SizedBox(height: 25),
+  //                         // const Text(
+  //                         //   "Aktivitas Pengiriman",
+  //                         //   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  //                         // ),
+  //                         Text(
+  //       "Aktivitas Pengiriman (${DateFormat('MMMM yyyy', 'id_ID').format(DateTime.now())})",
+  //       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  //     ),
+  //                         const SizedBox(height: 15),
+  //                         _buildStatisticGrid(),
+  //                       const SizedBox(height: 30),
+                          
+  //                         // --- BAGIAN ORDER BARU ---
+  //                         Row(
+  //                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                           children: [
+  //                             const Text("Pesanan Baru Tersedia", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  //                             if (_isOrderLoading) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+  //                           ],
+  //                         ),
+  //                         const SizedBox(height: 15),
+                          
+  //                         if (_newOrdersList.isEmpty && !_isOrderLoading)
+  //                           _buildEmptyState()
+  //                         else
+  //                           ListView.builder(
+  //                             shrinkWrap: true,
+  //                             physics: const NeverScrollableScrollPhysics(),
+  //                             itemCount: _newOrdersList.length,
+  //                             itemBuilder: (context, index) => _buildOrderCard(_newOrdersList[index]),
+  //                           ),
+  //                       ],
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ),
+  //   );
+  // }
+  @override
+Widget build(BuildContext context) {
+  final primaryColor = Colors.red.shade700;
+
+  return Scaffold(
+    backgroundColor: Colors.grey.shade50,
+    body: isLoading
+        ? Center(child: CircularProgressIndicator(color: primaryColor))
+        : RefreshIndicator(
+           onRefresh: () async {
+                await _fetchStatistics();
+                await _fetchNewOrders();
+              },
               color: primaryColor,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildHeaderSection(primaryColor),
-                    Padding(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildHeaderSection(primaryColor),
+                  // Batasi lebar maksimal konten agar bagus di Laptop
+                  // Center(
+                  //   child: Container(
+                  //     constraints: const BoxConstraints(maxWidth: 1000), // Maksimal lebar 1000px
+                  Padding(
                       padding: const EdgeInsets.all(20.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          //_buildStatusBanner(isApproved),
-                          //const SizedBox(height: 25),
-                          // const Text(
-                          //   "Aktivitas Pengiriman",
-                          //   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          // ),
                           Text(
-        "Aktivitas Pengiriman (${DateFormat('MMMM yyyy', 'id_ID').format(DateTime.now())})",
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
-                          const SizedBox(height: 15),
-                          _buildStatisticGrid(),
-                        const SizedBox(height: 30),
+                            "Aktivitas Pengiriman (${DateFormat('MMMM yyyy', 'id_ID').format(DateTime.now())})",
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 20),
                           
-                          // --- BAGIAN ORDER BARU ---
+                          // Widget Statistik Responsif
+                          _buildStatisticGrid(),
+                          
+                          const SizedBox(height: 35),
+                          
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text("Pesanan Baru Tersedia", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                              if (_isOrderLoading) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                              const Text("Pesanan Baru Tersedia", 
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              if (_isOrderLoading) 
+                                const SizedBox(width: 20, height: 20, 
+                                  child: CircularProgressIndicator(strokeWidth: 2)),
                             ],
                           ),
                           const SizedBox(height: 15),
@@ -539,12 +643,13 @@ if (mounted) {
                         ],
                       ),
                     ),
-                  ],
-                ),
+                
+                ],
               ),
             ),
-    );
-  }
+          ),
+  );
+}
   // --- UI KARTU PESANAN (Pindahan VendorOrderListPage) ---
   // Widget _buildOrderCard(Map<String, dynamic> item) {
   //   final bool isGroup = item['group_id'] != null;
@@ -754,12 +859,17 @@ Widget _buildOrderCard(Map<String, dynamic> item) {
         : "-";
 
     final bool expired = _isExpired(item['assigned_at']);
-
+final vt = item['vendor_transportasi'];
+  
+  final String city = vt != null ? (vt['city'] ?? '-') : '-';
+  final String area = vt != null ? (vt['area'] ?? '-') : '-';
+  final String typeUnit = vt != null ? (vt['type_unit'] ?? '-') : '-';
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // HEADER: Penanda Group / Single Ship
           Container(
@@ -815,12 +925,40 @@ Widget _buildOrderCard(Map<String, dynamic> item) {
                   children: [
                    // _infoBox("RDD", _formatDate(item['rdd'])),
                     _infoBox("STUFFING", _formatDate(item['stuffing_date'])),
+                     _infoBox("TIPE UNIT",  typeUnit.toUpperCase()),
+                     _infoBox("RUTE PENGIRIMAN", "$city → $area"),
                     _infoBox("STATUS", (item['is_dedicated'] ?? "-").toString().toUpperCase()),
                     _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase(), color: Colors.red.shade700),
                   ],
                 ),
-                
+                // // --- LETAKKAN DI SINI ---
+                // if (item['vendor_transportasi'] != null)
+                //   Padding(
+                //     padding: const EdgeInsets.only(top: 12, bottom: 4, left: 4),
+                //     child: Column(
+                //       crossAxisAlignment: CrossAxisAlignment.start,
+                //       children: [
+                //         const Text(
+                //           "DETAIL ALOKASI WILAYAH & UNIT", 
+                //           style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)
+                //         ),
+                //         const SizedBox(height: 6),
+                //         Wrap(
+                //           spacing: 8,
+                //           runSpacing: 4,
+                //           children: [
+                //             _miniVendorDetail("City: ${item['vendor_transportasi']['city'] ?? '-'}"),
+                //             _miniVendorDetail("Area: ${item['vendor_transportasi']['area'] ?? '-'}"),
+                //             _miniVendorDetail("Unit: ${item['vendor_transportasi']['type_unit'] ?? '-'}"),
+                //           ],
+                //         ),
+                //       ],
+                //     ),
+                //   ),
+            
+             
                  const Divider(height: 25),
+        
                 // --- LETAKKAN DI SINI ---
                 const Text(
                   "RINCIAN MUATAN", 
@@ -870,6 +1008,26 @@ Widget _buildOrderCard(Map<String, dynamic> item) {
       ),
     );
   }
+  
+// Fungsi helper untuk teks detail vendor yang kecil di bawah nama
+Widget _miniVendorDetail(String text) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: Colors.grey.shade300, width: 0.5),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        color: Colors.blueGrey.shade700,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
+}
 void _showRejectDialog(Map<String, dynamic> item) {
   final List<String> rejectReasons = [
     "Tidak Ada Supir",
@@ -1164,6 +1322,7 @@ Widget _infoText(String label, String value) {
   //     ),
   //   );
   // }
+  
 Widget _buildDoMiniCard(Map<String, dynamic> doItem, dynamic parentSo) {
   // Ambil data customer dan RDD yang sudah disuntikkan tadi
   final customer = doItem['customer'] ?? {};
@@ -1363,55 +1522,125 @@ Widget _buildDoMiniCard(Map<String, dynamic> doItem, dynamic parentSo) {
   //   );
   // }
 
-  Widget _buildStatisticGrid() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 4,
-      crossAxisSpacing: 15,
-      mainAxisSpacing: 15,
-      childAspectRatio: 2.1,
-      children: [
-        _statCard("Total Request", totalRequests.toString(), Colors.blue),
-        _statCard("On Going", ongoingCount.toString(), Colors.orange),
-        _statCard("Completed", completedCount.toString(), Colors.green),
-        _statCard("Rejected", rejectedCount.toString(), Colors.red),
-      ],
-    );
-  }
+  // Widget _buildStatisticGrid() {
+  //   return GridView.count(
+  //     shrinkWrap: true,
+  //     physics: const NeverScrollableScrollPhysics(),
+  //     crossAxisCount: 4,
+  //     crossAxisSpacing: 15,
+  //     mainAxisSpacing: 15,
+  //     childAspectRatio: 2.1,
+  //     children: [
+  //       _statCard("Total Request", totalRequests.toString(), Colors.blue),
+  //       _statCard("On Going", ongoingCount.toString(), Colors.orange),
+  //       _statCard("Completed", completedCount.toString(), Colors.green),
+  //       _statCard("Rejected", rejectedCount.toString(), Colors.red),
+  //     ],
+  //   );
+  // }
 
-  Widget _statCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border(left: BorderSide(color: color, width: 5)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+  // Widget _statCard(String label, String value, Color color) {
+  //   return Container(
+  //     padding: const EdgeInsets.all(16),
+  //     decoration: BoxDecoration(
+  //       color: Colors.white,
+  //       borderRadius: BorderRadius.circular(15),
+  //       border: Border(left: BorderSide(color: color, width: 5)),
+  //       boxShadow: [
+  //         BoxShadow(
+  //           color: Colors.black.withOpacity(0.05),
+  //           blurRadius: 10,
+  //           offset: const Offset(0, 4),
+  //         ),
+  //       ],
+  //     ),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       mainAxisAlignment: MainAxisAlignment.center,
+  //       children: [
+  //         Text(
+  //           label,
+  //           style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600),
+  //         ),
+  //         const SizedBox(height: 4),
+  //         Text(
+  //           value,
+  //           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
+  Widget _buildStatisticGrid() {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      // Jika lebar layar < 600px (HP), pakai 2 kolom. Jika > 600px (Laptop), pakai 4 kolom.
+      int crossAxisCount = constraints.maxWidth < 600 ? 2 : 4;
+      // Sesuaikan rasio kotak agar tidak overflow
+      double aspectRatio = constraints.maxWidth < 600 ? 1.5 : 2.0;
+
+      return GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: aspectRatio,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
-          ),
+          _statCard("Total Request", totalRequests.toString(), Colors.blue, Icons.assignment),
+          _statCard("On Going", ongoingCount.toString(), Colors.orange, Icons.pending_actions),
+          _statCard("Completed", completedCount.toString(), Colors.green, Icons.check_circle),
+          _statCard("Rejected", rejectedCount.toString(), Colors.red, Icons.cancel),
         ],
-      ),
-    );
-  }
+      );
+    },
+  );
+}
+
+Widget _statCard(String label, String value, Color color, IconData icon) {
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(15),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+      ],
+    ),
+    child: Row(
+      children: [
+        // Indikator Warna & Icon
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        // Teks
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(label, 
+                style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              FittedBox(
+                child: Text(value, 
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildHeaderSection(Color color) {
     return Container(

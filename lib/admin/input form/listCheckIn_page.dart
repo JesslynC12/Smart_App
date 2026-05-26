@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/input%20form/checkIn_page.dart';
+import 'package:project_app/admin/input%20form/formKelayakan_page.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -16,40 +16,155 @@ class _VehicleControlFormState extends State<VehicleControlFormState> {
   final supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<dynamic> _planningList = [];
+  List<dynamic> _filteredPlanningList = [];
   String? _currentUser;
+  // String? _currentUserName;
 
 // Variabel Filter Baru
   DateTime _selectedDate = DateTime.now();
   String _dateFilterType = 'stuffing_date'; // Default: Shipping Date
-  //final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 RealtimeChannel? _channel;
+RealtimeChannel? _assignmentsChannel;
+  RealtimeChannel? _requestsChannel;
 
   @override
   void initState() {
     super.initState();
   
-    _fetchPlanningData();
+  //   _fetchPlanningData();
 
-  _channel = supabase
-      .channel('shipping_assignments_changes')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'shipping_assignments',
-        callback: (payload) async {
-          await _fetchPlanningData();
-        },
-      )
-      .subscribe();
-
+  // _channel = supabase
+  //     .channel('shipping_assignments_changes')
+  //     .onPostgresChanges(
+  //       event: PostgresChangeEvent.all,
+  //       schema: 'public',
+  //       table: 'shipping_assignments',
+  //       callback: (payload) async {
+  //         await _fetchPlanningData();
+  //       },
+  //     )
+  //     .subscribe();
+  _getUserData();
+// Memuat data awal dengan loading spinner
+    _fetchPlanningData(showGlobalLoading: true);
+    // Aktifkan pendengar realtime
+    _initRealtimeStreams();
+    // Jalankan filter pencarian setiap kali ada teks baru diketik
+    _searchController.addListener(_filterDataBySearch);
   }
 
 @override
 void dispose() {
-  _channel?.unsubscribe();
-  super.dispose();
+  // _channel?.unsubscribe();
+  // Hapus channel realtime saat pindah halaman
+  // if (_channel != null) {
+  //   supabase.removeChannel(_channel!);
+  // }
+  // Tutup semua koneksi stream agar tidak memory leak
+  _searchController.dispose();
+    _assignmentsChannel?.unsubscribe();
+    _requestsChannel?.unsubscribe();
+    // Hapus juga dari client supabase secara eksplisit
+    if (_assignmentsChannel != null) supabase.removeChannel(_assignmentsChannel!);
+    if (_requestsChannel != null) supabase.removeChannel(_requestsChannel!);
+    super.dispose();
 }
+void _initRealtimeStreams() {
+    // 1. Monitor tabel penugasan (shipping_assignments)
+    _assignmentsChannel = supabase
+        .channel('vehicle_assignments_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_assignments',
+          callback: (payload) async {
+            debugPrint("Realtime: Perubahan di Penugasan Terdeteksi");
+            // Refresh data diam-diam tanpa memunculkan loading di tengah layar
+            await _fetchPlanningData(showGlobalLoading: false); 
+          },
+        )
+        .subscribe();
 
+    // 2. Monitor tabel permintaan (shipping_request)
+    _requestsChannel = supabase
+        .channel('vehicle_requests_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_request',
+          callback: (payload) async {
+            debugPrint("Realtime: Perubahan di Request Terdeteksi");
+            await _fetchPlanningData(showGlobalLoading: false);
+          },
+        )
+        .subscribe();
+  }
+  
+  void _filterDataBySearch() {
+    String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      setState(() {
+        _filteredPlanningList = List.from(_planningList);
+      });
+      return;
+    }
+
+    setState(() {
+      _filteredPlanningList = _planningList.where((item) {
+        // Ambil data Vendor
+        final vendor = item['master_vendor'] ?? {};
+        final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
+        final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
+
+        // Ambil list DO dari request
+        final request = item['request'] ?? {};
+        final List dos = request['delivery_order'] as List? ?? [];
+        
+        // Cek apakah ada salah satu nomor DO yang cocok
+        bool matchDO = dos.any((doItem) {
+          final String doNumber = (doItem['do_number'] ?? '').toString().toLowerCase();
+          return doNumber.contains(query);
+        });
+
+        // Return true jika salah satu kondisi terpenuhi
+        return matchDO || vendorName.contains(query) || nikVendor.contains(query);
+      }).toList();
+    });
+  }
+  
+  // Langkah 1: Fungsi otomatis ketika pertama kali klik "CHECK-IN KEDATANGAN"
+  Future<void> _registerCheckInTimestamp(Map<String, dynamic> item,{String? lateReason}) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
+      final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
+
+      final String nowIso = DateTime.now().toIso8601String();
+      final String operatorName = _currentUser ?? 'admin';
+
+      // Update kolom checkIn_at dan checkIn_by di Postgres
+      await supabase.from('shipping_assignments').update({
+        'checkIn_at': nowIso,
+        'checkIn_by': operatorName,
+        'status_assignment': 'check in', 
+        'latecheckIn_reason': lateReason,
+      }).inFilter('id_assignment', assignmentIds);
+
+ await supabase.from('shipping_request').update({
+      'status': 'check in', 
+    }).inFilter('shipping_id', shipIds);
+
+      _showSnackBar("Kedatangan berhasil dicatat!", Colors.green);
+      
+      // Refresh data agar UI mendeteksi perubahan status tombol
+      await _fetchPlanningData(showGlobalLoading: false);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showSnackBar("Gagal mencatat kedatangan: $e", Colors.red);
+    }
+  }
 // Fungsi untuk memproses Check-in
 Future<void> _handleCheckIn(Map<String, dynamic> item) async {
   final request = item['request'] ?? {};
@@ -79,7 +194,8 @@ Future<void> _handleCheckIn(Map<String, dynamic> item) async {
   if (now.isAfter(bookingTime)) {
     _showLateCheckInDialog(item);
   } else {
-    _openCheckInTab(item);
+    // _openCheckInTab(item);
+    _registerCheckInTimestamp(item);
     // PINDAH KE HALAMAN FORM (Normal)
     //Navigator.push(context, MaterialPageRoute(builder: (c) => CheckInFormPage(item: item, onBack: () {  },)));
   //_navigateToForm(item);
@@ -105,15 +221,44 @@ Future<void> _handleCheckIn(Map<String, dynamic> item) async {
       ),
     );
   }
-void _getUserData() {
+
+// void _getUserData() {
+//     final user = supabase.auth.currentUser;
+//     if (user != null) {
+//       setState(() {
+//         _currentUser = user.email;
+//       });
+      
+//     }
+//   }
+
+Future<void> _getUserData() async {
     final user = supabase.auth.currentUser;
     if (user != null) {
-      setState(() {
-        _currentUser = user.email;
-      });
+      try {
+        final profileData = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (profileData != null && profileData['name'] != null) {
+          setState(() {
+            _currentUser = profileData['name']; // Menggunakan field 'name'
+          });
+        } else {
+          setState(() {
+            _currentUser = user.email; // Fallback ke email jika name kosong
+          });
+        }
+      } catch (e) {
+        debugPrint("Error fetching profile name: $e");
+        setState(() {
+          _currentUser = user.email;
+        });
+      }
     }
-  }
-  
+  }  
 //   void _navigateToForm(Map<String, dynamic> item, {String? lateReason}) {
 //   setState(() {
 //     _currentActiveContent = CheckInFormPage(
@@ -195,10 +340,11 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
             //    CheckInFormPage(item: item, lateReason: reasonController.text)));
             //_navigateToForm(item, lateReason: reasonController.text);
              Navigator.pop(context); // Tutup dialog
-              _openCheckInTab(item, reason: reasonController.text);
+              // _openCheckInTab(item, reason: reasonController.text);
+              _registerCheckInTimestamp(item, lateReason: reasonController.text.trim());
             
           },
-          child: const Text("LANJUT KE FORM", style: TextStyle(color: Colors.white)),
+          child: const Text("SIMPAN", style: TextStyle(color: Colors.white)),
         ),
       ],
     ),
@@ -226,44 +372,45 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
 //     _showSnackBar("Gagal Check-in: $e", Colors.red);
 //   }
 // }
-Future<void> _processCheckIn(Map<String, dynamic> item, String? lateReason) async {
-  try {
-    setState(() => _isLoading = true);
+
+// Future<void> _processCheckIn(Map<String, dynamic> item, String? lateReason) async {
+//   try {
+//     setState(() => _isLoading = true);
     
-    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
-    final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
+//     final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
+//     final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
+// final String operatorName = _currentUser ?? 'admin';
+// // UPDATE 1: Tabel Assignments (Data Detail Eksekusi)
+//     // await supabase.from('shipping_assignments').update({
+//     //   'status_assignment': 'check in',
+//     //   'checkin_at': DateTime.now().toIso8601String(),
+//     //   'late_reason': lateReason,
+//     // }).inFilter('id_assignment', assignmentIds);
 
-// UPDATE 1: Tabel Assignments (Data Detail Eksekusi)
-    // await supabase.from('shipping_assignments').update({
-    //   'status_assignment': 'check in',
-    //   'checkin_at': DateTime.now().toIso8601String(),
-    //   'late_reason': lateReason,
-    // }).inFilter('id_assignment', assignmentIds);
+//     // 1. Simpan Milestone Kedatangan di tabel Assignments (Tanpa ubah status)
+//     await supabase.from('shipping_assignments').update({
+//       'kelayakan_at': DateTime.now().toIso8601String(),
+//       'latecheckIn_reason': lateReason, 
+//       'kelayakan_by': operatorName,
+//       // Status assignment dibiarkan 'accepted' sesuai permintaan Anda
+//     }).inFilter('id_assignment', assignmentIds);
 
-    // 1. Simpan Milestone Kedatangan di tabel Assignments (Tanpa ubah status)
-    await supabase.from('shipping_assignments').update({
-      'checkIn_at': DateTime.now().toIso8601String(),
-      'latecheckIn_reason': lateReason, 
-      'checkIn_by': _currentUser ?? 'admin',
-      // Status assignment dibiarkan 'accepted' sesuai permintaan Anda
-    }).inFilter('id_assignment', assignmentIds);
+//     // 2. Update Status Utama di tabel Request (Sesuai keinginan Anda)
+//     await supabase.from('shipping_request').update({
+//       'status': 'check in', 
+//     }).inFilter('shipping_id', shipIds);
 
-    // 2. Update Status Utama di tabel Request (Sesuai keinginan Anda)
-    await supabase.from('shipping_request').update({
-      'status': 'check in', 
-    }).inFilter('shipping_id', shipIds);
-
-    if (mounted) {
-      _showSnackBar("Berhasil Check-in!", Colors.green);
-      _fetchPlanningData(); // Refresh data
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _showSnackBar("Gagal Check-in: $e", Colors.red);
-    }
-  }
-}
+//     if (mounted) {
+//       _showSnackBar("Berhasil Check-in!", Colors.green);
+//       _fetchPlanningData(); // Refresh data
+//     }
+//   } catch (e) {
+//     if (mounted) {
+//       setState(() => _isLoading = false);
+//       _showSnackBar("Gagal Check-in: $e", Colors.red);
+//     }
+//   }
+// }
 
 void _showSnackBar(String msg, Color color) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
@@ -423,9 +570,11 @@ void _showSnackBar(String msg, Color color) {
 //   }
 // }
 
-Future<void> _fetchPlanningData() async {
+Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
   try {
-    setState(() => _isLoading = true);
+    if (showGlobalLoading) {
+        setState(() => _isLoading = true);
+      }
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
     
@@ -434,6 +583,12 @@ Future<void> _fetchPlanningData() async {
         .select('''
           *,
           master_vendor:nik (vendor_name), 
+          vendor_transportasi:id_vendor_details (
+        qcf,
+        city,
+        area,
+        type_unit
+      ),
           request:shipping_id (
             shipping_id, so, rdd, stuffing_date, group_id, storage_location, is_dedicated,
             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
@@ -448,10 +603,10 @@ Future<void> _fetchPlanningData() async {
             )
           )
         ''')
-        .eq('status_assignment', 'accepted')
+        .inFilter('status_assignment', ['accepted', 'check in'])
         .not('jam_booking', 'is', null)
         .eq('request.stuffing_date', formattedDate)
-        .neq('request.status', 'check in')
+        .neq('request.status', 'kelayakan unit')
         .order('jam_booking', ascending: true);
 
     Map<String, dynamic> groupedData = {};
@@ -562,6 +717,7 @@ Future<void> _fetchPlanningData() async {
       _planningList = groupedData.values.toList();
       _isLoading = false;
     });
+    _filterDataBySearch();
   } catch (e) {
     setState(() => _isLoading = false);
     debugPrint("Error Fetch Planning: $e");
@@ -603,14 +759,22 @@ Future<void> _fetchPlanningData() async {
             child:  _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  onRefresh: _fetchPlanningData,
-                  child: _planningList.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _planningList.length,
-                          itemBuilder: (context, index) =>
-                              _buildPlanningCard(_planningList[index]),
+                  // onRefresh: _fetchPlanningData,
+                  // child:_filteredPlanningList.isEmpty
+                  //     ? _buildEmptyState()
+                  //     : ListView.builder(
+                  //         padding: const EdgeInsets.all(12),
+                  //         itemCount: _filteredPlanningList.length,
+                  //         itemBuilder: (context, index) =>
+                  //             _buildPlanningCard(_filteredPlanningList[index]),
+                  onRefresh: () => _fetchPlanningData(showGlobalLoading: false),
+                    child: _filteredPlanningList.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _filteredPlanningList.length,
+                            itemBuilder: (context, index) =>
+                                _buildPlanningCard(_filteredPlanningList[index]),
                         ),
                 ),
         ),
@@ -722,6 +886,100 @@ Future<void> _fetchPlanningData() async {
 //     ),
 //   );
 // }
+
+// Widget _buildTopFilterBar() {
+//   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
+//                  DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+//   return Container(
+//     padding: const EdgeInsets.all(12),
+//     color: Colors.white,
+//     child: Row(
+//       children: [
+//         Expanded(
+//           flex: 4,
+//           child: Container(
+//             decoration: BoxDecoration(
+//               color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+//               borderRadius: BorderRadius.circular(10),
+//             ),
+//             child: InkWell(
+//               onTap: _selectSingleDate,
+//               child: Padding(
+//                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+//                 child: Row(
+//                   children: [
+//                     Icon(
+//                       Icons.calendar_today,
+//                       size: 16,
+//                       color: !isToday ? Colors.white : Colors.black87,
+//                     ),
+//                     const SizedBox(width: 12),
+//                     Text(
+//                       "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+//                       overflow: TextOverflow.ellipsis,
+//                       style: TextStyle(
+//                         fontSize: 12,
+//                         fontWeight: FontWeight.bold,
+//                         color: !isToday ? Colors.white : Colors.black87,
+//                       ),
+//                     ),
+//                     const Spacer(),
+//                     Icon(
+//                       Icons.arrow_drop_down,
+//                       color: !isToday ? Colors.white : Colors.black87,
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ),
+//           ),
+//         ),
+//         const SizedBox(width: 10),
+
+//           // 2. Input Search Box (DO / Vendor Name / NIK) - Di Sebelah Filter Tanggal
+//           Expanded(
+//             flex: 5, // Proporsi lebar widget search
+//             child: Container(
+//               height: 44,
+//               decoration: BoxDecoration(
+//                 color: Colors.grey.shade100,
+//                 borderRadius: BorderRadius.circular(10),
+//                 border: Border.all(color: Colors.grey.shade300, width: 1),
+//               ),
+//               child: TextField(
+//                 controller: _searchController,
+//                 style: const TextStyle(fontSize: 12),
+//                 decoration: InputDecoration(
+//                   hintText: "Cari DO, Vendor, NIK...",
+//                   prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+//                   suffixIcon: _searchController.text.isNotEmpty
+//                       ? InkWell(
+//                           onTap: () => _searchController.clear(),
+//                           child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+//                         )
+//                       : null,
+//                   border: InputBorder.none,
+//                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
+//                 ),
+//               ),
+//             ),
+//           ),
+//         if (!isToday)
+//           IconButton(
+//             icon: const Icon(Icons.refresh, color: Colors.red),
+//             onPressed: () {
+//               setState(() {
+//                 _selectedDate = DateTime.now();
+//               });
+//               _fetchPlanningData();
+//             },
+//           ),
+//       ],
+//     ),
+//   );
+// }
+
 Widget _buildTopFilterBar() {
   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
                  DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -729,60 +987,148 @@ Widget _buildTopFilterBar() {
   return Container(
     padding: const EdgeInsets.all(12),
     color: Colors.white,
-    child: Row(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: InkWell(
-              onTap: _selectSingleDate,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 16,
-                      color: !isToday ? Colors.white : Colors.black87,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        // Jika layar kecil (HP), gunakan susunan Vertikal (Column)
+        if (constraints.maxWidth < 600) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: InkWell(
+                  onTap: _selectSingleDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 16, color: !isToday ? Colors.white : Colors.black87),
+                            const SizedBox(width: 12),
+                            Text(
+                              "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isToday ? Colors.white : Colors.black87),
+                            ),
+                          ],
+                        ),
+                        Icon(Icons.arrow_drop_down, color: !isToday ? Colors.white : Colors.black87),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: !isToday ? Colors.white : Colors.black87,
-                      ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10), // Jarak antar filter di HP
+              Container(
+                height: 44,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: "Cari DO, Vendor, NIK...",
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? InkWell(
+                            onTap: () => _searchController.clear(),
+                            child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // Jika layar lebar (Laptop/Tablet), tetap gunakan Row (Horizontal)
+        return Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: InkWell(
+                  onTap: _selectSingleDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 16, color: !isToday ? Colors.white : Colors.black87),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isToday ? Colors.white : Colors.black87),
+                          ),
+                        ),
+                        Icon(Icons.arrow_drop_down, color: !isToday ? Colors.white : Colors.black87),
+                      ],
                     ),
-                    const Spacer(),
-                    Icon(
-                      Icons.arrow_drop_down,
-                      color: !isToday ? Colors.white : Colors.black87,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        if (!isToday)
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.red),
-            onPressed: () {
-              setState(() {
-                _selectedDate = DateTime.now();
-              });
-              _fetchPlanningData();
-            },
-          ),
-      ],
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 5,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: "Cari DO, Vendor, NIK...",
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? InkWell(
+                            onTap: () => _searchController.clear(),
+                            child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+            if (!isToday)
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.red),
+                onPressed: () {
+                  setState(() {
+                    _selectedDate = DateTime.now();
+                  });
+                  _fetchPlanningData();
+                },
+              ),
+          ],
+        );
+      },
     ),
   );
 }
-
 
 Future<void> _selectSingleDate() async {
   final DateTime? picked = await showDatePicker(
@@ -812,6 +1158,45 @@ Future<void> _selectSingleDate() async {
   }
 }
 
+String _getCheckInTime(String? timeSlot) {
+  // 1. Cek keamanan awal: jika null, kosong, atau tidak mengandung pemisah " - "
+  if (timeSlot == null || timeSlot.isEmpty || timeSlot == "-" || !timeSlot.contains(" - ")) {
+    return "00:00 - 00:00";
+  }
+
+  try {
+    // 2. Pecah string (misal: "19:00 - 21:00")
+    List<String> parts = timeSlot.split(" - ");
+    if (parts.length < 2) return "00:00 - 00:00";
+
+    String startTimeStr = parts[0]; // "19:00"
+    String endTimeStr = parts[1];   // "21:00"
+
+    // 3. Ambil jam (handle jika split ":" gagal)
+    List<String> startSplit = startTimeStr.split(":");
+    List<String> endSplit = endTimeStr.split(":");
+    
+    if (startSplit.isEmpty || endSplit.isEmpty) return "00:00 - 00:00";
+
+    int startHour = int.parse(startSplit[0]);
+    int endHour = int.parse(endSplit[0]);
+
+    // 4. Kurangi 2 jam (dengan logika putaran 24 jam agar tidak negatif)
+    // Misal: jam 1 pagi dikurang 2 jam menjadi jam 23 malam
+    int newStart = (startHour - 2) < 0 ? (24 + (startHour - 2)) : (startHour - 2);
+    int newEnd = (endHour - 2) < 0 ? (24 + (endHour - 2)) : (endHour - 2);
+
+    // 5. Kembalikan format HH:00
+    String checkInStart = "${newStart.toString().padLeft(2, '0')}:00";
+    String checkInEnd = "${newEnd.toString().padLeft(2, '0')}:00";
+
+    return "$checkInStart - $checkInEnd";
+  } catch (e) {
+    // Jika ada eror parsing di tengah jalan, tampilkan default alih-alih crash
+    debugPrint("Error kalkulasi jam check-in: $e");
+    return "00:00 - 00:00";
+  }
+}
 Widget _buildPlanningCard(Map<String, dynamic> item) {
   final Map<String, dynamic> request = item['request'] ?? {};
   final vendor = item['master_vendor'] ?? {};
@@ -826,6 +1211,9 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
       : "-";
 
+// Validasi penentuan tombol dinamis berdasarkan ketersediaan timestamp 'checkIn_at'
+    final bool hasCheckedIn = item['checkIn_at'] != null;
+
   return Card(
     margin: const EdgeInsets.only(bottom: 16),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -834,24 +1222,48 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
       children: [
         // Header (Jam & Label)
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+         child: Wrap(
+    spacing: 12, // Jarak horizontal antar elemen jika sejajar
+    runSpacing: 8, // Jarak vertikal otomatis jika teks melipat ke bawah
+    alignment: WrapAlignment.spaceBetween,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+              // Row(
+              //   children: [
+              //     const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
+              //     const SizedBox(width: 8),
+              //     Text(
+              //       item['jam_booking'] ?? "-",
+              //       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              //     ),
+              //   ],
+              // ),
               Row(
-                children: [
-                  const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    item['jam_booking'] ?? "-",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ],
+                mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.access_time_filled, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Flexible( // Flexible memastikan teks menyesuaikan ruang yang ada
+              child: Text(
+                "CHECK-IN: ${_getCheckInTime(item['jam_booking'])} | LOADING: ${item['jam_booking'] ?? "-"}",
+                overflow: TextOverflow.ellipsis, // Jika terlalu panjang, akan jadi titik-titik (...)
+                style: const TextStyle(
+                  color: Colors.white, 
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 14, // Ukuran sedikit diperkecil agar pas
+                ),
               ),
+            ),
+          ],
+        ),
+      
+      const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -897,18 +1309,38 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
               const Divider(height: 24),
 
               // Info Vendor
-              Row(
+             Row(
                 children: [
                   const Icon(Icons.store, size: 18, color: Colors.red),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: 
+                   child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                     Text(
                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
-                  ),
-                  _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
+                              // --- TAMBAHKAN DETAIL VENDOR TRANSPORTASI DI SINI ---
+          if (item['vendor_transportasi'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap( // Gunakan Wrap agar rapi saat dibuka di HP
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  //_miniVendorDetail("QCF: ${item['vendor_transportasi']['qcf'] ?? '-'}"),
+                  _miniVendorDetail("City: ${item['vendor_transportasi']['city'] ?? '-'}"),
+                  _miniVendorDetail("Area: ${item['vendor_transportasi']['area'] ?? '-'}"),
+                  _miniVendorDetail("Unit: ${item['vendor_transportasi']['type_unit'] ?? '-'}"),
+                ],
+              ),
+            ),
+                           
+        ],
+                   ),
+              ),
+                  //_infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
                 ],
               ),
               const SizedBox(height: 16),
@@ -976,28 +1408,73 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                   ],
                 );
               }).toList(),
-              SizedBox(
-  width: double.infinity,
-  child: ElevatedButton.icon(
-    onPressed: () => _handleCheckIn(item),
-    icon: const Icon(Icons.location_on, color: Colors.white),
-    label: const Text("CHECK-IN KEDATANGAN", 
-        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.green.shade700,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ),
-  ),
-),
-            ],
+//               SizedBox(
+//   width: double.infinity,
+//   child: ElevatedButton.icon(
+//     onPressed: () => _handleCheckIn(item),
+//     icon: const Icon(Icons.location_on, color: Colors.white),
+//     label: const Text("CHECK-IN KEDATANGAN", 
+//         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+//     style: ElevatedButton.styleFrom(
+//       backgroundColor: Colors.green.shade700,
+//       padding: const EdgeInsets.symmetric(vertical: 12),
+//       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+//     ),
+//   ),
+// ),
+//             ],
+//           ),
+//         ),
+//       ],
+//     ),
+//   );
+// }
+// KONDISI TOMBOL DINAMIS: Langkah 1 (Mencatat Kedatangan) vs Langkah 2 (Mengisi Kelayakan)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: hasCheckedIn 
+                        ? () => _openCheckInTab(item) // Jika sudah check-in kedatangan, arahkan ke validasi & form kelayakan
+                        : () => _handleCheckIn(item), // Jika belum, rekam waktu kedatangan terlebih dahulu
+                    icon: Icon(hasCheckedIn ? Icons.verified_user : Icons.location_on, color: Colors.white),
+                    label: Text(
+                      hasCheckedIn ? "CEK KELAYAKAN UNIT" : "CHECK-IN KEDATANGAN", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: hasCheckedIn ? Colors.orange.shade800 : Colors.green.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+// Fungsi helper untuk teks detail vendor yang kecil di bawah nama
+Widget _miniVendorDetail(String text) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: Colors.grey.shade300, width: 0.5),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        color: Colors.blueGrey.shade700,
+        fontWeight: FontWeight.w500,
+      ),
     ),
   );
 }
-
 Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

@@ -21,11 +21,12 @@ class _BookingPlanningListPageState extends State<BookingPlanningListPage> {
   String _dateFilterType = 'stuffing_date'; // Default: Shipping Date
   //final TextEditingController _searchController = TextEditingController();
   
-RealtimeChannel? _channel;
+  List<dynamic> _filteredPlanningList = [];
+//RealtimeChannel? _channel;
 int? _expandedId; // Melacak ID yang sedang di-expand
 int? _selectedSLoc; // Untuk nilai dropdown di form
 List<dynamic> _warehouseList = []; // Pastikan Anda memanggil data warehouse di initState
-
+  final TextEditingController _searchController = TextEditingController();
 RealtimeChannel? _assignmentsChannel;
   RealtimeChannel? _requestsChannel;
   RealtimeChannel? _loadingChannel;
@@ -37,21 +38,9 @@ String? _tempCancelReason;
   void initState() {
     super.initState();
   
-  //   _fetchPlanningData();
-    
-  // _channel = supabase
-  //     .channel('shipping_assignments_changes')
-  //     .onPostgresChanges(
-  //       event: PostgresChangeEvent.all,
-  //       schema: 'public',
-  //       table: 'shipping_assignments',
-  //       callback: (payload) async {
-  //         await _fetchPlanningData();
-  //       },
-  //     )
-  //     .subscribe();
   _fetchPlanningData(showGlobalLoading: true);
     _initRealtimeStreams();
+    _searchController.addListener(_filterDataBySearch);
 
   }
 
@@ -109,6 +98,7 @@ String? _tempCancelReason;
 
 @override
   void dispose() {
+     _searchController.dispose();
     _assignmentsChannel?.unsubscribe();
     _requestsChannel?.unsubscribe();
     _loadingChannel?.unsubscribe();
@@ -199,471 +189,401 @@ final List<String> _rescheduleReasons = [
     'Unit Rusak',
     'Jalan Macet',
     'Dokumen Expired',
+    'Vendor Tidak Datang',
     'Other'
 ];
 
-Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
-  try {
-    if (showGlobalLoading) {
-    setState(() => _isLoading = true);
-    }
+// Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
+//   try {
+//     if (showGlobalLoading) {
+//     setState(() => _isLoading = true);
+//     }
 
-// 1. Update assignment yang expired menjadi 'no response'
-    final expiredAssignments = await supabase
-        .from('shipping_assignments')
-        .update({
-          'status_assignment': 'no response',
-          'responded_at': DateTime.now().toIso8601String(),
-        })
-        .eq('status_assignment', 'offered')
-        .lt('assigned_at', DateTime.now().subtract(const Duration(hours: 2)).toIso8601String())
-        .select('shipping_id'); // Ambil list shipping_id yang hangus
+// // 1. Update assignment yang expired menjadi 'no response'
+//     final expiredAssignments = await supabase
+//         .from('shipping_assignments')
+//         .update({
+//           'status_assignment': 'no response',
+//           'responded_at': DateTime.now().toIso8601String(),
+//         })
+//         .eq('status_assignment', 'offered')
+//         .lt('assigned_at', DateTime.now().subtract(const Duration(hours: 2)).toIso8601String())
+//         .select('shipping_id'); // Ambil list shipping_id yang hangus
 
-    // 2. Jika ada data yang hangus, kembalikan status shipping_request-nya agar admin bisa pilih vendor baru
-    if (expiredAssignments != null && (expiredAssignments as List).isNotEmpty) {
-      List<int> expiredShippingIds = List<int>.from(expiredAssignments.map((e) => e['shipping_id']));
+//     // 2. Jika ada data yang hangus, kembalikan status shipping_request-nya agar admin bisa pilih vendor baru
+//     if (expiredAssignments != null && (expiredAssignments as List).isNotEmpty) {
+//       List<int> expiredShippingIds = List<int>.from(expiredAssignments.map((e) => e['shipping_id']));
       
-      await supabase
-          .from('shipping_request')
-          .update({'status': 'waiting assign vendor delivery'})
-          .inFilter('shipping_id', expiredShippingIds);
-    }
+//       await supabase
+//           .from('shipping_request')
+//           .update({'status': 'waiting assign vendor delivery'})
+//           .inFilter('shipping_id', expiredShippingIds);
+//     }
 
-    String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+//     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
     
-    final response = await supabase
-        .from('shipping_assignments')
-        .select('''
-          *,
-          master_vendor:nik (vendor_name), 
-          loading:loading (
-            loading_at,
-            loading_by
-          ),
-          request:shipping_id (
-            shipping_id, so, rdd, status, stuffing_date, group_id, storage_location, is_dedicated,
-            warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
-            delivery_order (
-              do_number,
-              customer (customer_id, customer_name),
-              do_details (
-                qty,
-                material:material_id (material_id, material_name,net_weight)
-              )
-            )
-          )
-        ''')
-        // .eq('status_assignment', 'accepted')
-        // .inFilter('status_assignment', ['offered','accepted', 'check in', 'loading','weighbridge','keluar','cancel booking','rejected','on going','no response','completed','rejected unit'])
-        // .not('jam_booking', 'is', null)
-       .eq('request.stuffing_date', formattedDate)
-        .order('jam_booking', ascending: true);
+//     final response = await supabase
+//         .from('shipping_assignments')
+//         .select('''
+//           *,
+//           master_vendor:nik (vendor_name), 
+//           vendor_transportasi:id_vendor_details (
+//         qcf,
+//         city,
+//         area,
+//         type_unit
+//       ),
+//           loading:loading (
+//             loading_at,
+//             loading_by
+//           ),
+//           request:shipping_id (
+//             shipping_id, so, rdd, status, stuffing_date, group_id, storage_location, is_dedicated,
+//             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+//             delivery_order (
+//               do_number,
+//               customer (customer_id, customer_name),
+//               do_details (
+//                 qty,
+//                 material:material_id (material_id, material_name,net_weight)
+//               )
+//             )
+//           )
+//         ''')
+//         // .eq('status_assignment', 'accepted')
+//         // .inFilter('status_assignment', ['offered','accepted', 'check in', 'loading','weighbridge','keluar','cancel booking','rejected','on going','no response','completed','rejected unit'])
+//         // .not('jam_booking', 'is', null)
+//        .eq('request.stuffing_date', formattedDate)
+//         .order('jam_booking', ascending: true);
 
-// Jika response kosong, langsung bersihkan list
-    if (response == null || (response as List).isEmpty) {
-      setState(() {
-        _planningList = [];
-        _isLoading = false;
-      });
-      return;
-    }
+// // Jika response kosong, langsung bersihkan list
+//     if (response == null || (response as List).isEmpty) {
+//       setState(() {
+//         _planningList = [];
+//         _isLoading = false;
+//       });
+//       return;
+//     }
 
-    // --- PROSES GROUPING MANUAL AGAR TIDAK DUPLIKAT ---
-    Map<String, dynamic> groupedData = {};
+//     // --- PROSES GROUPING MANUAL AGAR TIDAK DUPLIKAT ---
+//     Map<String, dynamic> groupedData = {};
 
-    for (var item in response) {
-      final req = item['request'];
-      if (req == null) continue;
+//     for (var item in response) {
+//       final req = item['request'];
+//       if (req == null) continue;
 
-      // Tentukan Unique Key (Jika ada group_id pakai itu, jika tidak pakai shipping_id)
-      String key = req['group_id'] != null 
-          ? "GROUP_${req['group_id']}" 
-          : "SINGLE_${req['shipping_id']}";
+//       // Tentukan Unique Key (Jika ada group_id pakai itu, jika tidak pakai shipping_id)
+//       String key = req['group_id'] != null 
+//           ? "GROUP_${req['group_id']}" 
+//           : "SINGLE_${req['shipping_id']}";
 
-    //   if (!groupedData.containsKey(key)) {
-    //     // Jika key belum ada, masukkan data pertama
-    //     groupedData[key] = Map<String, dynamic>.from(item);
-        
-    //     // Inisialisasi rdd_origin untuk setiap DO di item pertama ini
-    //     if (groupedData[key]['request']['delivery_order'] != null) {
-    //       for (var d in groupedData[key]['request']['delivery_order']) {
-    //         d['rdd_origin'] = req['rdd'];
-    //       }
-    //     }
-    //   } else {
-    //     // Jika key sudah ada (berarti ini anggota grup yang lain), gabungkan DO-nya
-    //     List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-    //     List newDOs = List.from(req['delivery_order'] ?? []);
+//     // Ambal info vendor dan status saat ini
+//       String currentStatus = item['status_assignment']?.toString().toLowerCase() ?? "";
+//       String currentVendorName = item['master_vendor']?['vendor_name'] ?? 'Unknown Vendor';
+//       String currentReason = item['reason_rejected'] ?? 'Tanpa Alasan';
 
-    //     for (var ndo in newDOs) {
-    //       ndo['rdd_origin'] = req['rdd']; // Tetap simpan RDD aslinya
-    //       currentDOs.add(ndo);
-    //     }
-    //     groupedData[key]['request']['delivery_order'] = currentDOs;
-    //   }
-    // }
-// if (!groupedData.containsKey(key)) {
+//       if (!groupedData.containsKey(key)) {
 //         groupedData[key] = Map<String, dynamic>.from(item);
 //         groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
 //         groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
         
-//         // Inisialisasi rdd_origin
-//         if (groupedData[key]['request']['delivery_order'] != null) {
-//           for (var d in groupedData[key]['request']['delivery_order']) {
-//             d['rdd_origin'] = req['rdd'];
-//           }
+//         // Buat list kosong untuk menampung riwayat log cancel/reject
+//         groupedData[key]['history_logs'] = <Map<String, String>>[]; 
+
+//         // Jika data pertama ini sudah berstatus rusak, masukkan ke log riwayat
+//         if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
+//           groupedData[key]['history_logs'].add({
+//             'status': currentStatus,
+//             'vendor': currentVendorName,
+//             'reason': currentReason,
+//           });
 //         }
-//       } else {
-//         // Jika sudah ada (Grup), tambahkan ID untuk keperluan update nanti
-//         groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
-//         groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
 
-//         // --- CEK DUPLIKASI DO SEBELUM MENGGABUNGKAN ---
-//         List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
-//         List newDOs = req['delivery_order'] ?? [];
-
-//         for (var ndo in newDOs) {
-//           // Hanya tambahkan jika do_number belum ada di list saat ini
-//           bool isDuplicate = currentDOs.any((existing) => 
-//             existing['do_number'] == ndo['do_number']);
-          
-//           if (!isDuplicate) {
-//             ndo['rdd_origin'] = req['rdd'];
-//             currentDOs.add(ndo);
-//           }
+//         List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
+//         for (var d in currentDOs) {
+//           d['rdd_origin'] = req['rdd'];
+//           d['parent_so'] = req['so'];
+//           d['parent_shipping_id'] = req['shipping_id'];
 //         }
 //         groupedData[key]['request']['delivery_order'] = currentDOs;
+//       } 
+//       else {
+   
+//     // --- DATA PENDAMPING (Ditemukan penugasan lain untuk DO/Grup yang sama) ---
+        
+//         // A. Filter Riwayat: Agar teks tidak double di Group DO
+//         List<Map<String, String>> existingLogs = List<Map<String, String>>.from(groupedData[key]['history_logs'] ?? []);
+//         bool isAlreadyLogged = existingLogs.any((log) => 
+//             log['vendor'] == currentVendorName && 
+//             log['status'] == currentStatus &&
+//             log['reason'] == currentReason);
 
-//int currentAssignmentId = int.tryParse(item['id_assignment']?.toString() ?? "0") ?? 0;
+//         if (!isAlreadyLogged && ['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
+//           existingLogs.add({
+//             'status': currentStatus,
+//             'vendor': currentVendorName,
+//             'reason': currentReason,
+//           });
+//         }
 
-// if (!groupedData.containsKey(key)) {
-//   groupedData[key] = Map<String, dynamic>.from(item);
+//         // B. Cek Update: Apakah data ini lebih baru (id_assignment lebih besar)?
+//         int existingId = int.tryParse(groupedData[key]['id_assignment'].toString()) ?? 0;
+//         int currentId = int.tryParse(item['id_assignment'].toString()) ?? 0;
 
-//   groupedData[key]['grouped_assignment_ids'] = [
-//     item['id_assignment']
-//   ];
+//         if (currentId > existingId) {
+//           // Jika lebih baru, data utama Card (Status & Vendor) diganti ke data baru ini
+//           List oldAssignIds = List.from(groupedData[key]['grouped_assignment_ids'] ?? []);
+//           List oldShipIds = List.from(groupedData[key]['grouped_shipping_ids'] ?? []);
+//           List existingDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
 
-//   groupedData[key]['grouped_shipping_ids'] = [
-//     req['shipping_id']
-//   ];
+//           groupedData[key] = Map<String, dynamic>.from(item); // OVERWRITE
+          
+//           if (!oldAssignIds.contains(item['id_assignment'])) oldAssignIds.add(item['id_assignment']);
+//           if (!oldShipIds.contains(req['shipping_id'])) oldShipIds.add(req['shipping_id']);
+          
+//           groupedData[key]['grouped_assignment_ids'] = oldAssignIds;
+//           groupedData[key]['grouped_shipping_ids'] = oldShipIds;
+//           groupedData[key]['history_logs'] = existingLogs;
 
-//   // Pastikan delivery_order tidak null
-//   List currentDOs =
-//       List.from(groupedData[key]['request']['delivery_order'] ?? []);
+//           // C. Merging Delivery Orders (Mencegah duplikasi item barang)
+//           List newDOs = req['delivery_order'] ?? [];
+//           for (var ndo in newDOs) {
+//             ndo['rdd_origin'] = req['rdd'];
+//             ndo['parent_so'] = req['so'];
+//             ndo['parent_shipping_id'] = req['shipping_id'];
 
-//   // Tambahkan informasi asal shipment
-//   for (var d in currentDOs) {
-//     d['rdd_origin'] = req['rdd'];
-//     d['parent_so'] = req['so'];
-//     d['parent_shipping_id'] = req['shipping_id'];
-//   }
+//             bool isDuplicate = existingDOs.any((existing) =>
+//                 existing['do_number'] == ndo['do_number'] &&
+//                 existing['parent_shipping_id'] == req['shipping_id']);
 
-//   groupedData[key]['request']['delivery_order'] = currentDOs;
-// } else {
-//   // Tambahkan semua assignment & shipping ID grup
-//   groupedData[key]['grouped_assignment_ids']
-//       .add(item['id_assignment']);
-
-//   groupedData[key]['grouped_shipping_ids']
-//       .add(req['shipping_id']);
-
-//   // Existing DO dalam card grup
-//   List currentDOs =
-//       groupedData[key]['request']['delivery_order'] ?? [];
-
-//   // DO baru dari shipment lain
-//   List newDOs = req['delivery_order'] ?? [];
-
-//   for (var ndo in newDOs) {
-//     // Tambahkan metadata asal shipment
-//     ndo['rdd_origin'] = req['rdd'];
-//     ndo['parent_so'] = req['so'];
-//     ndo['parent_shipping_id'] = req['shipping_id'];
-
-//     // CEK DUPLIKAT BERDASARKAN
-//     // DO NUMBER + SHIPPING ID
-//     bool isDuplicate = currentDOs.any(
-//       (existing) =>
-//           existing['do_number'] == ndo['do_number'] &&
-//           existing['parent_shipping_id'] == req['shipping_id'],
-//     );
-
-//     // Tambahkan jika belum ada
-//     if (!isDuplicate) {
-//       currentDOs.add(ndo);
-//     }
-//   }
-
-//   groupedData[key]['request']['delivery_order'] = currentDOs;
-
+//             if (!isDuplicate) existingDOs.add(ndo);
+//           }
+//           groupedData[key]['request']['delivery_order'] = existingDOs;
+//         } else {
+//           // Jika data ini data lama, cukup update ID dan Log saja tanpa menimpa data utama Card
+//           if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
+//             groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+//           }
+//           groupedData[key]['history_logs'] = existingLogs;
+//         }
 //       }
 //     }
-// Skenario 1: Jika key BUMUM ADA di dalam Map, masukkan data pertama
-    //   if (!groupedData.containsKey(key)) {
-    //     groupedData[key] = Map<String, dynamic>.from(item);
-    //     groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
-    //     groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
+//     setState(() {
+//       _planningList = groupedData.values.toList();
+//       _isLoading = false;
+//     });
+    
+//     _filterDataBySearch();
+//   } catch (e) {
+//     setState(() => _isLoading = false);
+//     debugPrint("Error Fetch Planning: $e");
+//   }
+// }
+Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
+    try {
+      if (showGlobalLoading) {
+        setState(() => _isLoading = true);
+      }
 
-    //     List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-    //     for (var d in currentDOs) {
-    //       d['rdd_origin'] = req['rdd'];
-    //       d['parent_so'] = req['so'];
-    //       d['parent_shipping_id'] = req['shipping_id'];
-    //     }
-    //     groupedData[key]['request']['delivery_order'] = currentDOs;
-    //   } 
-    //   // Skenario 2: Jika KEY SUDAH ADA, bandingkan ID Assignment-nya untuk mengambil yang TERBARU
-    //   else {
-    //     int existingAssignmentId = int.tryParse(groupedData[key]['id_assignment']?.toString() ?? "0") ?? 0;
+      // 1. Update assignment yang expired menjadi 'no response' (Timeout 2 Jam)
+      final expiredAssignments = await supabase
+          .from('shipping_assignments')
+          .update({
+            'status_assignment': 'no response',
+            'responded_at': DateTime.now().toIso8601String(),
+          })
+          .eq('status_assignment', 'offered')
+          .lt('assigned_at', DateTime.now().subtract(const Duration(hours: 2)).toIso8601String())
+          .select('shipping_id');
 
-    //     // Simpan semua ID untuk keperluan log/bulk update pembatalan
-    //     if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
-    //       groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
-    //     }
-    //     if (!groupedData[key]['grouped_shipping_ids'].contains(req['shipping_id'])) {
-    //       groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
-    //     }
+      if (expiredAssignments != null && (expiredAssignments as List).isNotEmpty) {
+        List<int> expiredShippingIds = List<int>.from(expiredAssignments.map((e) => e['shipping_id']));
+        await supabase
+            .from('shipping_request')
+            .update({'status': 'waiting assign vendor delivery'})
+            .inFilter('shipping_id', expiredShippingIds);
+      }
 
-    //     // JIKA id_assignment baris ini LEBIH BESAR dari yang disimpan di Map,
-    //     // artinya ini adalah data ASSIGNMENT TERBARU dari admin. LOGIKA UTAMA: TIMPA DATA UTAMA CARD.
-    //     if (currentAssignmentId > existingAssignmentId) {
-    //       List savedAssignmentIds = groupedData[key]['grouped_assignment_ids'];
-    //       List savedShippingIds = groupedData[key]['grouped_shipping_ids'];
+      String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      
+      final response = await supabase
+          .from('shipping_assignments')
+          .select('''
+            *,
+            master_vendor:nik (vendor_name), 
+            vendor_transportasi:id_vendor_details (qcf, city, area, type_unit),
+            loading:loading (loading_at, loading_by),
+            request:shipping_id (
+              shipping_id, so, rdd, status, stuffing_date, group_id, storage_location, is_dedicated,
+              warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
+              delivery_order (
+                do_number,
+                customer (customer_id, customer_name),
+                do_details (
+                  qty,
+                  material:material_id (material_id, material_name, net_weight)
+                )
+              )
+            )
+          ''')
+          .eq('request.stuffing_date', formattedDate)
+          .order('jam_booking', ascending: true);
 
-    //       // Ambil data DO yang sudah digabungkan sebelumnya agar tidak hilang
-    //       List existingDOs = groupedData[key]['request']['delivery_order'] ?? [];
+      if (response == null || (response as List).isEmpty) {
+        setState(() {
+          _planningList = [];
+          _filteredPlanningList = [];
+          _isLoading = false;
+        });
+        return;
+      }
 
-    //       // Timpa data dasar card dengan data assignment terbaru (Status & Vendor Baru)
-    //       groupedData[key] = Map<String, dynamic>.from(item);
-    //       groupedData[key]['grouped_assignment_ids'] = savedAssignmentIds;
-    //       groupedData[key]['grouped_shipping_ids'] = savedShippingIds;
+      // --- PROSES GROUPING MANUAL ---
+      Map<String, dynamic> groupedData = {};
 
-    //       // Gabungkan list DO-nya kembali
-    //       List newDOs = req['delivery_order'] ?? [];
-    //       for (var ndo in newDOs) {
-    //         ndo['rdd_origin'] = req['rdd'];
-    //         ndo['parent_so'] = req['so'];
-    //         ndo['parent_shipping_id'] = req['shipping_id'];
+      for (var item in response) {
+        final req = item['request'];
+        if (req == null) continue;
 
-    //         bool isDuplicate = existingDOs.any((existing) =>
-    //             existing['do_number'] == ndo['do_number'] &&
-    //             existing['parent_shipping_id'] == req['shipping_id']);
+        String key = req['group_id'] != null 
+            ? "GROUP_${req['group_id']}" 
+            : "SINGLE_${req['shipping_id']}";
 
-    //         if (!isDuplicate) {
-    //           existingDOs.add(ndo);
-    //         }
-    //       }
-    //       groupedData[key]['request']['delivery_order'] = existingDOs;
-    //     } 
-    //     // Jika baris ini adalah data lama, cukup gabungkan DO-nya saja (jika ada DO baru yang terlewat)
-    //     else {
-    //       List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
-    //       List newDOs = req['delivery_order'] ?? [];
+        String currentStatus = item['status_assignment']?.toString().toLowerCase() ?? "";
+        String currentVendorName = item['master_vendor']?['vendor_name'] ?? 'Unknown Vendor';
+        //String currentReason = item['reason_rejected'] ?? 'Tanpa Alasan';
 
-    //       for (var ndo in newDOs) {
-    //         ndo['rdd_origin'] = req['rdd'];
-    //         ndo['parent_so'] = req['so'];
-    //         ndo['parent_shipping_id'] = req['shipping_id'];
-
-    //         bool isDuplicate = currentDOs.any((existing) =>
-    //             existing['do_number'] == ndo['do_number'] &&
-    //             existing['parent_shipping_id'] == req['shipping_id']);
-
-    //         if (!isDuplicate) {
-    //           currentDOs.add(ndo);
-    //         }
-    //       }
-    //       groupedData[key]['request']['delivery_order'] = currentDOs;
-    //     }
-    //   }
-    // }
-    // Ambal info vendor dan status saat ini
-      String currentStatus = item['status_assignment']?.toString().toLowerCase() ?? "";
-      String currentVendorName = item['master_vendor']?['vendor_name'] ?? 'Unknown Vendor';
-      String currentReason = item['reason_rejected'] ?? 'Tanpa Alasan';
-
-      if (!groupedData.containsKey(key)) {
-        groupedData[key] = Map<String, dynamic>.from(item);
-        groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
-        groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
-        
-        // Buat list kosong untuk menampung riwayat log cancel/reject
-        groupedData[key]['history_logs'] = <Map<String, String>>[]; 
-
-        // Jika data pertama ini sudah berstatus rusak, masukkan ke log riwayat
-        if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
-          groupedData[key]['history_logs'].add({
-            'status': currentStatus,
-            'vendor': currentVendorName,
-            'reason': currentReason,
-          });
-        }
-
-        List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-        for (var d in currentDOs) {
-          d['rdd_origin'] = req['rdd'];
-          d['parent_so'] = req['so'];
-          d['parent_shipping_id'] = req['shipping_id'];
-        }
-        groupedData[key]['request']['delivery_order'] = currentDOs;
-      } 
-      else {
-    //     // JIKA KEY SUDAH ADA (Ada assignment baru/lain untuk DO/Grup yang sama)
-        
-    //     // 1. Ambil list history logs yang sudah terbentuk sebelumnya
-    //     List<Map<String, String>> existingLogs = List<Map<String, String>>.from(groupedData[key]['history_logs'] ?? []);
-    //     List savedAssignmentIds = groupedData[key]['grouped_assignment_ids'];
-    //     List savedShippingIds = groupedData[key]['grouped_shipping_ids'];
-    //     List existingDOs = groupedData[key]['request']['delivery_order'] ?? [];
-
-    //     // 2. Jika data yang lama (yang ada di map) statusnya rusak, masukkan ke log history sebelum ditimpa
-    //     String existingStatus = groupedData[key]['status_assignment']?.toString().toLowerCase() ?? "";
-    //     String existingVendor = groupedData[key]['master_vendor']?['vendor_name'] ?? 'Unknown Vendor';
-    //     String existingReason = groupedData[key]['reason_rejected'] ?? 'Tanpa Alasan';
-        
-    //     if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(existingStatus)) {
-    //       bool alreadyLogged = existingLogs.any((log) => log['vendor'] == existingVendor && log['status'] == existingStatus);
-    //       if (!alreadyLogged) {
-    //         existingLogs.add({
-    //           'status': existingStatus,
-    //           'vendor': existingVendor,
-    //           'reason': existingReason,
-    //         });
-    //       }
-    //     }
-
-    //     // 3. Update Card dengan data assignment yang BARU (karena query diurutkan ascending, item saat ini pasti lebih baru)
-    //     groupedData[key] = Map<String, dynamic>.from(item);
-        
-    //     // 4. Kembalikan data gabungan ID, DO, dan Log History yang sudah diamankan
-    //     if (!savedAssignmentIds.contains(item['id_assignment'])) savedAssignmentIds.add(item['id_assignment']);
-    //     if (!savedShippingIds.contains(req['shipping_id'])) savedShippingIds.add(req['shipping_id']);
-        
-    //     groupedData[key]['grouped_assignment_ids'] = savedAssignmentIds;
-    //     groupedData[key]['grouped_shipping_ids'] = savedShippingIds;
-    //     groupedData[key]['history_logs'] = existingLogs;
-
-    //     // Jika data baru ini ternyata juga rusak/ditolak lagi oleh vendor baru, masukkan lagi ke log
-    //     if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
-    //       groupedData[key]['history_logs'].add({
-    //         'status': currentStatus,
-    //         'vendor': currentVendorName,
-    //         'reason': currentReason,
-    //       });
-    //     }
-
-    //     // Gabungkan list DO agar data barang tidak hilang
-    //     List newDOs = req['delivery_order'] ?? [];
-    //     for (var ndo in newDOs) {
-    //       ndo['rdd_origin'] = req['rdd'];
-    //       ndo['parent_so'] = req['so'];
-    //       ndo['parent_shipping_id'] = req['shipping_id'];
-
-    //       bool isDuplicate = existingDOs.any((existing) =>
-    //           existing['do_number'] == ndo['do_number'] &&
-    //           existing['parent_shipping_id'] == req['shipping_id']);
-
-    //       if (!isDuplicate) {
-    //         existingDOs.add(ndo);
-    //       }
-    //     }
-    //     groupedData[key]['request']['delivery_order'] = existingDOs;
-    //   }
-    // }
-    // --- DATA PENDAMPING (Ditemukan penugasan lain untuk DO/Grup yang sama) ---
-        
-        // A. Filter Riwayat: Agar teks tidak double di Group DO
-        List<Map<String, String>> existingLogs = List<Map<String, String>>.from(groupedData[key]['history_logs'] ?? []);
-        bool isAlreadyLogged = existingLogs.any((log) => 
-            log['vendor'] == currentVendorName && 
-            log['status'] == currentStatus &&
-            log['reason'] == currentReason);
-
-        if (!isAlreadyLogged && ['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
-          existingLogs.add({
-            'status': currentStatus,
-            'vendor': currentVendorName,
-            'reason': currentReason,
-          });
-        }
-
-        // B. Cek Update: Apakah data ini lebih baru (id_assignment lebih besar)?
-        int existingId = int.tryParse(groupedData[key]['id_assignment'].toString()) ?? 0;
-        int currentId = int.tryParse(item['id_assignment'].toString()) ?? 0;
-
-        if (currentId > existingId) {
-          // Jika lebih baru, data utama Card (Status & Vendor) diganti ke data baru ini
-          List oldAssignIds = List.from(groupedData[key]['grouped_assignment_ids'] ?? []);
-          List oldShipIds = List.from(groupedData[key]['grouped_shipping_ids'] ?? []);
-          List existingDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-
-          groupedData[key] = Map<String, dynamic>.from(item); // OVERWRITE
-          
-          if (!oldAssignIds.contains(item['id_assignment'])) oldAssignIds.add(item['id_assignment']);
-          if (!oldShipIds.contains(req['shipping_id'])) oldShipIds.add(req['shipping_id']);
-          
-          groupedData[key]['grouped_assignment_ids'] = oldAssignIds;
-          groupedData[key]['grouped_shipping_ids'] = oldShipIds;
-          groupedData[key]['history_logs'] = existingLogs;
-
-          // C. Merging Delivery Orders (Mencegah duplikasi item barang)
-          List newDOs = req['delivery_order'] ?? [];
-          for (var ndo in newDOs) {
-            ndo['rdd_origin'] = req['rdd'];
-            ndo['parent_so'] = req['so'];
-            ndo['parent_shipping_id'] = req['shipping_id'];
-
-            bool isDuplicate = existingDOs.any((existing) =>
-                existing['do_number'] == ndo['do_number'] &&
-                existing['parent_shipping_id'] == req['shipping_id']);
-
-            if (!isDuplicate) existingDOs.add(ndo);
-          }
-          groupedData[key]['request']['delivery_order'] = existingDOs;
+// --- LOGIKA PILIH KOLOM REASON DINAMIS ---
+        String currentReason = 'Tanpa Alasan';
+        if (currentStatus.contains('rejected')) {
+          currentReason = item['reason_rejected'] ?? 'Tanpa Alasan Rejected';
+        } else if (currentStatus.contains('cancel booking')) {
+          currentReason = item['cancelled_reason'] ?? 'Tanpa Alasan Cancel';
         } else {
-          // Jika data ini data lama, cukup update ID dan Log saja tanpa menimpa data utama Card
-          if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
-            groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+          currentReason = item['catatan'] ?? 'Tanpa Alasan';
+        }
+
+        if (!groupedData.containsKey(key)) {
+          groupedData[key] = Map<String, dynamic>.from(item);
+          groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
+          groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
+          groupedData[key]['history_logs'] = <Map<String, dynamic>>[]; 
+
+          if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
+            groupedData[key]['history_logs'].add({
+              'status': currentStatus,
+              'vendor': currentVendorName,
+              'reason': currentReason,
+            });
           }
-          groupedData[key]['history_logs'] = existingLogs;
+
+          List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
+          for (var d in currentDOs) {
+            d['rdd_origin'] = req['rdd'];
+            d['parent_so'] = req['so'];
+            d['parent_shipping_id'] = req['shipping_id'];
+          }
+          groupedData[key]['request']['delivery_order'] = currentDOs;
+        } else {
+          List<Map<String, dynamic>> existingLogs = List<Map<String, dynamic>>.from(groupedData[key]['history_logs'] ?? []);
+          bool isAlreadyLogged = existingLogs.any((log) => 
+              log['vendor'] == currentVendorName && 
+              log['status'] == currentStatus &&
+              log['reason'] == currentReason);
+
+          if (!isAlreadyLogged && ['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
+            existingLogs.add({
+              'status': currentStatus,
+              'vendor': currentVendorName,
+              'reason': currentReason,
+            });
+          }
+
+          int existingId = int.tryParse(groupedData[key]['id_assignment'].toString()) ?? 0;
+          int currentId = int.tryParse(item['id_assignment'].toString()) ?? 0;
+
+          if (currentId > existingId) {
+            List oldAssignIds = List.from(groupedData[key]['grouped_assignment_ids'] ?? []);
+            List oldShipIds = List.from(groupedData[key]['grouped_shipping_ids'] ?? []);
+            List existingDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
+
+            groupedData[key] = Map<String, dynamic>.from(item); 
+            
+            if (!oldAssignIds.contains(item['id_assignment'])) oldAssignIds.add(item['id_assignment']);
+            if (!oldShipIds.contains(req['shipping_id'])) oldShipIds.add(req['shipping_id']);
+            
+            groupedData[key]['grouped_assignment_ids'] = oldAssignIds;
+            groupedData[key]['grouped_shipping_ids'] = oldShipIds;
+            groupedData[key]['history_logs'] = existingLogs;
+
+            List newDOs = req['delivery_order'] ?? [];
+            for (var ndo in newDOs) {
+              ndo['rdd_origin'] = req['rdd'];
+              ndo['parent_so'] = req['so'];
+              ndo['parent_shipping_id'] = req['shipping_id'];
+
+              bool isDuplicate = existingDOs.any((existing) =>
+                  existing['do_number'] == ndo['do_number'] &&
+                  existing['parent_shipping_id'] == req['shipping_id']);
+
+              if (!isDuplicate) existingDOs.add(ndo);
+            }
+            groupedData[key]['request']['delivery_order'] = existingDOs;
+          } else {
+            if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
+              groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+            }
+            groupedData[key]['history_logs'] = existingLogs;
+          }
         }
       }
+
+      setState(() {
+        _planningList = groupedData.values.toList();
+        _isLoading = false;
+      });
+      
+      _filterDataBySearch();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      debugPrint("Error Fetch Planning: $e");
     }
-    setState(() {
-      _planningList = groupedData.values.toList();
-      _isLoading = false;
-    });
-  } catch (e) {
-    setState(() => _isLoading = false);
-    debugPrint("Error Fetch Planning: $e");
   }
-}
 
 
+  void _filterDataBySearch() {
+    String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      setState(() {
+        _filteredPlanningList = List.from(_planningList);
+      });
+      return;
+    }
+
+    setState(() {
+      _filteredPlanningList = _planningList.where((item) {
+        // Ambil data Vendor
+        final vendor = item['master_vendor'] ?? {};
+        final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
+        final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
+
+        // Ambil list DO dari request
+        final request = item['request'] ?? {};
+        final List dos = request['delivery_order'] as List? ?? [];
+        
+        // Cek apakah ada salah satu nomor DO yang cocok
+        bool matchDO = dos.any((doItem) {
+          final String doNumber = (doItem['do_number'] ?? '').toString().toLowerCase();
+          return doNumber.contains(query);
+        });
+
+        // Return true jika salah satu kondisi terpenuhi
+        return matchDO || vendorName.contains(query) || nikVendor.contains(query);
+      }).toList();
+    });
+  }
 // Mendapatkan warna background status secara dinamis berdasarkan kondisi real-time
  
-  // @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     // appBar: AppBar(
-  //     //   title: const Text("ANTRIAN PLANNING BOOKING", 
-  //     //     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-  //     //   backgroundColor: Colors.red.shade800,
-  //     // ),
-  //     body: _isLoading
-  //         ? const Center(child: CircularProgressIndicator())
-  //         : RefreshIndicator(
-  //             onRefresh: _fetchPlanningData,
-  //             child: _planningList.isEmpty
-  //                 ? _buildEmptyState()
-  //                 : ListView.builder(
-  //                     padding: const EdgeInsets.all(12),
-  //                     itemCount: _planningList.length,
-  //                     itemBuilder: (context, index) => _buildPlanningCard(_planningList[index]),
-  //                   ),
-  //           ),
-  //   );
-  // }
   void _showSnackBar(String msg, Color color) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
@@ -687,13 +607,13 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _fetchPlanningData,
-                  child: _planningList.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _planningList.length,
-                          itemBuilder: (context, index) =>
-                              _buildPlanningCard(_planningList[index]),
+                  child: _filteredPlanningList.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _filteredPlanningList.length,
+                            itemBuilder: (context, index) =>
+                                _buildPlanningCard(_filteredPlanningList[index]),
                         ),
                 ),
         ),
@@ -702,6 +622,7 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
   );
 }
 
+
 Widget _buildTopFilterBar() {
   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
                  DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -709,56 +630,145 @@ Widget _buildTopFilterBar() {
   return Container(
     padding: const EdgeInsets.all(12),
     color: Colors.white,
-    child: Row(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: InkWell(
-              onTap: _selectSingleDate,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 16,
-                      color: !isToday ? Colors.white : Colors.black87,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        // Jika layar kecil (HP), gunakan susunan Vertikal (Column)
+        if (constraints.maxWidth < 600) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: InkWell(
+                  onTap: _selectSingleDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 16, color: !isToday ? Colors.white : Colors.black87),
+                            const SizedBox(width: 12),
+                            Text(
+                              "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isToday ? Colors.white : Colors.black87),
+                            ),
+                          ],
+                        ),
+                        Icon(Icons.arrow_drop_down, color: !isToday ? Colors.white : Colors.black87),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: !isToday ? Colors.white : Colors.black87,
-                      ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10), // Jarak antar filter di HP
+              Container(
+                height: 44,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: "Cari DO, Vendor, NIK...",
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? InkWell(
+                            onTap: () => _searchController.clear(),
+                            child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // Jika layar lebar (Laptop/Tablet), tetap gunakan Row (Horizontal)
+        return Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: InkWell(
+                  onTap: _selectSingleDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 16, color: !isToday ? Colors.white : Colors.black87),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isToday ? Colors.white : Colors.black87),
+                          ),
+                        ),
+                        Icon(Icons.arrow_drop_down, color: !isToday ? Colors.white : Colors.black87),
+                      ],
                     ),
-                    const Spacer(),
-                    Icon(
-                      Icons.arrow_drop_down,
-                      color: !isToday ? Colors.white : Colors.black87,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        if (!isToday)
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.red),
-            onPressed: () {
-              setState(() {
-                _selectedDate = DateTime.now();
-              });
-              _fetchPlanningData();
-            },
-          ),
-      ],
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 5,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: "Cari DO, Vendor, NIK...",
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? InkWell(
+                            onTap: () => _searchController.clear(),
+                            child: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+            if (!isToday)
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.red),
+                onPressed: () {
+                  setState(() {
+                    _selectedDate = DateTime.now();
+                  });
+                  _fetchPlanningData();
+                },
+              ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -791,1238 +801,7 @@ Future<void> _selectSingleDate() async {
     _fetchPlanningData();
   }
 }
-  // Widget _buildPlanningCard(Map<String, dynamic> item) {
-  //   final request = item['request'] ?? {};
-  //   final bool isGroup = request['group_id'] != null;
-  //   final List dos = request['delivery_order'] ?? [];
 
-  //   return Card(
-  //     margin: const EdgeInsets.symmetric(vertical: 8),
-  //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-  //     elevation: 2,
-  //     child: InkWell(
-  //       onTap: () {
-  //         // Navigasi ke halaman Vehicle Control Form (Bagian Transporter/Security)
-  //         // Navigator.push(context, MaterialPageRoute(builder: (c) => VehicleCheckForm(data: item)));
-  //       },
-  //       child: Column(
-  //         children: [
-  //           // Header: Jam Booking & ID
-  //           Container(
-  //             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-  //             decoration: BoxDecoration(
-  //               color: Colors.blue.shade700,
-  //               borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-  //             ),
-  //             child: Row(
-  //               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //               children: [
-  //                 Row(
-  //                   children: [
-  //                     const Icon(Icons.alarm, color: Colors.white, size: 16),
-  //                     const SizedBox(width: 8),
-  //                     Text(
-  //                       item['jam_booking'] ?? "-",
-  //                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-  //                     ),
-  //                   ],
-  //                 ),
-  //                 Text(
-  //                   isGroup ? "GROUP: ${request['group_id']}" : "SINGLE SHIP",
-  //                   style: const TextStyle(color: Colors.white70, fontSize: 10),
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-            
-  //           Padding(
-  //             padding: const EdgeInsets.all(12),
-  //             child: Column(
-  //               crossAxisAlignment: CrossAxisAlignment.start,
-  //               children: [
-  //                 Row(
-  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                   children: [
-  //                     _infoColumn("SHIP ID", "#${request['shipping_id']}"),
-  //                     _infoColumn("GUDANG", request['storage_location']?.toString().toUpperCase() ?? "-"),
-  //                     _infoColumn("STATUS", "PLANNING", color: Colors.orange.shade800),
-  //                   ],
-  //                 ),
-  //                 const Divider(height: 20),
-                  
-  //                 // Info Customer & DO (Hanya ambil yang pertama sebagai ringkasan)
-  //                 if (dos.isNotEmpty) ...[
-  //                   Row(
-  //                     children: [
-  //                       const Icon(Icons.person, size: 14, color: Colors.grey),
-  //                       const SizedBox(width: 8),
-  //                       Expanded(
-  //                         child: Text(
-  //                           dos[0]['customer']?['customer_name'] ?? "-",
-  //                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-  //                           overflow: TextOverflow.ellipsis,
-  //                         ),
-  //                       ),
-  //                     ],
-  //                   ),
-  //                   const SizedBox(height: 4),
-  //                   Row(
-  //                     children: [
-  //                       const Icon(Icons.description, size: 14, color: Colors.grey),
-  //                       const SizedBox(width: 8),
-  //                       Text(
-  //                         "DO: ${dos[0]['do_number']} ${dos.length > 1 ? '(+${dos.length - 1} DO lainnya)' : ''}",
-  //                         style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
-  //                       ),
-  //                     ],
-  //                   ),
-  //                 ],
-                  
-  //                 const SizedBox(height: 12),
-  //                 // Footer Card: Info Truck
-  //                 Row(
-  //                   mainAxisAlignment: MainAxisAlignment.end,
-  //                   children: [
-  //                     const Text("Klik untuk mulai check unit ", 
-  //                       style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.grey)),
-  //                     Icon(Icons.arrow_forward_ios, size: 10, color: Colors.grey.shade400),
-  //                   ],
-  //                 )
-  //               ],
-  //             ),
-  //           ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
-
-// Widget _buildPlanningCard(Map<String, dynamic> item) {
-//   final request = item['request'] ?? {};
-//   final vendor = item['master_vendor'] ?? {};
-//   final List dos = request['delivery_order'] ?? [];
-
-//   return Card(
-//     margin: const EdgeInsets.only(bottom: 16),
-//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//     child: Column(
-//       children: [
-//         // Header: Jam & Status Assignment
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//           decoration: BoxDecoration(
-//             color: Colors.blue.shade800,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Text("⏰ ${item['jam_booking']}", 
-//                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-//                 decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
-//                 child: Text(item['status_assignment'].toString().toUpperCase(), 
-//                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // Info Utama (RDD, Stuffing, SO)
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   _infoBox("RDD", _formatDate(request['rdd'])),
-//                   _infoBox("STUFFING", _formatDate(request['stuffing_date'])),
-//                   _infoBox("SO #", request['so']?.toString() ?? "-"),
-//                 ],
-//               ),
-//               const Divider(height: 24),
-
-//               // Info Vendor
-//               Row(
-//                 children: [
-//                   const Icon(Icons.local_shipping, size: 16, color: Colors.red),
-//                   const SizedBox(width: 8),
-//                   Expanded(
-//                     child: Text(
-//                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-//                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//               const SizedBox(height: 12),
-
-//               // Detail per DO & Material
-//               ...dos.map((doItem) {
-//                 final List details = doItem['do_details'] ?? [];
-//                 return Container(
-//                   margin: const EdgeInsets.only(bottom: 12),
-//                   padding: const EdgeInsets.all(10),
-//                   decoration: BoxDecoration(
-//                     color: Colors.grey.shade50,
-//                     borderRadius: BorderRadius.circular(8),
-//                     border: Border.all(color: Colors.grey.shade200),
-//                   ),
-//                   child: Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue)),
-//                       Text("👤 ${doItem['customer']?['customer_id']} - ${doItem['customer']?['customer_name']}", style: const TextStyle(fontSize: 11)),
-//                       const Divider(),
-//                       // Looping Material
-//                       ...details.map((det) {
-//                         final mat = det['material'] ?? {};
-//                         return Padding(
-//                           padding: const EdgeInsets.only(bottom: 4),
-//                           child: Row(
-//                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                             children: [
-//                               Expanded(
-//                                 child: Text("${mat['material_id']} - ${mat['material_name']}", 
-//                                   style: const TextStyle(fontSize: 10, color: Colors.black87)),
-//                               ),
-//                               Text("${det['qty']}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                             ],
-//                           ),
-//                         );
-//                       }).toList(),
-//                     ],
-//                   ),
-//                 );
-//               }).toList(),
-//             ],
-//           ),
-//         ),
-//       ],
-//     ),
-//   );
-// }
-
-// Widget _buildPlanningCard(Map<String, dynamic> item) {
-//   final request = item['request'] ?? {};
-//   final vendor = item['master_vendor'] ?? {};
-//   final List dos = request['delivery_order'] ?? [];
-  
-//   // Logika penentuan Single atau Group
-//   final bool isGroup = request['group_id'] != null;
-
-//   return Card(
-//     margin: const EdgeInsets.only(bottom: 16),
-//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//     elevation: 3,
-//     child: Column(
-//       children: [
-//         // Header: Jam, Status, dan Label Group/Single
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//           decoration: BoxDecoration(
-//             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Row(
-//                 children: [
-//                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-//                   const SizedBox(width: 8),
-//                   Text(
-//                     item['jam_booking'] ?? "-",
-//                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                   ),
-//                 ],
-//               ),
-//               // LABEL INDIKATOR GROUP / SINGLE
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-//                 decoration: BoxDecoration(
-//                   color: Colors.white.withOpacity(0.2),
-//                   borderRadius: BorderRadius.circular(20),
-//                   border: Border.all(color: Colors.white, width: 1),
-//                 ),
-//                 child: Row(
-//                   children: [
-//                     Icon(
-//                       isGroup ? Icons.groups_rounded : Icons.person_rounded,
-//                       color: Colors.white,
-//                       size: 14,
-//                     ),
-//                     const SizedBox(width: 4),
-//                     Text(
-//                       isGroup ? "GROUP SHIP (#${request['group_id']})" : "SINGLE SHIP",
-//                       style: const TextStyle(
-//                         color: Colors.white,
-//                         fontSize: 10,
-//                         fontWeight: FontWeight.bold,
-//                         letterSpacing: 0.5,
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // Baris 1: RDD, Shipping Date (Stuffing), SO
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   _infoBox("RDD", _formatDate(request['rdd'])),
-//                   _infoBox("SHIPPING DATE", _formatDate(request['stuffing_date'])),
-//                   _infoBox("SO NUMBER", request['so']?.toString() ?? "-"),
-//                 ],
-//               ),
-//               const Divider(height: 24),
-
-//               // Baris 2: Info Vendor & Status Assignment
-//               Row(
-//                 children: [
-//                   const Icon(Icons.store, size: 18, color: Colors.red),
-//                   const SizedBox(width: 8),
-//                   Expanded(
-//                     child: Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         const Text("VENDOR", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-//                         Text(
-//                           "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-//                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-//                         ),
-//                       ],
-//                     ),
-//                   ),
-//                   _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
-//                 ],
-//               ),
-//               const SizedBox(height: 16),
-
-//               // Bagian Detail DO, Customer, dan Material
-//               const Text("LIST DELIVERY ORDER & MATERIALS", 
-//                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-//               const SizedBox(height: 8),
-              
-//               ...dos.map((doItem) {
-//                 final List details = doItem['do_details'] ?? [];
-//                 return Container(
-//                   margin: const EdgeInsets.only(bottom: 12),
-//                   padding: const EdgeInsets.all(12),
-//                   decoration: BoxDecoration(
-//                     color: Colors.grey.shade50,
-//                     borderRadius: BorderRadius.circular(10),
-//                     border: Border.all(color: Colors.grey.shade200),
-//                   ),
-//                   child: Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       // Customer Info
-//                       Row(
-//                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                         children: [
-//                           Text("DO: ${doItem['do_number']}", 
-//                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 12)),
-//                           Text("Cust ID: ${doItem['customer']?['customer_id'] ?? '-'}", 
-//                             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                         ],
-//                       ),
-//                       Text("👤 ${doItem['customer']?['customer_name'] ?? '-'}", 
-//                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-//                       const Padding(
-//                         padding: EdgeInsets.symmetric(vertical: 8.0),
-//                         child: Divider(thickness: 0.5),
-//                       ),
-//                       // Material List
-//                       ...details.map((det) {
-//                         final mat = det['material'] ?? {};
-//                         return Padding(
-//                           padding: const EdgeInsets.only(bottom: 6),
-//                           child: Row(
-//                             crossAxisAlignment: CrossAxisAlignment.start,
-//                             children: [
-//                               const Icon(Icons.inventory_2_outlined, size: 12, color: Colors.grey),
-//                               const SizedBox(width: 6),
-//                               Expanded(
-//                                 child: Text("${mat['material_id']} - ${mat['material_name']}", 
-//                                   style: const TextStyle(fontSize: 10, color: Colors.black87)),
-//                               ),
-//                               Text("${det['qty']} Unit", 
-//                                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
-//                             ],
-//                           ),
-//                         );
-//                       }).toList(),
-//                     ],
-//                   ),
-//                 );
-//               }).toList(),
-//             ],
-//           ),
-//         ),
-//       ],
-//     ),
-//   );
-// }
-
-// Widget _buildPlanningCard(Map<String, dynamic> item) {
-//   final request = item['request'] ?? {};
-//   final vendor = item['master_vendor'] ?? {};
-//   final List dos = request['delivery_order'] ?? [];
-//   final bool isGroup = request['group_id'] != null;
-
-//   return Card(
-//     margin: const EdgeInsets.only(bottom: 16),
-//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//     elevation: 3,
-//     child: Column(
-//       children: [
-//         // Header: Jam, Status, dan Label Group/Single
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//           decoration: BoxDecoration(
-//             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Row(
-//                 children: [
-//                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-//                   const SizedBox(width: 8),
-//                   Text(
-//                     item['jam_booking'] ?? "-",
-//                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                   ),
-//                 ],
-//               ),
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-//                 decoration: BoxDecoration(
-//                   color: Colors.white.withOpacity(0.2),
-//                   borderRadius: BorderRadius.circular(20),
-//                   border: Border.all(color: Colors.white, width: 1),
-//                 ),
-//                 child: Text(
-//                   isGroup ? "GROUP SHIP (#${request['group_id']})" : "SINGLE SHIP",
-//                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // --- PENAMBAHAN INFO TIME LOG (Kecil) ---
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   Text(
-//                     "Assigned: ${_formatDateTime(item['assigned_at'])}",
-//                     style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-//                   ),
-//                   Text(
-//                     "Responded: ${_formatDateTime(item['responded_at'])}",
-//                     style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-//                   ),
-//                 ],
-//               ),
-//               const SizedBox(height: 8),
-              
-//               // Baris 1: RDD, Shipping Date, SO
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   _infoBox("RDD", _formatDate(request['rdd'])),
-//                   _infoBox("SHIPPING DATE", _formatDate(request['stuffing_date'])),
-//                   _infoBox("SO NUMBER", request['so']?.toString() ?? "-"),
-//                 ],
-//               ),
-//               const Divider(height: 20),
-
-//               // Baris 2: Info Vendor
-//               Row(
-//                 children: [
-//                   const Icon(Icons.store, size: 18, color: Colors.red),
-//                   const SizedBox(width: 8),
-//                   Expanded(
-//                     child: Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         const Text("VENDOR", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-//                         Text(
-//                           "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-//                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-//                         ),
-//                       ],
-//                     ),
-//                   ),
-//                   _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
-//                 ],
-//               ),
-//               const SizedBox(height: 16),
-
-//               // Detail Item (Customer & Material)
-//               ...dos.map((doItem) {
-//                 final List details = doItem['do_details'] ?? [];
-//                 return Container(
-//                   margin: const EdgeInsets.only(bottom: 12),
-//                   padding: const EdgeInsets.all(12),
-//                   decoration: BoxDecoration(
-//                     color: Colors.grey.shade50,
-//                     borderRadius: BorderRadius.circular(10),
-//                     border: Border.all(color: Colors.grey.shade200),
-//                   ),
-//                   child: Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       Row(
-//                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                         children: [
-//                           Text("DO: ${doItem['do_number']}", 
-//                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 12)),
-//                           Text("Cust ID: ${doItem['customer']?['customer_id'] ?? '-'}", 
-//                             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                         ],
-//                       ),
-//                       Text("👤 ${doItem['customer']?['customer_name'] ?? '-'}", 
-//                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-//                       const Divider(height: 16),
-//                       ...details.map((det) {
-//                         final mat = det['material'] ?? {};
-//                         return Padding(
-//                           padding: const EdgeInsets.only(bottom: 4),
-//                           child: Row(
-//                             children: [
-//                               const Icon(Icons.circle, size: 4, color: Colors.grey),
-//                               const SizedBox(width: 6),
-//                               Expanded(
-//                                 child: Text("${mat['material_id']} - ${mat['material_name']}", 
-//                                   style: const TextStyle(fontSize: 10)),
-//                               ),
-//                               Text("${det['qty']} Unit", 
-//                                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                             ],
-//                           ),
-//                         );
-//                       }).toList(),
-//                     ],
-//                   ),
-//                 );
-//               }).toList(),
-//             ],
-//           ),
-//         ),
-//       ],
-//     ),
-//   );
-// }
-
-// Widget _buildPlanningCard(Map<String, dynamic> item) {
-//   // PENTING: Ambil data dari key 'request'
-//  final Map<String, dynamic> request = item['request'] ?? {};
-//   final vendor = item['master_vendor'] ?? {};
-
-//   if (request.isEmpty) return const SizedBox.shrink();
-//   final List dos = request['delivery_order'] as List? ?? [];
-//   final bool isGroup = request['group_id'] != null;
-
-// // Mengambil data warehouse hasil join
-//   final warehouse = request['warehouse'];
-//   String warehouseDisplay = "-";
-//   if (warehouse != null) {
-//     warehouseDisplay = "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}";
-//   }
-
-//   return Card(
-//     margin: const EdgeInsets.only(bottom: 16),
-//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//     elevation: 3,
-//     child: Column(
-//       children: [
-//         // Header: Jam, Status, dan Label Group/Single
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//           decoration: BoxDecoration(
-//             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Row(
-//                 children: [
-//                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-//                   const SizedBox(width: 8),
-//                   Text(
-//                     item['jam_booking'] ?? "-",
-//                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                   ),
-//                 ],
-//               ),
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-//                 decoration: BoxDecoration(
-//                   color: Colors.white.withOpacity(0.2),
-//                   borderRadius: BorderRadius.circular(20),
-//                   border: Border.all(color: Colors.white, width: 1),
-//                 ),
-//                 child: Text(
-//                   isGroup ? "GROUP SHIP ${request['group_id']}" : "SINGLE SHIP ${request['shipping_id']}",
-//                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // Info TIME LOG (Kecil)
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   Text(
-//                     "Assigned: ${_formatDateTime(item['assigned_at'])}",
-//                     style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-//                   ),
-//                   Text(
-//                     "Responded: ${_formatDateTime(item['responded_at'])}",
-//                     style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-//                   ),
-//                 ],
-//               ),
-//               const SizedBox(height: 8),
-              
-//               // Baris 1: RDD, SHIPPING DATE, STORAGE LOCATION (Pengganti SO)
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                  // _infoBox("RDD", _formatDate(request['rdd'])),
-//                   _infoBox("STUFFING DATE", _formatDate(request['stuffing_date'])),
-//                   _infoBox("TYPE", (request['is_dedicated'] ?? "-").toString().toUpperCase()),
-//                   // PERUBAHAN: Sekarang menampilkan Lokasi Gudang
-//                   _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase()),
-//                 ],
-//               ),
-//               const Divider(height: 20),
-
-//               // Baris 2: Info Vendor
-//               Row(
-//                 children: [
-//                   const Icon(Icons.store, size: 18, color: Colors.red),
-//                   const SizedBox(width: 8),
-//                   Expanded(
-//                     child: Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         const Text("VENDOR", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-//                         Text(
-//                           "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-//                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-//                         ),
-//                       ],
-//                     ),
-//                   ),
-//                   _infoBox("STATUS ORDER", item['status_assignment'].toString().toUpperCase()),
-//                 ],
-//               ),
-//               const SizedBox(height: 16),
-
-//               // Detail Item (Customer & Material)
-//               ...dos.map((doItem) {
-//                 final List details = doItem['do_details'] ?? [];
-//                 final String rddSpesifik = _formatDate(doItem['rdd_origin']);
-//                 // Mengambil nomor SO dari request utama atau item DO
-//                 final String soDisplay = request['so']?.toString() ?? "-";
-//                 final String custId = doItem['customer']?['customer_id']?.toString() ?? '-';
-//                 final String custName = doItem['customer']?['customer_name'] ?? '-';
-
-//                 return Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   children: [
-//                     // 1. Teks RDD (Di luar kotak, tepat di atas Header)
-//                     Padding(
-//                       padding: const EdgeInsets.only(left: 4, bottom: 4),
-//                       child: Row(
-//                         children: [
-//                           Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-//                           const SizedBox(width: 6),
-//                           Text(
-//                             "RDD: $rddSpesifik",
-//                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade900),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-
-//                     // 2. Kontainer Detail DO (Desain Konsisten)
-//                     Container(
-//                       margin: const EdgeInsets.only(bottom: 12),
-//                       decoration: BoxDecoration(
-//                         color: Colors.white,
-//                         borderRadius: BorderRadius.circular(8),
-//                         border: Border.all(color: Colors.grey.shade300),
-//                       ),
-//                       child: Column(
-//                         children: [
-//                           // Header Pink (DO - SO - Customer)
-//                           Container(
-//                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//                             decoration: BoxDecoration(
-//                               color: const Color(0xFFFCE4EC), // Warna Pink Konsisten
-//                               borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-//                             ),
-//                             child: Row(
-//                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                               children: [
-//                                 Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-//                                 Text("SO: ${request['so']?.toString() ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                                 Text("$custId - $custName", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                               ],
-//                             ),
-//                           ),
-//                           // Tabel Material
-//                           Table(
-//                             columnWidths: const {
-//                               0: FlexColumnWidth(1.2),
-//                               1: FlexColumnWidth(4),
-//                               2: FlexColumnWidth(1),
-//                             },
-//                             children: details.map((det) {
-//                               final mat = det['material'] ?? {};
-//                               return TableRow(
-//                                 children: [
-//                                   _tableCell(mat['material_id']?.toString() ?? "-"),
-//                                   _tableCell(mat['material_name'] ?? "-"),
-//                                   _tableCell(det['qty']?.toString() ?? "0", align: TextAlign.right, isBold: true),
-//                                 ],
-//                               );
-//                             }).toList(),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ],
-//                 );
-//               }).toList(),
-//             ],
-//           ),
-//         ),
-//       ],
-//     ),
-//   );
-// }
-
-// Widget _buildPlanningCard(Map<String, dynamic> item) {
-//   final Map<String, dynamic> request = item['request'] ?? {};
-//   final vendor = item['master_vendor'] ?? {};
-
-//   if (request.isEmpty) return const SizedBox.shrink();
-  
-//   final List dos = request['delivery_order'] as List? ?? [];
-//   final bool isGroup = request['group_id'] != null;
-//   final warehouse = request['warehouse'];
-  
-//   String warehouseDisplay = warehouse != null 
-//       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
-//       : "-";
-
-//   return Card(
-//     margin: const EdgeInsets.only(bottom: 16),
-//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//     elevation: 3,
-//     child: Column(
-//       children: [
-//         // Header (Jam & Label)
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//           decoration: BoxDecoration(
-//             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Row(
-//                 children: [
-//                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-//                   const SizedBox(width: 8),
-//                   Text(
-//                     item['jam_booking'] ?? "-",
-//                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                   ),
-//                 ],
-//               ),
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-//                 decoration: BoxDecoration(
-//                   color: Colors.white.withOpacity(0.2),
-//                   borderRadius: BorderRadius.circular(20),
-//                   border: Border.all(color: Colors.white, width: 1),
-//                 ),
-//                 child: Text(
-//                   isGroup ? "GROUP SHIP ${request['group_id']}" : "SINGLE SHIP ${request['shipping_id']}",
-//                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // Info Log
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   Text("Assigned: ${_formatDateTime(item['assigned_at'])}",
-//                       style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-//                   Text("Responded: ${_formatDateTime(item['responded_at'])}",
-//                       style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-//                 ],
-//               ),
-//               const SizedBox(height: 8),
-              
-//               // Baris Info Umum
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   _infoBox("STUFFING DATE", _formatDate(request['stuffing_date'])),
-//                   _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase()),
-//                   _infoBox("TYPE", (request['is_dedicated'] ?? "-").toString().toUpperCase()),
-//                 ],
-//               ),
-//               const Divider(height: 24),
-
-//               // Info Vendor
-//               Row(
-//                 children: [
-//                   const Icon(Icons.store, size: 18, color: Colors.red),
-//                   const SizedBox(width: 8),
-//                   Expanded(
-//                     child: Text(
-//                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-//                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-//                     ),
-//                   ),
-//                   _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
-//                 ],
-//               ),
-//               const SizedBox(height: 16),
-
-//               // --- LOOPING DETAIL DO (Sudah Gabung) ---
-//               ...dos.map((doItem) {
-//                 final List details = doItem['do_details'] ?? [];
-//                 final String rddSpesifik = _formatDate(doItem['rdd_origin']);
-
-//                 return Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   children: [
-//                     Padding(
-//                       padding: const EdgeInsets.only(left: 4, bottom: 4),
-//                       child: Row(
-//                         children: [
-//                           Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-//                           const SizedBox(width: 6),
-//                           Text("RDD: $rddSpesifik",
-//                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB71C1C))),
-//                         ],
-//                       ),
-//                     ),
-//                     Container(
-//                       margin: const EdgeInsets.only(bottom: 12),
-//                       decoration: BoxDecoration(
-//                         color: Colors.white,
-//                         borderRadius: BorderRadius.circular(8),
-//                         border: Border.all(color: Colors.grey.shade300),
-//                       ),
-//                       child: Column(
-//                         children: [
-//                           Container(
-//                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//                             decoration: const BoxDecoration(
-//                               color: Color(0xFFFCE4EC),
-//                               borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-//                             ),
-//                             child: Row(
-//                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                               children: [
-//                                 Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-//                                 Text("SO: ${request['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                                 Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
-//                                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                               ],
-//                             ),
-//                           ),
-//                           Table(
-//                             columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(4), 2: FlexColumnWidth(1)},
-//                             children: details.map((det) {
-//                               final mat = det['material'] ?? {};
-//                               return TableRow(
-//                                 children: [
-//                                   _tableCell(mat['material_id']?.toString() ?? "-"),
-//                                   _tableCell(mat['material_name'] ?? "-"),
-//                                   _tableCell(det['qty']?.toString() ?? "0", align: TextAlign.right, isBold: true),
-//                                 ],
-//                               );
-//                             }).toList(),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ],
-//                 );
-//               }).toList(),
-//             ],
-//           ),
-//         ),
-//       ],
-//     ),
-//   );
-// }
-
-// Widget _buildPlanningCard(Map<String, dynamic> item,int sid, bool isExpanded) {
-//   final Map<String, dynamic> request = item['request'] ?? {};
-//   final vendor = item['master_vendor'] ?? {};
-
-//   if (request.isEmpty) return const SizedBox.shrink();
-  
-//   final List dos = request['delivery_order'] as List? ?? [];
-//   final bool isGroup = request['group_id'] != null;
-//   final warehouse = request['warehouse'];
-  
-//   String warehouseDisplay = warehouse != null 
-//       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
-//       : "-";
-
-// // --- LOGIKA HITUNG TOTAL TONASE (Sesuai contoh yang Anda berikan) ---
-//   double sumNW = 0;
-//   for (var doItem in dos) {
-//     for (var det in doItem['do_details'] ?? []) {
-//       double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-//       double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-//       sumNW += (qty * unitWeight);
-//     }
-//   }
-//   double totalTonase = sumNW / 1000;
-
-//  return Card(
-//   elevation: isExpanded ? 4 : 1,
-//   margin: const EdgeInsets.only(bottom: 16),
-//   shape: RoundedRectangleBorder(
-//     borderRadius: BorderRadius.circular(12),
-//   ),
-//   clipBehavior: Clip.antiAlias,
-//   child: InkWell(
-//     splashColor: Colors.transparent,
-//     highlightColor: Colors.transparent,
-//     hoverColor: Colors.transparent,
-//     focusColor: Colors.transparent,
-//     overlayColor: WidgetStateProperty.all(Colors.transparent),
-//     onTap: () {
-//       setState(() {
-//         _expandedId = isExpanded ? null : sid;
-//       });
-//     },
-//     child: Column(
-//       children: [
-//         // Header (Jam & Label)
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//           decoration: BoxDecoration(
-//             color: isGroup ? Colors.purple.shade700 : Colors.blue.shade800,
-//             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-//           ),
-//           child: Row(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Row(
-//                 children: [
-//                   const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-//                   const SizedBox(width: 8),
-//                   Text(
-//                     item['jam_booking'] ?? "-",
-//                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-//                   ),
-//                 ],
-//               ),
-//               Container(
-//                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-//                 decoration: BoxDecoration(
-//                   color: Colors.white.withOpacity(0.2),
-//                   borderRadius: BorderRadius.circular(20),
-//                   border: Border.all(color: Colors.white, width: 1),
-//                 ),
-//                 child: Text(
-//                   isGroup ? "GROUP SHIP ${request['group_id']}" : "SINGLE SHIP ${request['shipping_id']}",
-//                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-
-//         Padding(
-//           padding: const EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // Info Log
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   Text("Assigned: ${_formatDateTime(item['assigned_at'])}",
-//                       style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-//                   Text("Responded: ${_formatDateTime(item['responded_at'])}",
-//                       style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-//                 ],
-//               ),
-//               const SizedBox(height: 8),
-              
-//               // Baris Info Umum
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   _infoBox("STUFFING DATE", _formatDate(request['stuffing_date'])),
-//                   _infoBox("WAREHOUSE", warehouseDisplay.toUpperCase()),
-//                   _infoBox("TYPE", (request['is_dedicated'] ?? "-").toString().toUpperCase()),
-//                 ],
-//               ),
-//               const Divider(height: 24),
-
-//               // Info Vendor
-//               Row(
-//                 children: [
-//                   const Icon(Icons.store, size: 18, color: Colors.red),
-//                   const SizedBox(width: 8),
-//                   Expanded(
-//                     child: Text(
-//                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-//                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-//                     ),
-//                   ),
-//                  // _infoBox("STATUS", item['status_assignment'].toString().toUpperCase()),
-//                   //_infoBox("CHECK-IN AT", _formatDateTime(item['checkIn_at'])),
-//                 ],
-//               ),
-//               const SizedBox(height: 8),
-//               Container(
-//                 width: double.infinity,
-//                 padding: const EdgeInsets.all(10),
-//                 margin: const EdgeInsets.only(bottom: 16),
-//                 decoration: BoxDecoration(
-//                   color: Colors.orange.shade50,
-//                   borderRadius: BorderRadius.circular(8),
-//                   border: Border.all(color: Colors.orange.shade200),
-//                 ),
-//                 child: Column(
-//                   children: [
-//                     Row(
-//                       children: [
-//                         const Icon(Icons.location_on, size: 14, color: Colors.orange),
-//                         const SizedBox(width: 6),
-//                         Text(
-//                           "Check-in At: ${_formatDateTime(item['checkIn_at'])}",
-//                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
-//                         ),
-// // Tampilkan info jika dia check-in terlambat
-//                if (item['latecheckIn_reason'] != null) ...[
-//                           const SizedBox(width: 12),
-//                           const Text("|", style: TextStyle(color: Colors.orange, fontSize: 11)),
-//                           const SizedBox(width: 12),
-//                           Expanded(
-//                             child: Text(
-//                               "Terlambat: ${item['latecheckIn_reason']}",
-//                               style: TextStyle(fontSize: 11, color: Colors.red.shade900, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
-//                               overflow: TextOverflow.ellipsis,
-//                             ),
-//                           ),
-//                         ],
-//                       ],
-//                     ),
-//                     // TAMBAHKAN PEMBATAS TIPIS
-//       const Padding(
-//         padding: EdgeInsets.symmetric(vertical: 4),
-//         child: Divider(height: 1, color: Colors.orange),
-//       ),
-
-//       // BARIS LOADING & CHECKER (BARU)
-//       Row(
-//         children: [
-//           const Icon(Icons.hourglass_bottom, size: 14, color: Colors.orange),
-//           const SizedBox(width: 6),
-//           Text(
-//             "Loading At: ${_formatDateTime(item['loading_at'])}",
-//             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
-//           ),
-//           const SizedBox(width: 12),
-//           const Text("|", style: TextStyle(color: Colors.orange, fontSize: 11)),
-//           const SizedBox(width: 12),
-//           Expanded(
-//             child: Text(
-//               "Checker: ${item['loading_by'] ?? '-'}", // Sesuaikan field 'loading_by' dengan DB Anda
-//               style: TextStyle(fontSize: 11, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
-//               overflow: TextOverflow.ellipsis,
-//            ),
-//                               ),
-//                             ],
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-            
-//               if (isExpanded) ...[
-//             const Divider(height: 1),
-//             const SizedBox(height: 8),
-//             Padding(
-//             padding: const EdgeInsets.all(16),
-//             child: Column(
-//               crossAxisAlignment: CrossAxisAlignment.start,
-//               children: [
-//               // --- LOOPING DETAIL DO (Sudah Gabung) ---
-//               ...dos.map((doItem) {
-//                 final List details = doItem['do_details'] ?? [];
-//                 final String rddSpesifik = _formatDate(doItem['rdd_origin']);
-
-//                 return Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   children: [
-//                     Padding(
-//                       padding: const EdgeInsets.only(left: 4, bottom: 4),
-//                       child: Row(
-//                         children: [
-//                           Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-//                           const SizedBox(width: 6),
-//                           Text("RDD: $rddSpesifik",
-//                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB71C1C))),
-//                         ],
-//                       ),
-//                     ),
-//                     Container(
-//                       margin: const EdgeInsets.only(bottom: 12),
-//                       decoration: BoxDecoration(
-//                         color: Colors.white,
-//                         borderRadius: BorderRadius.circular(8),
-//                         border: Border.all(color: Colors.grey.shade300),
-//                       ),
-//                       child: Column(
-//                         children: [
-//                           Container(
-//                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//                             decoration: const BoxDecoration(
-//                               color: Color(0xFFFCE4EC),
-//                               borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-//                             ),
-//                             child: Row(
-//                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                               children: [
-//                                 Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-//                                 Text("SO: ${request['so'] ?? '-'}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                                 Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
-//                                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-//                               ],
-//                             ),
-//                           ),
-//                           Table(
-//                             columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(4), 2: FlexColumnWidth(1)},
-//                             children: details.map((det) {
-//                               final mat = det['material'] ?? {};
-//                               return TableRow(
-//                                 children: [
-//                                   _tableCell(mat['material_id']?.toString() ?? "-"),
-//                                   _tableCell(mat['material_name'] ?? "-"),
-//                                   _tableCell(det['qty']?.toString() ?? "0", align: TextAlign.right, isBold: true),
-//                                 ],
-//                               );
-//                             }).toList(),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ],
-//                 );
-//               }).toList(),
-//               //const Divider(height: 24),
-
-//       // TAMPILAN TOTAL TONASE (Pojok Kanan)
-//       Align(
-//         alignment: Alignment.centerRight,
-//         child: Padding(
-//           padding: const EdgeInsets.only(bottom: 8.0),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.end,
-//             children: [
-//               Text(
-//                 "Total Tonase:",
-//                 style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-//               ),
-//               Text(
-//                 "${totalTonase.toStringAsFixed(3)} TON",
-//                 style: const TextStyle(
-//                   fontSize: 16, 
-//                   fontWeight: FontWeight.bold, 
-//                   color: Colors.blueAccent
-//                 ),
-//               ),
-//             ],
-//           ),
-          
-//         ),
-//       ),
-//        // Form Action (Input Gudang, Tombol Proses)
-//             //_buildActionForm(item),
-      
-// //               SizedBox(
-// //   width: double.infinity,
-// //   child: ElevatedButton.icon(
-// //     onPressed: () =>_handleGoToLoading(item),
-// //     icon: const Icon(Icons.outbound, color: Colors.white),
-// //     label: const Text("SIMPAN & LANJUT KE POS KELUAR", 
-// //         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-// //     style: ElevatedButton.styleFrom(
-// //       backgroundColor: Colors.green.shade700,
-// //       padding: const EdgeInsets.symmetric(vertical: 12),
-// //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-// //     ),
-// //   ),
-// // ),
-//             ],
-//           ),
-//             ),
-//               ],
-//               ],
-//           ),
-//         ),          
-//     );
-
-    
-// }
 
 Widget _buildPlanningCard(Map<String, dynamic> item) {
   final Map<String, dynamic> request = item['request'] ?? {};
@@ -2078,6 +857,7 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
     switch (status) {
       case 'accepted': return Colors.blue.shade800;
       case 'check in': return Colors.orange;
+      case 'kelayakan unit': return Colors.orange;
       case 'loading': return Colors.orange;
       case 'weighbridge': return Colors.orange;
       case 'keluar': return Colors.orange;
@@ -2093,29 +873,41 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
     margin: const EdgeInsets.only(bottom: 16),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     elevation: 3,
-    //color: getCardColor(),
+    //clipBehavior: Clip.antiAlias, // Memastikan sudut container dalam ikut melengkung
     child: Column(
       children: [
-        // Header (Jam & Label)
+        // Header (Jam & Label) - PERBAIKAN: Menggunakan Wrap agar tidak tabrakan di layar kecil
         Container(
+           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: _getStatusColor(status),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+          child: Wrap(
+    spacing: 12, // Jarak horizontal antar elemen jika sejajar
+    runSpacing: 8, // Jarak vertikal otomatis jika teks melipat ke bawah
+    alignment: WrapAlignment.spaceBetween,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    item['jam_booking'] ?? "-",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ],
+                  const Icon(Icons.access_time_filled, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Flexible( // Flexible memastikan teks menyesuaikan ruang yang ada
+              child: Text(
+                "CHECK-IN: ${_getCheckInTime(item['jam_booking'] ?? "-")} | LOADING: ${item['jam_booking'] ?? "-"}",
+                overflow: TextOverflow.ellipsis, // Jika terlalu panjang, akan jadi titik-titik (...)
+                style: const TextStyle(
+                  color: Colors.white, 
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 14, // Ukuran sedikit diperkecil agar pas
+                ),
               ),
+            ),
+          ],
+        ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -2166,19 +958,42 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
                   const Icon(Icons.store, size: 18, color: Colors.red),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      status == 'rejected' || status == 'no response' || status == 'cancel booking'
-            ? "Belum Ada Vendor (Menunggu Assign Ulang)"
-            : "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-                      //"${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13,),
-                    ),
-                  ),
+                   child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            status == 'rejected' || status == 'no response' || status == 'cancel booking'
+                ? "Belum Ada Vendor"
+                : "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+                    // --- TAMBAHKAN DETAIL VENDOR TRANSPORTASI DI SINI ---
+          if (item['vendor_transportasi'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap( // Gunakan Wrap agar rapi saat dibuka di HP
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  _miniVendorDetail("QCF: ${item['vendor_transportasi']['qcf'] ?? '-'}"),
+                  _miniVendorDetail("City: ${item['vendor_transportasi']['city'] ?? '-'}"),
+                  _miniVendorDetail("Area: ${item['vendor_transportasi']['area'] ?? '-'}"),
+                  _miniVendorDetail("Unit: ${item['vendor_transportasi']['type_unit'] ?? '-'}"),
+                ],
+              ),
+            ),
+                           
+        ],
+                   ),
+              ),
+      
+                  
                   _infoStatus("STATUS",status.toUpperCase()),
                   //_infoBox("CHECK-IN AT", _formatDateTime(item['checkIn_at'])),
                 ],
               ),
-              const SizedBox(height: 8),
+    
+              const SizedBox(height: 14),
               // --- TRACKING BOX UNTUK CONDITIONAL STATUS (No Response, Rejected, Rejected Unit) ---
                // if (status == 'no response' || status == 'rejected' || status == 'rejected unit' || status == 'cancel booking')
                  if (['no response', 'rejected', 'rejected unit', 'cancel booking'].contains(status) || 
@@ -2567,7 +1382,7 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
       
     // const SizedBox(height: 16),
     // --- TOMBOL AKSI ADMIN (Hanya muncul jika status 'accepted') ---
-              if (status == 'accepted') ...[
+             // if (status == 'accepted') ...[
                 const SizedBox(height: 20),
                 Row(
                   children: [
@@ -2585,6 +1400,7 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
                         ),
                       ),
                     ),
+                     if (status == 'accepted') ...[
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
@@ -2599,32 +1415,20 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ],
+                      ],  
+                  ],  
+                ), 
 
               const SizedBox(height: 16),
                 
-//               SizedBox(
-//   width: double.infinity,
-//   child: ElevatedButton.icon(
-//     onPressed: () =>_handleGoToLoading(item),
-//     icon: const Icon(Icons.play_arrow, color: Colors.white),
-//     label: const Text("Loading", 
-//         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-//     style: ElevatedButton.styleFrom(
-//       backgroundColor: Colors.green.shade700,
-//       padding: const EdgeInsets.symmetric(vertical: 12),
-//       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-//     ),
-//   ),
-// ),
- ],
-                ),
-              ),
-            ],
-          ),
-          );
+//      
+      ],
+  ),
+        ),
+      ],
+    ),
+  );
+   
           
 }
 // 1. Fungsi Navigasi ke Halaman Edit Jam
@@ -2654,6 +1458,65 @@ void _openEditTab(Map<String, dynamic> item) {
       }, 
     ),
   );
+}
+// Fungsi helper untuk teks detail vendor yang kecil di bawah nama
+Widget _miniVendorDetail(String text) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: Colors.grey.shade300, width: 0.5),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        color: Colors.blueGrey.shade700,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
+}
+
+String _getCheckInTime(String? timeSlot) {
+  // 1. Cek keamanan awal: jika null, kosong, atau tidak mengandung pemisah " - "
+  if (timeSlot == null || timeSlot.isEmpty || timeSlot == "-" || !timeSlot.contains(" - ")) {
+    return "00:00 - 00:00";
+  }
+
+  try {
+    // 2. Pecah string (misal: "19:00 - 21:00")
+    List<String> parts = timeSlot.split(" - ");
+    if (parts.length < 2) return "00:00 - 00:00";
+
+    String startTimeStr = parts[0]; // "19:00"
+    String endTimeStr = parts[1];   // "21:00"
+
+    // 3. Ambil jam (handle jika split ":" gagal)
+    List<String> startSplit = startTimeStr.split(":");
+    List<String> endSplit = endTimeStr.split(":");
+    
+    if (startSplit.isEmpty || endSplit.isEmpty) return "00:00 - 00:00";
+
+    int startHour = int.parse(startSplit[0]);
+    int endHour = int.parse(endSplit[0]);
+
+    // 4. Kurangi 2 jam (dengan logika putaran 24 jam agar tidak negatif)
+    // Misal: jam 1 pagi dikurang 2 jam menjadi jam 23 malam
+    int newStart = (startHour - 2) < 0 ? (24 + (startHour - 2)) : (startHour - 2);
+    int newEnd = (endHour - 2) < 0 ? (24 + (endHour - 2)) : (endHour - 2);
+
+    // 5. Kembalikan format HH:00
+    String checkInStart = "${newStart.toString().padLeft(2, '0')}:00";
+    String checkInEnd = "${newEnd.toString().padLeft(2, '0')}:00";
+
+    return "$checkInStart - $checkInEnd";
+  } catch (e) {
+    // Jika ada eror parsing di tengah jalan, tampilkan default alih-alih crash
+    debugPrint("Error kalkulasi jam check-in: $e");
+    return "00:00 - 00:00";
+  }
 }
 
 // Future<void> _saveReschedule(String newTime) async {
@@ -2691,23 +1554,6 @@ void _confirmCancelBooking(Map<String, dynamic> item) {
   showDialog(
     context: context,
     builder: (context) => StatefulBuilder(
-    // builder: (context) => AlertDialog(
-//       title: const Text("Batalkan Booking?"),
-//       content: const Text("Tindakan ini akan menghapus jam booking dan mengembalikan status penugasan ke 'waiting assign vendor'."),
-//       actions: [
-//         TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEMBALI")),
-//         ElevatedButton(
-//           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-//           onPressed: () async {
-//             Navigator.pop(context);
-//             await _executeCancelBooking(item);
-//           },
-//           child: const Text("YA, BATALKAN", style: TextStyle(color: Colors.white)),
-//         ),
-//       ],
-//     ),
-//   );
-// }
 builder: (context, setStateDialog) => AlertDialog(
         title: const Text("Alasan Pembatalan", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
@@ -2777,9 +1623,36 @@ Future<void> _executeCancelBooking(Map<String, dynamic> item,String reason) asyn
 
         final String activeUserName = profileRes?['name'] ?? currentUser?.email ?? 'Admin';
     // Ambil semua ID jika ini adalah grup
-    final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
+    //final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
     final List<int> shippingIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['request']['shipping_id']]);
+    List<int> assignmentIds = [];
+    // 2. PROTEKSI GANDA: Cari ID assignment yang benar-benar aktif ('offered' / 'accepted') di database
+    final req = item['request'];
+    if (req != null && req['group_id'] != null) {
+      final assignmentRes = await supabase
+          .from('shipping_assignments')
+          .select('id_assignment')
+          .inFilter('shipping_id', shippingIds)
+          .inFilter('status_assignment', ['offered', 'accepted']); // Hanya sasar yang aktif!
 
+      assignmentIds = (assignmentRes as List)
+          .map((e) => e['id_assignment'] as int)
+          .toList();
+          
+      // Antisipasi jika kosong, masukkan ID utama dari card yang ditekan
+      if (assignmentIds.isEmpty && item['id_assignment'] != null) {
+        assignmentIds.add(int.parse(item['id_assignment'].toString()));
+      }
+    } else {
+      // Jika Single Shipment, langsung pakai ID utama card
+      assignmentIds = [int.parse(item['id_assignment'].toString())];
+    }
+
+    // Jaga-jaga jika assignmentIds kosong agar tidak melempar error query kosong
+    if (assignmentIds.isEmpty) {
+      _showSnackBar("Tidak ada penugasan aktif yang bisa dibatalkan", Colors.orange);
+      return;
+    }
     // Update Assignment: Hapus jam dan ubah status ke cancel
     await supabase.from('shipping_assignments').update({
       'status_assignment': 'cancel booking',
@@ -2816,12 +1689,7 @@ Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign
     ),
   );
 }
-// Helper untuk format tanggal dan jam (Assigned & Responded)
-// String _formatDateTime(String? dateStr) {
-//   if (dateStr == null) return "-";
-//   DateTime dt = DateTime.parse(dateStr).toLocal();
-//   return DateFormat('dd/MM/yy HH:mm').format(dt);
-// }
+
 String _formatDateTime(String? dateStr) {
   if (dateStr == null || dateStr.isEmpty) return "-";
 

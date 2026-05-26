@@ -54,10 +54,49 @@ String _currentUserName = 'admin';
   @override
   void initState() {
     super.initState();
-    _shippingData = widget.item;
+    //_shippingData = widget.item;
+    _loadData();
     _getProfileName();
   }
 
+// Cari di dalam class _CheckInFormPageState
+Future<void> _loadData() async {
+  try {
+    final assignmentId = widget.item['id_assignment'];
+    
+    // Kita ambil data ulang dari view/table penugasan lengkap dengan vendornya
+    final response = await supabase
+        .from('shipping_assignments')
+        .select('''
+          *,
+          vendor_transportasi:id_vendor_details(*),
+          request:shipping_id (
+            *,
+            rdd,
+            so,
+            warehouse:warehouse_id(*),
+            delivery_order(
+              *,
+              customer(*),
+              do_details(
+                qty,
+                material:material_id(*)
+              )
+            )
+          )
+        ''')
+        .eq('id_assignment', assignmentId)
+        .single();
+
+    if (mounted) {
+      setState(() {
+        _shippingData = response;
+      });
+    }
+  } catch (e) {
+    debugPrint("Error load data vendor: $e");
+  }
+}
 Future<void> _getProfileName() async {
   try {
     final user = supabase.auth.currentUser;
@@ -116,7 +155,7 @@ Future<void> _getProfileName() async {
     return false;
   }
 
-    if (!isDocChecked || _ganjalRoda == null || _remHandRem == null || !isApdChecked) {
+    if (!isDocChecked || _ganjalRoda == null || _remHandRem == null) {
       _showSnackBar("Safety Factor (Dokumen, Ganjal, Rem, APD) wajib diisi!", Colors.orange);
       return false;
     }
@@ -165,16 +204,16 @@ Future<void> _getProfileName() async {
       // Namun status request kembali ke 'waiting assign vendor delivery' agar muncul di list Admin
       String targetStatusAssignment = (_decision == 'DITOLAK') 
           ? 'rejected unit' 
-          : 'check in';
+          : 'kelayakan unit';
           
       String targetStatusRequest = (_decision == 'DITOLAK') 
           ? 'waiting assign vendor delivery' 
-          : 'check in';
+          : 'kelayakan unit';
 
       await supabase.from('shipping_assignments').update({
         'status_assignment': targetStatusAssignment, // Tambahkan baris ini
-        'checkIn_at': DateTime.now().toIso8601String(),
-        'checkIn_by': _currentUserName,
+        'kelayakan_at': DateTime.now().toIso8601String(),
+        'kelayakan_by': _currentUserName,
         'no_polisi': _noPolisiController.text.toUpperCase(),
         'tahun_kendaraan': _tahunKendaraanController.text,
         'nama_supir': _namaSupirController.text,
@@ -339,52 +378,137 @@ Future<void> _getProfileName() async {
     );
   }
 
-  Widget _buildContainerGrid() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 6,
-        childAspectRatio: 0.8,
-        children: [
-          _buildSideChecklist("SISI KANAN", _sisiKanan),
-          _buildSideChecklist("SISI KIRI", _sisiKiri),
-          _buildSideChecklist("SISI DEPAN", _sisiDepan),
-          _buildSideChecklist("SISI BELAKANG", _sisiPintu),
-          _buildSideChecklist("SISI ATAP", _sisiAtap),
-          _buildSideChecklist("SISI LANTAI", _sisiLantai),
-        ],
-      ),
-    );
-  }
+  // Widget _buildContainerGrid() {
+  //   return Padding(
+  //     padding: const EdgeInsets.all(8.0),
+  //     child: GridView.count(
+  //       shrinkWrap: true,
+  //       physics: const NeverScrollableScrollPhysics(),
+  //       crossAxisCount: 6,
+  //       childAspectRatio: 0.8,
+  //       children: [
+  //         _buildSideChecklist("SISI KANAN", _sisiKanan),
+  //         _buildSideChecklist("SISI KIRI", _sisiKiri),
+  //         _buildSideChecklist("SISI DEPAN", _sisiDepan),
+  //         _buildSideChecklist("SISI BELAKANG", _sisiPintu),
+  //         _buildSideChecklist("SISI ATAP", _sisiAtap),
+  //         _buildSideChecklist("SISI LANTAI", _sisiLantai),
+  //       ],
+  //     ),
+  //   );
+  // }
 
+Widget _buildContainerGrid() {
+  return Padding(
+    padding: const EdgeInsets.all(8.0),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        // Jika layar kecil (HP), tampilkan 2 kolom (3 baris)
+        // Jika layar lebar (Laptop), tampilkan 6 kolom (1 baris)
+        int columns = constraints.maxWidth < 600 ? 2 : 6;
+        
+        // Atur rasio tinggi kotak: HP perlu lebih tinggi (0.6) agar checkbox tidak sesak
+        double ratio = constraints.maxWidth < 600 ? 0.65 : 0.8;
+
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: columns,
+          childAspectRatio: ratio,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          children: [
+            _buildSideChecklist("SISI KANAN", _sisiKanan),
+            _buildSideChecklist("SISI KIRI", _sisiKiri),
+            _buildSideChecklist("SISI DEPAN", _sisiDepan),
+            _buildSideChecklist("SISI BELAKANG", _sisiPintu),
+            _buildSideChecklist("SISI ATAP", _sisiAtap),
+            _buildSideChecklist("SISI LANTAI", _sisiLantai),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+  // Widget _buildSideChecklist(String title, Map<String, bool> sideMap) {
+  //   return Card(
+  //     elevation: 0,
+  //     shape: RoundedRectangleBorder(side: BorderSide(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+  //     margin: const EdgeInsets.all(4),
+  //     child: Column(
+  //       children: [
+  //         Container(
+  //           width: double.infinity,
+  //           padding: const EdgeInsets.all(6),
+  //           decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
+  //           child: Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red)),
+  //         ),
+  //         ...sideMap.keys.map((key) {
+  //           return CheckboxListTile(
+  //             title: Text(key, style: const TextStyle(fontSize: 10)),
+  //             value: sideMap[key],
+  //             dense: true,
+  //             visualDensity: VisualDensity.compact,
+  //             onChanged: (val) => setState(() => sideMap[key] = val!),
+  //           );
+  //         }),
+  //       ],
+  //     ),
+  //   );
+  // }
   Widget _buildSideChecklist(String title, Map<String, bool> sideMap) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(side: BorderSide(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      margin: const EdgeInsets.all(4),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-            child: Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red)),
+  return Card(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      side: BorderSide(color: Colors.grey.shade300), 
+      borderRadius: BorderRadius.circular(8)
+    ),
+    margin: EdgeInsets.zero, // Gunakan spacing dari GridView saja
+    child: Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50, 
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8))
           ),
-          ...sideMap.keys.map((key) {
-            return CheckboxListTile(
-              title: Text(key, style: const TextStyle(fontSize: 10)),
-              value: sideMap[key],
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              onChanged: (val) => setState(() => sideMap[key] = val!),
-            );
-          }),
-        ],
-      ),
-    );
-  }
+          child: Text(
+            title, 
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red)
+          ),
+        ),
+        // Gunakan Expanded agar list checkbox bisa menyesuaikan sisa ruang Card
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            children: sideMap.keys.map((key) {
+              return Theme(
+                // Mengecilkan ukuran checkbox agar tidak makan tempat
+                data: ThemeData(unselectedWidgetColor: Colors.grey.shade400),
+                child: CheckboxListTile(
+                  title: Text(
+                    key, 
+                    style: const TextStyle(fontSize: 10, height: 1.0)
+                  ),
+                  value: sideMap[key],
+                  dense: true,
+                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  activeColor: Colors.red.shade700,
+                  onChanged: (val) => setState(() => sideMap[key] = val!),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   // Widget _buildCheckboxGroup(Map<String, bool> map) {
   //   return Padding(
@@ -1168,15 +1292,16 @@ Widget _buildTextField(
 
 
   Widget _buildDetailedSummary() {
-
-    final data = _shippingData ?? {};
-
+    //final data = _shippingData ?? {};
+final data = _shippingData ?? widget.item;
     final request = data['request'] ?? {};
 
     final bool isGroup = request['group_id'] != null;
 
     final List dos = request['delivery_order'] ?? [];
-
+// Ambil RDD dan SO dari level request (shipping_request)
+    final String rddGlobal = _formatDate(request['rdd']);
+    final String soGlobal = request['so']?.toString() ?? "-";
     final warehouse = request['warehouse'];
 
     String warehouseDisplay = warehouse != null 
@@ -1185,7 +1310,29 @@ Widget _buildTextField(
 
         : "-";
 
+// AMBIL DATA DETAIL VENDOR DARI HASIL JOIN SHIPPING REQUEST / ASSIGNMENTS
+    // Menyesuaikan struktur data map penugasan aktif dari widget.item
+    Map<String, dynamic>? vendorDetails;
+   // Cek di root data (untuk single)
+    if (data['vendor_transportasi'] != null) {
+      vendorDetails = data['vendor_transportasi'];
+    } 
+    // Cek di dalam request -> assignments (untuk group)
+    else if (request['shipping_assignments'] != null && (request['shipping_assignments'] as List).isNotEmpty) {
+      // Ambil dari assignment pertama dalam list
+      var firstAssign = request['shipping_assignments'][0];
+      vendorDetails = firstAssign['vendor_transportasi'];
+    }
+    // Cek jika vendor_transportasi malah ada di dalam request langsung
+    else if (request['vendor_transportasi'] != null) {
+      vendorDetails = request['vendor_transportasi'];
+    }
 
+    final String vVendorName = vendorDetails?['vendor_name'] ?? '-';
+    final String vCity = vendorDetails?['city'] ?? '-';
+    final String vArea = vendorDetails?['area'] ?? '-';
+    final String vUnit = vendorDetails?['type_unit'] ?? '-';
+    final String vendorNikDisplay = data['nik'] ?? request['nik'] ?? vendorDetails?['nik'] ?? '-';
 
     return Container(
 
@@ -1222,7 +1369,7 @@ Widget _buildTextField(
                     Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", 
 
                       style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-
+_buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                   ],
 
                 ),
@@ -1234,16 +1381,28 @@ Widget _buildTextField(
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
 
                 const SizedBox(height: 16),
+                Text(
+                 "$vendorNikDisplay - $vVendorName",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(height: 1, color: Color(0xFFE0E0E0)),
+                ),
 
                 Row(
 
                   children: [
 
                     _infoBox("Stuffing Date", _formatDate(request['stuffing_date'])),
+                    // _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _infoBox("Type Unit", vUnit),
+                    _infoBox("City", vCity),
+                    _infoBox("Area", vArea),
 
-                    const Spacer(),
+                    //const Spacer(),
 
-                    _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
+                    // _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
 
                   ],
 
@@ -1273,11 +1432,11 @@ Widget _buildTextField(
 
             final List doDetails = doItem['do_details'] ?? [];
 
-            final String soNum = doItem['so']?.toString() ?? 
-                               doItem['parent_so']?.toString() ?? 
-                               "-";
+            // final String soNum = doItem['so']?.toString() ?? 
+            //                    doItem['parent_so']?.toString() ?? 
+            //                    "-";
 
-            final String rddSpesifik = _formatDate(doItem['rdd_origin']);
+            // final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 
 
 
@@ -1299,7 +1458,7 @@ Widget _buildTextField(
 
                       const SizedBox(width: 6),
 
-                      Text("RDD: $rddSpesifik",
+                      Text("RDD: $rddGlobal",
 
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
 
@@ -1321,7 +1480,7 @@ Widget _buildTextField(
 
                       const SizedBox(width: 20),
 
-                      Text("SO: $soNum", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text("SO: $soGlobal", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
 
                     ],
 
@@ -1443,8 +1602,8 @@ Widget _buildTextField(
       ),
     );
   }
-
-  Widget _infoBox(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]);
+ Widget _infoBox(String label, String value) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))]));
+  // Widget _infoBox(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]);
   Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.all(8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 10, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)));
   Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color)), child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)));
   void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));

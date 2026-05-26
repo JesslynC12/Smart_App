@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/admin/display/daily-occupancy.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
 import 'package:project_app/admin/display/penilaianVendor_page.dart';
@@ -22,7 +23,7 @@ import 'package:project_app/admin/display/listPermintaanPengiriman_page.dart';
 import 'package:project_app/admin/input form/formComplain_page.dart';
 import 'package:project_app/admin/input form/formOccupancy_page.dart';
 import 'package:project_app/admin/input form/formDO_page.dart';
-import 'package:project_app/admin/input form/formKelayakanunit_page.dart';
+import 'package:project_app/admin/input%20form/listCheckIn_page.dart';
 import 'package:project_app/admin/master data/checker_master.dart';
 import 'package:project_app/admin/master data/customer_master.dart';
 import 'package:project_app/admin/master data/manage_user_vendor.dart';
@@ -43,6 +44,8 @@ class MainDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print("DEBUG: Role User = ${currentUser?.role}");
+  print("DEBUG: Privileges User = ${currentUser?.privileges}");
     return Drawer(
       child: Column(
         children: [
@@ -60,7 +63,7 @@ class MainDrawer extends StatelessWidget {
               padding: EdgeInsets.zero,
               children: [
                 // ================= MENU ADMIN =================
-                if (currentUser?.role == 'admin') ...[
+                if (currentUser?.role != 'vendor') ...[
                   _buildAdminMenu(context),
                 ],
 
@@ -130,7 +133,7 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                DynamicTabPage.of(context)?.openTab(
         "Security Pos Keluar",
-        SecurityPosKeluarState(
+        SecurityPosKeluarPage(
           item: {},
         ),
       );
@@ -170,12 +173,12 @@ class MainDrawer extends StatelessWidget {
                 DynamicTabPage.of(context)?.openTab("List DO", const ListDOPage());
               }),
             if (_hasAccess('DOdetailsGBJ'))
-              _menuItem(context, Icons.list_rounded, "Do Details GBJ", Colors.redAccent, onTap: () {
+              _menuItem(context, Icons.list_rounded, "Do Details GBJ", Colors.deepPurple, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Do Details GBJ", const DetailsDOGbjPage());
               }),
             if (_hasAccess('VendorRequest'))
-              _menuItem(context, Icons.request_quote_rounded, "Permintaan Pengiriman", Colors.redAccent, onTap: () {
+              _menuItem(context, Icons.request_quote_rounded, "Permintaan Pengiriman", Colors.green, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Permintaan Pengiriman ", const VendorRequestPage());
               }),
@@ -187,7 +190,7 @@ class MainDrawer extends StatelessWidget {
                 DynamicTabPage.of(context)?.openTab("List Planning Booking Antrian", BookingPlanningListPage());
               }),
               if (_hasAccess('slotAntrian'))
-               _menuItem(context, Icons.schedule_rounded, "Slot Antrian", Colors.amber.shade800, onTap: () {
+               _menuItem(context, Icons.schedule_rounded, "Slot Antrian", Colors.redAccent, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Slot Antrian", QueueSlotPage());
               }),
@@ -195,27 +198,34 @@ class MainDrawer extends StatelessWidget {
               //   Navigator.pop(context);
               //   DynamicTabPage.of(context)?.openTab("List Complain", const ComplainPage());
               // }),
-            _menuItem(context, Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
+            //_menuItem(context, Icons.dashboard_customize_rounded, "Dashboard Logistik", Colors.blueGrey),
             if (_hasAccess('penilaianVendor'))
                _menuItem(context, Icons.star_rate_rounded, "Penilaian Vendor", Colors.amber.shade800, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Penilaian Vendor", VendorEvaluationPage());
               }),
              if (_hasAccess('ListPPIC'))
-              _menuItem(context, Icons.padding_outlined, "List PPIC", Colors.orange, onTap: () {
+              _menuItem(context, Icons.padding_outlined, "List PPIC", Colors.blue, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("List PPIC", const PPICListPage());
               }),
-
-            if (_hasAccess('ListComplain'))
-              _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
+              if (_hasAccess('DailyOccupancy'))
+               _menuItem(context, Icons.star_rate_rounded, "Daily Occupancy", Colors.amber.shade800, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("List Complain", const ComplainPage());
+                DynamicTabPage.of(context)?.openTab("Daily Occupancy", MasterReviewDailyPage());
               }),
+
+            // if (_hasAccess('ListComplain'))
+            //   _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
+            //     Navigator.pop(context);
+            //     DynamicTabPage.of(context)?.openTab("List Complain", const ComplainPage());
+            //   }),
           ],
         ),
 
         // --- SECTION 3: MASTER DATA ---
+        if (_hasAccess('Master'))
+
         ExpansionTile(
           leading: const Icon(Icons.storage_rounded),
           title: const Text("Master Data", style: TextStyle(fontWeight: FontWeight.w600)),
@@ -225,10 +235,10 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen User", const UserManagementPage());
               }),
-              _menuItem(context, Icons.people_alt_rounded, "Manajemen Vendor Transport", Colors.indigo, onTap: () {
-                Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Manajemen Vendor Transport", const VendorManagementPage());
-              }),
+              // _menuItem(context, Icons.people_alt_rounded, "Manajemen Vendor Transport", Colors.indigo, onTap: () {
+              //   Navigator.pop(context);
+              //   DynamicTabPage.of(context)?.openTab("Manajemen Vendor Transport", const VendorManagementPage());
+              // }),
               _menuItem(context, Icons.storefront_rounded, "Manajemen Customer", Colors.blue, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen Customer", const CustomerPaginatedPage());
@@ -249,10 +259,10 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen Vendor", const VendorPaginatedPage());
               }),
-              _menuItem(context, Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent, onTap: () {
-                Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Enrollment Akun Vendor", const VendorEnrollmentPage());
-              }),
+              // _menuItem(context, Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent, onTap: () {
+              //   Navigator.pop(context);
+              //   DynamicTabPage.of(context)?.openTab("Enrollment Akun Vendor", const VendorEnrollmentPage());
+              // }),
             ]
           ],
         ),

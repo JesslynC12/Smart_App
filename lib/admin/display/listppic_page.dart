@@ -41,7 +41,10 @@ bool _globalExportLock = false;
 
   @override
   void dispose() {
-    _ppicSubscription?.unsubscribe();
+    // _ppicSubscription?.unsubscribe();
+    if (_ppicSubscription != null) {
+    supabase.removeChannel(_ppicSubscription!);
+  }
     super.dispose();
   }
 
@@ -60,20 +63,47 @@ bool _globalExportLock = false;
     }
   }
 
-  void _listenToRealtime() {
-    _ppicSubscription = supabase
-        .channel('public:ppic_form_details')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'ppic_form_details',
-          callback: (payload) {
-            debugPrint("Data Changed: ${payload.eventType}");
-            _fetchData();
-          },
-        )
-        .subscribe();
-  }
+  // void _listenToRealtime() {
+  //   _ppicSubscription = supabase
+  //       .channel('public:ppic_form_details')
+  //       .onPostgresChanges(
+  //         event: PostgresChangeEvent.all,
+  //         schema: 'public',
+  //         table: 'ppic_form_details',
+  //         callback: (payload) {
+  //           debugPrint("Data Changed: ${payload.eventType}");
+  //           _fetchData();
+  //         },
+  //       )
+  //       .subscribe();
+  // }
+  // 2. Optimasi fungsi listen agar lebih peka terhadap perubahan status/form
+void _listenToRealtime() {
+  // Batalkan subscription lama jika ada
+  _ppicSubscription?.unsubscribe();
+
+  _ppicSubscription = supabase
+      .channel('ppic_realtime_updates')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'ppic_form_details',
+        callback: (payload) {
+          debugPrint("Realtime Update on Details: ${payload.eventType}");
+          _fetchData(isSilent: true); // Refresh diam-diam
+        },
+      )
+      .onPostgresChanges( // Tambahan: Dengarkan juga tabel utama PPIC Forms
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'ppic_forms',
+        callback: (payload) {
+          debugPrint("Realtime Update on Header: ${payload.eventType}");
+          _fetchData(isSilent: true);
+        },
+      )
+      .subscribe();
+}
 
   // Future<void> _fetchData() async {
   //   if (!mounted) return;
@@ -144,9 +174,9 @@ bool _globalExportLock = false;
   //   }
   // }
 
-  Future<void> _fetchData() async {
+ Future<void> _fetchData({bool isSilent = false}) async {
   if (!mounted) return;
-  setState(() => _isLoading = true);
+  if (!isSilent) setState(() => _isLoading = true);
   try {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
 

@@ -425,16 +425,25 @@ Row(
           labelText: "Cari Nama Warehouse...",
           prefixIcon: const Icon(Icons.search),
           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          suffixIcon: IconButton(
+          // suffixIcon: IconButton(
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
             icon: const Icon(Icons.clear),
             onPressed: () {
+              setState(() {
               _searchController.clear();
               _searchQuery = "";
+              });
               _fetchData();
             },
-          ),
+          )
+          : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
+        onChanged: (val) {
+    // Memanggil setState agar suffixIcon diupdate saat user mengetik
+    setState(() {});
+  },
         onSubmitted: (val) {
           _searchQuery = val;
           _fetchData();
