@@ -386,7 +386,7 @@ if (mounted) {
     'MALUKU UTARA', 'NTB', 'NTT', 'P. BANGKA & BELITUNG', 'PAPUA',
     'PAPUA BARAT', 'RIAU', 'SULAWESI SELATAN', 'SULAWESI TENGAH',
     'SULAWESI TENGGARA', 'SULAWESI UTARA', 'SUMATERA BARAT',
-    'SUMATERA SELATAN', 'SUMATERA UTARA'
+    'SUMATERA SELATAN', 'SUMATERA UTARA', 'NUSA TENGGARA BARAT', 'NUSA TENGGARA TIMUR'
   ];
 
   // Cek apakah ada salah satu area tujuan yang masuk dalam daftar di atas

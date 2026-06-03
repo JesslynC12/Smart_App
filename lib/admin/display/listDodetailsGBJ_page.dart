@@ -374,7 +374,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
           children: [
             Icon(Icons.edit_note, size: 18, color: Colors.blueGrey),
             SizedBox(width: 8),
-            Text("INPUT LOGISTIK GUDANG",
+            Text("INPUT GUDANG",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
           ],
         ),
@@ -387,7 +387,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLabel("Storage & Loading Location"),
+                  _buildLabel("Loading Location"),
                   DropdownButtonFormField<int>(
                     decoration: _inputDecoration("Pilih Lokasi"),
                     value: _selectedSLoc,
@@ -1014,7 +1014,7 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           onPressed: () => Navigator.pop(context, true),
-          child: const Text("BATALKAN", style: TextStyle(color: Colors.white)),
+          child: const Text("PENDING", style: TextStyle(color: Colors.white)),
         ),
       ],
     ),

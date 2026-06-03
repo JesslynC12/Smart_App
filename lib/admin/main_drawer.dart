@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/daily-occupancy.dart';
+import 'package:project_app/admin/display/dashboard_logistik.dart';
+import 'package:project_app/admin/display/indashboard.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
 import 'package:project_app/admin/display/penilaianVendor_page.dart';
@@ -210,9 +212,19 @@ class MainDrawer extends StatelessWidget {
                 DynamicTabPage.of(context)?.openTab("List PPIC", const PPICListPage());
               }),
               if (_hasAccess('DailyOccupancy'))
-               _menuItem(context, Icons.star_rate_rounded, "Daily Occupancy", Colors.amber.shade800, onTap: () {
+               _menuItem(context, Icons.calendar_today, "Daily Occupancy", Colors.red, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Daily Occupancy", MasterReviewDailyPage());
+              }),
+              if (_hasAccess('InDashboard'))
+               _menuItem(context, Icons.dashboard_customize_rounded, "In Dashboard", Colors.green, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("In Dashboard", DashboardCombinedPage());
+              }),
+               if (_hasAccess('DashboardLogistik'))
+               _menuItem(context, Icons.dashboard_customize_rounded, "Logistics Dashboard", Colors.green, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Logistics Dashboard", LogisticDashboardPage());
               }),
 
             // if (_hasAccess('ListComplain'))

@@ -379,6 +379,7 @@ final List<String> _rescheduleReasons = [
 //     debugPrint("Error Fetch Planning: $e");
 //   }
 // }
+
 Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
     try {
       if (showGlobalLoading) {
@@ -463,11 +464,59 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
           currentReason = item['catatan'] ?? 'Tanpa Alasan';
         }
 
+        // if (!groupedData.containsKey(key)) {
+        //   groupedData[key] = Map<String, dynamic>.from(item);
+        //   groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
+        //   groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
+        //   groupedData[key]['history_logs'] = <Map<String, dynamic>>[]; 
+
+        //   if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
+        //     groupedData[key]['history_logs'].add({
+        //       'status': currentStatus,
+        //       'vendor': currentVendorName,
+        //       'reason': currentReason,
+        //     });
+        //   }
+
+        //   List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
+        //   for (var d in currentDOs) {
+        //     d['rdd_origin'] = req['rdd'];
+        //     d['parent_so'] = req['so'];
+        //     d['parent_shipping_id'] = req['shipping_id'];
+        //   }
+        //   groupedData[key]['request']['delivery_order'] = currentDOs;
+        // } else {
+        //   List<Map<String, dynamic>> existingLogs = List<Map<String, dynamic>>.from(groupedData[key]['history_logs'] ?? []);
+        //   bool isAlreadyLogged = existingLogs.any((log) => 
+        //       log['vendor'] == currentVendorName && 
+        //       log['status'] == currentStatus &&
+        //       log['reason'] == currentReason);
+
+        //   if (!isAlreadyLogged && ['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
+        //     existingLogs.add({
+        //       'status': currentStatus,
+        //       'vendor': currentVendorName,
+        //       'reason': currentReason,
+        //     });
+        //   }
+
+// Ambil DO dari item saat ini dan berikan metadata parent
+        List currentItemDOs = List.from(req['delivery_order'] ?? []);
+        for (var d in currentItemDOs) {
+          d['rdd_origin'] = req['rdd'];
+          d['parent_so'] = req['so'];
+          d['parent_shipping_id'] = req['shipping_id'];
+        }
+
         if (!groupedData.containsKey(key)) {
+          // Inisialisasi data grup
           groupedData[key] = Map<String, dynamic>.from(item);
           groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
           groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
           groupedData[key]['history_logs'] = <Map<String, dynamic>>[]; 
+          
+          // Masukkan DO pertama kali
+          groupedData[key]['request']['delivery_order'] = currentItemDOs;
 
           if (['rejected', 'no response', 'cancel booking', 'rejected unit'].contains(currentStatus)) {
             groupedData[key]['history_logs'].add({
@@ -476,15 +525,50 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
               'reason': currentReason,
             });
           }
-
-          List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-          for (var d in currentDOs) {
-            d['rdd_origin'] = req['rdd'];
-            d['parent_so'] = req['so'];
-            d['parent_shipping_id'] = req['shipping_id'];
-          }
-          groupedData[key]['request']['delivery_order'] = currentDOs;
         } else {
+          // --- LOGIKA MERGE UNTUK DATA BERIKUTNYA DALAM GRUP YANG SAMA ---
+          
+          // 1. Tambahkan ID ke list penampung
+          if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
+            groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+          }
+          if (!groupedData[key]['grouped_shipping_ids'].contains(req['shipping_id'])) {
+            groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
+          }
+
+          // 2. MERGE DELIVERY ORDERS (PENTING: Agar muncul lebih dari 1 DO)
+          List existingDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
+          for (var newDo in currentItemDOs) {
+            // Cek apakah DO ini sudah ada di list (berdasarkan do_number)
+            bool isAlreadyExists = existingDOs.any((ext) => ext['do_number'] == newDo['do_number']);
+            if (!isAlreadyExists) {
+              existingDOs.add(newDo);
+            }
+          }
+          groupedData[key]['request']['delivery_order'] = existingDOs;
+
+          // 3. Update Status ke yang paling baru (jika id_assignment lebih besar)
+          int existingId = int.tryParse(groupedData[key]['id_assignment'].toString()) ?? 0;
+          int currentId = int.tryParse(item['id_assignment'].toString()) ?? 0;
+
+          if (currentId > existingId) {
+            // Simpan log lama sebelum overwrite
+            var logs = groupedData[key]['history_logs'];
+            var gAssignIds = groupedData[key]['grouped_assignment_ids'];
+            var gShipIds = groupedData[key]['grouped_shipping_ids'];
+            var mergedDOs = groupedData[key]['request']['delivery_order']; // Ambil hasil merge
+
+            // Overwrite data utama dengan yang terbaru
+            groupedData[key] = Map<String, dynamic>.from(item);
+            
+            // Kembalikan data grup yang seharusnya tidak hilang
+            groupedData[key]['history_logs'] = logs;
+            groupedData[key]['grouped_assignment_ids'] = gAssignIds;
+            groupedData[key]['grouped_shipping_ids'] = gShipIds;
+            groupedData[key]['request']['delivery_order'] = mergedDOs;
+          }
+
+          // 4. Update History Logs
           List<Map<String, dynamic>> existingLogs = List<Map<String, dynamic>>.from(groupedData[key]['history_logs'] ?? []);
           bool isAlreadyLogged = existingLogs.any((log) => 
               log['vendor'] == currentVendorName && 
@@ -497,46 +581,48 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
               'vendor': currentVendorName,
               'reason': currentReason,
             });
-          }
-
-          int existingId = int.tryParse(groupedData[key]['id_assignment'].toString()) ?? 0;
-          int currentId = int.tryParse(item['id_assignment'].toString()) ?? 0;
-
-          if (currentId > existingId) {
-            List oldAssignIds = List.from(groupedData[key]['grouped_assignment_ids'] ?? []);
-            List oldShipIds = List.from(groupedData[key]['grouped_shipping_ids'] ?? []);
-            List existingDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-
-            groupedData[key] = Map<String, dynamic>.from(item); 
-            
-            if (!oldAssignIds.contains(item['id_assignment'])) oldAssignIds.add(item['id_assignment']);
-            if (!oldShipIds.contains(req['shipping_id'])) oldShipIds.add(req['shipping_id']);
-            
-            groupedData[key]['grouped_assignment_ids'] = oldAssignIds;
-            groupedData[key]['grouped_shipping_ids'] = oldShipIds;
-            groupedData[key]['history_logs'] = existingLogs;
-
-            List newDOs = req['delivery_order'] ?? [];
-            for (var ndo in newDOs) {
-              ndo['rdd_origin'] = req['rdd'];
-              ndo['parent_so'] = req['so'];
-              ndo['parent_shipping_id'] = req['shipping_id'];
-
-              bool isDuplicate = existingDOs.any((existing) =>
-                  existing['do_number'] == ndo['do_number'] &&
-                  existing['parent_shipping_id'] == req['shipping_id']);
-
-              if (!isDuplicate) existingDOs.add(ndo);
-            }
-            groupedData[key]['request']['delivery_order'] = existingDOs;
-          } else {
-            if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
-              groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
-            }
             groupedData[key]['history_logs'] = existingLogs;
           }
         }
       }
+      //     int existingId = int.tryParse(groupedData[key]['id_assignment'].toString()) ?? 0;
+      //     int currentId = int.tryParse(item['id_assignment'].toString()) ?? 0;
+
+      //     if (currentId > existingId) {
+      //       List oldAssignIds = List.from(groupedData[key]['grouped_assignment_ids'] ?? []);
+      //       List oldShipIds = List.from(groupedData[key]['grouped_shipping_ids'] ?? []);
+      //       List existingDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
+
+      //       groupedData[key] = Map<String, dynamic>.from(item); 
+            
+      //       if (!oldAssignIds.contains(item['id_assignment'])) oldAssignIds.add(item['id_assignment']);
+      //       if (!oldShipIds.contains(req['shipping_id'])) oldShipIds.add(req['shipping_id']);
+            
+      //       groupedData[key]['grouped_assignment_ids'] = oldAssignIds;
+      //       groupedData[key]['grouped_shipping_ids'] = oldShipIds;
+      //       groupedData[key]['history_logs'] = existingLogs;
+
+      //       List newDOs = req['delivery_order'] ?? [];
+      //       for (var ndo in newDOs) {
+      //         ndo['rdd_origin'] = req['rdd'];
+      //         ndo['parent_so'] = req['so'];
+      //         ndo['parent_shipping_id'] = req['shipping_id'];
+
+      //         bool isDuplicate = existingDOs.any((existing) =>
+      //             existing['do_number'] == ndo['do_number'] &&
+      //             existing['parent_shipping_id'] == req['shipping_id']);
+
+      //         if (!isDuplicate) existingDOs.add(ndo);
+      //       }
+      //       groupedData[key]['request']['delivery_order'] = existingDOs;
+      //     } else {
+      //       if (!groupedData[key]['grouped_assignment_ids'].contains(item['id_assignment'])) {
+      //         groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
+      //       }
+      //       groupedData[key]['history_logs'] = existingLogs;
+      //     }
+      //   }
+      // }
 
       setState(() {
         _planningList = groupedData.values.toList();

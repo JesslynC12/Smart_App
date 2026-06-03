@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -34,17 +36,17 @@ class MasterReviewDailyItem {
   });
 }
 
-class BufferItem {
-  final String asalProduk;
-  final int totalProduk;
-  final double totalRitase;
+// class BufferItem {
+//   final String asalProduk;
+//   final int totalProduk;
+//   final double totalRitase;
 
-  BufferItem({
-    required this.asalProduk,
-    required this.totalProduk,
-    required this.totalRitase,
-  });
-}
+//   BufferItem({
+//     required this.asalProduk,
+//     required this.totalProduk,
+//     required this.totalRitase,
+//   });
+// }
 
 // --- MAIN WIDGET ---
 
@@ -63,30 +65,67 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
   List<MasterReviewDailyItem> marshoDataList = [];
   List<MasterReviewDailyItem> cookingOilDataList = [];
   List<MasterReviewDailyItem> totalDataList = [];
-  List<BufferItem> bufferDataList = [];
+  //List<BufferItem> bufferDataList = [];
+
+RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
     super.initState();
     loadAllData();
+    _setupRealtimeListeners();
+  }
+@override
+  void dispose() {
+    // Sesuai dokumentasi Supabase v2, gunakan removeChannel untuk unsubscribe
+    if (_realtimeChannel != null) {
+      supabase.removeChannel(_realtimeChannel!);
+    }
+    super.dispose();
   }
 
+  void _setupRealtimeListeners() {
+    // Simpan hasilnya ke dalam variabel bertipe RealtimeChannel
+    _realtimeChannel = supabase
+        .channel('public:master_review_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'occupancy_details',
+          callback: (payload) => loadAllData(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ppic_form_details',
+          callback: (payload) => loadAllData(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'do_details',
+          callback: (payload) => loadAllData(),
+        );
+
+    // Jalankan pendaftaran realtime
+    _realtimeChannel!.subscribe();
+  }
   // --- LOGIC / CONTROLLER ---
 
   Future<void> loadAllData() async {
     setState(() => isLoading = true);
     try {
       // 1. Load Marsho & Cooking Oil Data
-      final marsho = await _fetchWarehouseData(["MARSHO WAREHOUSE", "LINC - TAMBAK LANGON", "COOLROOM"]);
+      final marsho = await _fetchWarehouseData(["MARSHO WAREHOUSE", "COOLROOM"]);
       final cookingOil = await _fetchWarehouseData(["GBJ CO CHIYODA"]);
 
       // 2. Load Buffer Data
-      final buffer = await _fetchBufferData();
+     // final buffer = await _fetchBufferData();
 
       setState(() {
         marshoDataList = marsho;
         cookingOilDataList = cookingOil;
-        bufferDataList = buffer;
+        //bufferDataList = buffer;
         _calculateGrandTotal();
       });
     } catch (e) {
@@ -188,30 +227,30 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
     return totalPallet.ceil();
   }
 
-  Future<List<BufferItem>> _fetchBufferData() async {
-    String dateHmin1 = DateFormat('yyyy-MM-dd').format(selectedDate.subtract(const Duration(days: 1)));
+  // Future<List<BufferItem>> _fetchBufferData() async {
+  //   String dateHmin1 = DateFormat('yyyy-MM-dd').format(selectedDate.subtract(const Duration(days: 1)));
     
-    final res = await supabase
-       .from('ppic_form_details')
-      .select('''
-        qty, 
-        material!inner(box_per_pallet, division_description),
-        ppic_forms!inner(tanggal)
-      ''')
-      .eq('material.division_description', 'Branded Export')
-      .eq('ppic_forms.tanggal', dateHmin1);
-    double pallets = 0;
-    for (var row in (res as List)) {
-      double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
-      pallets += (row['qty'] ?? 0) / (bpp == 0 ? 1 : bpp);
-    }
+  //   final res = await supabase
+  //      .from('ppic_form_details')
+  //     .select('''
+  //       qty, 
+  //       material!inner(box_per_pallet, division_description),
+  //       ppic_forms!inner(tanggal)
+  //     ''')
+  //     .eq('material.division_description', 'Branded Export')
+  //     .eq('ppic_forms.tanggal', dateHmin1);
+  //   double pallets = 0;
+  //   for (var row in (res as List)) {
+  //     double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
+  //     pallets += (row['qty'] ?? 0) / (bpp == 0 ? 1 : bpp);
+  //   }
 
-    int totalProduk = pallets.ceil();
-    double totalRitase = (totalProduk / 28.0);
-    if (totalRitase < 1 && totalProduk > 0) totalRitase = 1.0;
+  //   int totalProduk = pallets.ceil();
+  //   double totalRitase = (totalProduk / 28.0);
+  //   if (totalRitase < 1 && totalProduk > 0) totalRitase = 1.0;
 
-    return [BufferItem(asalProduk: "Produksi", totalProduk: totalProduk, totalRitase: totalRitase.ceilToDouble())];
-  }
+  //   return [BufferItem(asalProduk: "Produksi", totalProduk: totalProduk, totalRitase: totalRitase.ceilToDouble())];
+  // }
 
   void _calculateGrandTotal() {
     List<MasterReviewDailyItem> combined = [...marshoDataList, ...cookingOilDataList];
@@ -240,7 +279,7 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Master Review Daily")),
+     // appBar: AppBar(title: const Text("Master Review Daily")),
       body: Column(
         children: [
           _buildHeader(),
@@ -249,27 +288,67 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitle("MARSHO WAREHOUSE"),
-                        _buildDataTable(marshoDataList),
-                        const SizedBox(height: 20),
-                        _buildSectionTitle("COOKING OIL"),
-                        _buildDataTable(cookingOilDataList, hideHeader: true),
-                        const SizedBox(height: 10),
-                        _buildDataTable(totalDataList, hideHeader: true, isTotal: true),
-                        const SizedBox(height: 30),
-                        _buildBufferTable(),
-                      ],
-                    ),
+                    // child: Column(
+                    //   crossAxisAlignment: CrossAxisAlignment.start,
+                    //   children: [
+                    //     _buildSectionTitle("MARSHO WAREHOUSE"),
+                    //     _buildDataTable(marshoDataList),
+                    //     const SizedBox(height: 20),
+                    //     _buildSectionTitle("COOKING OIL"),
+                    //     _buildDataTable(cookingOilDataList, hideHeader: true),
+                    //     const SizedBox(height: 10),
+                    //     _buildDataTable(totalDataList, hideHeader: true, isTotal: true),
+                    //     const SizedBox(height: 30),
+                    //     // _buildBufferTable(),
+                    //   ],
+                    // ),
+                    child: _buildUnifiedTable(),
                   ),
           ),
         ],
       ),
     );
   }
+Widget _buildUnifiedTable() {
+  // Gabungkan semua baris ke dalam satu list DataRow
+  List<DataRow> allRows = [];
 
+  // 1. Bagian MARSHO
+ // allRows.add(_buildHeaderRow("MARSHO WAREHOUSE")); // Baris Judul
+  allRows.addAll(marshoDataList.map((item) => _buildRow(item, false)));
+
+  // 2. Spasi antar tabel (Opsional)
+  //allRows.add(const DataRow(cells: [DataCell(SizedBox(height: 10)), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox())]));
+
+  // 3. Bagian COOKING OIL
+  //allRows.add(_buildHeaderRow("COOKING OIL")); // Baris Judul
+  allRows.addAll(cookingOilDataList.map((item) => _buildRow(item, false)));
+
+  // 4. Bagian GRAND TOTAL
+  allRows.addAll(totalDataList.map((item) => _buildRow(item, true)));
+
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: DataTable(
+      columnSpacing: 20, // Atur spacing yang konsisten
+      headingRowColor: MaterialStateProperty.all(Colors.blueGrey[50]),
+      dataRowHeight: 45,
+      columns: _buildColumns(),
+      rows: allRows,
+    ),
+  );
+}
+
+// Helper untuk membuat baris judul di tengah tabel
+DataRow _buildHeaderRow(String title) {
+  return DataRow(
+    color: MaterialStateProperty.all(Colors.grey[100]),
+    cells: [
+      DataCell(Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
+      ...List.generate(11, (index) => const DataCell(SizedBox())), // Isi sel sisa dengan kosong
+    ],
+  );
+}
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -292,13 +371,8 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
             },
             child: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
           ),
-          const SizedBox(width: 20),
-          ElevatedButton.icon(
-            onPressed: loadAllData,
-            icon: const Icon(Icons.refresh),
-            label: const Text("Refresh"),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-          ),
+         
+         
         ],
       ),
     );
@@ -331,59 +405,123 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
       const DataColumn(label: Text('Kapasitas')),
       const DataColumn(label: Text('Max Utilize')),
       const DataColumn(label: Text('H Pagi (PP)')),
-      const DataColumn(label: Text('%')),
-      const DataColumn(label: Text('Deliv (H-1)')),
-      const DataColumn(label: Text('Prod (H-1)')),
+      const DataColumn(label: Text('H Pagi (%)')),
+      const DataColumn(label: Text('Deliv Plan (H-1)')),
+      const DataColumn(label: Text('Prod Plan (H-1)')),
       const DataColumn(label: Text('Predict Occ')),
-      const DataColumn(label: Text('Prod (H+1)')),
-      const DataColumn(label: Text('Deliv (H+1)')),
+      const DataColumn(label: Text('Prod Plan(H+1)')),
+      const DataColumn(label: Text('Deliv Plan (H+1)')),
       const DataColumn(label: Text('Final Occ')),
-      const DataColumn(label: Text('Sisa')),
+      const DataColumn(label: Text('Sisa Kapasitas')),
     ];
   }
 
-  DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
-    final fmt = NumberFormat('#,###');
-    final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
+  // DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
+  //   final fmt = NumberFormat('#,###');
+  //   final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
 
-    return DataRow(
-      color: isTotal ? MaterialStateProperty.all(Colors.grey[200]) : null,
-      cells: [
-        DataCell(Text(item.location, style: style)),
+  //   return DataRow(
+  //     color: isTotal ? MaterialStateProperty.all(Colors.grey[200]) : null,
+  //     cells: [
+  //       DataCell(Text(item.location, style: style)),
+  //       DataCell(Text(fmt.format(item.kapasitas), style: style)),
+  //       DataCell(Text(fmt.format(item.maxUtilize), style: style)),
+  //       DataCell(Text(fmt.format(item.hPagi), style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
+  //       DataCell(Text("${item.hPagiPersen.toStringAsFixed(2)}%", style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
+  //       DataCell(Text(fmt.format(item.actOutbound), style: style)),
+  //       DataCell(Text(fmt.format(item.productionPlanHmin1), style: style)),
+  //       DataCell( Text(fmt.format(item.predictOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+  //       DataCell(Text(fmt.format(item.productionPlanHplus1), style: style)),
+  //       DataCell(Text(fmt.format(item.deliveryPlanHplus1), style: style)),
+  //       DataCell(Text(fmt.format(item.finalOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+  //       DataCell(Text(fmt.format(item.sisaKapasitas), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+  //     ],
+  //   );
+  // }
+
+DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
+  final fmt = NumberFormat('#,###');
+  final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
+  
+  // // Definisi Warna
+  // const colorTosca = Color(0xFFD1F2EB); // Hijau Tosca Terang
+  // const colorBlue = Color(0xFFEBF5FB);  // Biru Terang
+  // const colorPurple = Color(0xFFF5EEF8); // Ungu Terang
+  // const colorOrange = Color(0xFFFEF5E7); // Orange Terang
+
+  // Helper fungsi sel berwarna
+  DataCell _cCell(String text, Color color, {TextStyle? tStyle}) {
+    return DataCell(
+      Container(
+        color: color,
+        alignment: Alignment.center,
+        width: double.infinity,
+        height: double.infinity,
+        child: Text(text, style: tStyle ?? style),
+      ),
+    );
+  }
+
+  return DataRow(
+    color: isTotal ? MaterialStateProperty.all(Colors.grey[300]) : null,
+    cells: [
+    //   DataCell(Text(item.location, style: style)),
+    //   DataCell(Text(fmt.format(item.kapasitas), style: style)),
+    //   DataCell(Text(fmt.format(item.maxUtilize), style: style)),
+      
+    //   // HPagi & % (Tosca)
+    //   _cCell(fmt.format(item.hPagi), colorTosca, tStyle: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+    //   _cCell("${item.hPagiPersen.toStringAsFixed(2)}%", colorTosca),
+      
+    //   // Deliv & Prod H-1 (Biru)
+    //   _cCell(fmt.format(item.actOutbound), colorBlue),
+    //   _cCell(fmt.format(item.productionPlanHmin1), colorBlue),
+      
+    //   // Predict (Orange)
+    //   _cCell(fmt.format(item.predictOccupancy), colorOrange, tStyle: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+      
+    //   // Prod & Deliv H+1 (Ungu)
+    //   _cCell(fmt.format(item.productionPlanHplus1), colorPurple),
+    //   _cCell(fmt.format(item.deliveryPlanHplus1), colorPurple),
+      
+    //   // Final & Sisa (Orange)
+    //   _cCell(fmt.format(item.finalOccupancy), colorOrange, tStyle: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+    //   _cCell(fmt.format(item.sisaKapasitas), colorOrange),
+    // ],
+     DataCell(Text(item.location, style: style)),
         DataCell(Text(fmt.format(item.kapasitas), style: style)),
         DataCell(Text(fmt.format(item.maxUtilize), style: style)),
         DataCell(Text(fmt.format(item.hPagi), style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
-        DataCell(Text("${item.hPagiPersen.toStringAsFixed(2)}%", style: style)),
+        DataCell(Text("${item.hPagiPersen.toStringAsFixed(2)}%", style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
         DataCell(Text(fmt.format(item.actOutbound), style: style)),
         DataCell(Text(fmt.format(item.productionPlanHmin1), style: style)),
-        DataCell(Container(color: Colors.orange[50], child: Text(fmt.format(item.predictOccupancy), style: style))),
+        DataCell( Text(fmt.format(item.predictOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
         DataCell(Text(fmt.format(item.productionPlanHplus1), style: style)),
         DataCell(Text(fmt.format(item.deliveryPlanHplus1), style: style)),
         DataCell(Text(fmt.format(item.finalOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-        DataCell(Text(fmt.format(item.sisaKapasitas), style: style)),
+        DataCell(Text(fmt.format(item.sisaKapasitas), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
       ],
-    );
-  }
-
-  Widget _buildBufferTable() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle("BUFFER REPORT"),
-        DataTable(
-          headingRowColor: MaterialStateProperty.all(Colors.green[50]),
-          columns: const [
-            DataColumn(label: Text('Asal Produk')),
-            DataColumn(label: Text('Total Produk (Pallet)')),
-            DataColumn(label: Text('Total Ritase')),
-          ],
-          rows: bufferDataList.map((item) => DataRow(cells: [
-            DataCell(Text(item.asalProduk)),
-            DataCell(Text(item.totalProduk.toString())),
-            DataCell(Text(item.totalRitase.toString())),
-          ])).toList(),
-        ),
-      ],
-    );
-  }
+  );
+}
+  // Widget _buildBufferTable() {
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.start,
+  //     children: [
+  //       _buildSectionTitle("BUFFER REPORT"),
+  //       DataTable(
+  //         headingRowColor: MaterialStateProperty.all(Colors.green[50]),
+  //         columns: const [
+  //           DataColumn(label: Text('Asal Produk')),
+  //           DataColumn(label: Text('Total Produk (Pallet)')),
+  //           DataColumn(label: Text('Total Ritase')),
+  //         ],
+  //         rows: bufferDataList.map((item) => DataRow(cells: [
+  //           DataCell(Text(item.asalProduk)),
+  //           DataCell(Text(item.totalProduk.toString())),
+  //           DataCell(Text(item.totalRitase.toString())),
+  //         ])).toList(),
+  //       ),
+  //     ],
+  //   );
+  // }
 }
