@@ -74,13 +74,13 @@ Future<void> _exportWarehouseToExcel() async {
     }
 
     // --- 3. SAVE / DOWNLOAD ---
-    var fileBytes = excel.save();
+    
     String fileName = "Master_Warehouse_${DateTime.now().millisecondsSinceEpoch}.xlsx";
-
+var fileBytes = excel.save(fileName: fileName);
     if (kIsWeb) {
       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       final url = html.Url.createObjectUrlFromBlob(content);
-      html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      //html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
       html.Url.revokeObjectUrl(url);
       _showMsg("Download dimulai...", Colors.green);
     } else {

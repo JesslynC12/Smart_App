@@ -51,10 +51,10 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     // Validasi Panjang NIK (Jika input bukan email, asumsikan itu NIK)
-    if (!identifier.contains('@') && identifier.length != 8) {
-      _showErrorSnackBar('NIK harus berjumlah 8 karakter');
-      return;
-    }
+    // if (!identifier.contains('@') && identifier.length != 8) {
+    //   _showErrorSnackBar('NIK harus berjumlah 8 karakter');
+    //   return;
+    // }
 
     setState(() => isLoading = true);
 
@@ -229,7 +229,7 @@ Center(
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
             labelText: 'NIK / Email',
-            hintText: 'Masukkan 8 digit NIK atau Email',
+            hintText: 'Masukkan NIK atau Email',
             prefixIcon: const Icon(Icons.person_outline),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -336,7 +336,7 @@ Center(
                       MaterialPageRoute(builder: (_) => const RegisterVendorPage())
                     ),
                     child: Text(
-                      'Daftar Perusahaan', 
+                      'Registrasi', 
                       style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold)
                     ),
                   ),

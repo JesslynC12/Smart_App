@@ -1,10 +1,10 @@
 import 'dart:async';
-
+import 'dart:typed_data';
+import 'package:excel/excel.dart' hide Border;
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-
-// --- MODELS ---
 
 class MasterReviewDailyItem {
   final String location;
@@ -36,20 +36,6 @@ class MasterReviewDailyItem {
   });
 }
 
-// class BufferItem {
-//   final String asalProduk;
-//   final int totalProduk;
-//   final double totalRitase;
-
-//   BufferItem({
-//     required this.asalProduk,
-//     required this.totalProduk,
-//     required this.totalRitase,
-//   });
-// }
-
-// --- MAIN WIDGET ---
-
 class MasterReviewDailyPage extends StatefulWidget {
   const MasterReviewDailyPage({super.key});
 
@@ -65,7 +51,6 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
   List<MasterReviewDailyItem> marshoDataList = [];
   List<MasterReviewDailyItem> cookingOilDataList = [];
   List<MasterReviewDailyItem> totalDataList = [];
-  //List<BufferItem> bufferDataList = [];
 
 RealtimeChannel? _realtimeChannel;
 
@@ -77,7 +62,6 @@ RealtimeChannel? _realtimeChannel;
   }
 @override
   void dispose() {
-    // Sesuai dokumentasi Supabase v2, gunakan removeChannel untuk unsubscribe
     if (_realtimeChannel != null) {
       supabase.removeChannel(_realtimeChannel!);
     }
@@ -85,7 +69,6 @@ RealtimeChannel? _realtimeChannel;
   }
 
   void _setupRealtimeListeners() {
-    // Simpan hasilnya ke dalam variabel bertipe RealtimeChannel
     _realtimeChannel = supabase
         .channel('public:master_review_changes')
         .onPostgresChanges(
@@ -106,22 +89,14 @@ RealtimeChannel? _realtimeChannel;
           table: 'do_details',
           callback: (payload) => loadAllData(),
         );
-
-    // Jalankan pendaftaran realtime
     _realtimeChannel!.subscribe();
   }
-  // --- LOGIC / CONTROLLER ---
 
   Future<void> loadAllData() async {
     setState(() => isLoading = true);
     try {
-      // 1. Load Marsho & Cooking Oil Data
-      final marsho = await _fetchWarehouseData(["MARSHO WAREHOUSE", "COOLROOM"]);
-      final cookingOil = await _fetchWarehouseData(["GBJ CO CHIYODA"]);
-
-      // 2. Load Buffer Data
-     // final buffer = await _fetchBufferData();
-
+      final marsho = await _fetchWarehouseData([12, 13, 6]);
+      final cookingOil = await _fetchWarehouseData([1]);
       setState(() {
         marshoDataList = marsho;
         cookingOilDataList = cookingOil;
@@ -140,13 +115,13 @@ RealtimeChannel? _realtimeChannel;
     }
   }
 
-  Future<List<MasterReviewDailyItem>> _fetchWarehouseData(List<String> names) async {
+  Future<List<MasterReviewDailyItem>> _fetchWarehouseData(List<int> ids) async {
     List<MasterReviewDailyItem> results = [];
     String formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
 
-    for (var name in names) {
+    for (var id in ids) {
       // Get Warehouse Info
-      final wh = await supabase.from('warehouse').select().eq('warehouse_name', name).maybeSingle();
+      final wh = await supabase.from('warehouse').select().eq('warehouse_id', id).maybeSingle();
       if (wh == null) continue;
 
       int whId = wh['warehouse_id'];
@@ -159,7 +134,9 @@ RealtimeChannel? _realtimeChannel;
           .select('kapasitas_tersedia, occupancy!inner(tanggal)')
           .eq('warehouse_id', whId)
           .eq('occupancy.tanggal', formattedDate)
-          .maybeSingle();
+          .order('occupancy_id', ascending: false) 
+    .limit(1)                    
+    .maybeSingle();
 
       int hPagi = occ?['kapasitas_tersedia'] ?? 0;
       double hPagiPersen = kapasitas > 0 ? (hPagi / kapasitas) * 100 : 0;
@@ -170,13 +147,12 @@ RealtimeChannel? _realtimeChannel;
       int prodHplus1 = await _getPalletSum(whId, selectedDate.add(const Duration(days: 1)), isProduction: true);
       int delivHplus1 = await _getPalletSum(whId, selectedDate.add(const Duration(days: 1)), isProduction: false);
 
-      // Rumus sesuai Java
       int predictOccupancy = (hPagi - prodHmin1) + actOutbound;
       int finalOccupancy = predictOccupancy - prodHplus1 + delivHplus1;
       int sisaKapasitas = maxUtilize - finalOccupancy;
 
       results.add(MasterReviewDailyItem(
-        location: name,
+        location: wh['warehouse_name'],
         kapasitas: kapasitas,
         maxUtilize: maxUtilize,
         hPagi: hPagi,
@@ -227,30 +203,117 @@ RealtimeChannel? _realtimeChannel;
     return totalPallet.ceil();
   }
 
-  // Future<List<BufferItem>> _fetchBufferData() async {
-  //   String dateHmin1 = DateFormat('yyyy-MM-dd').format(selectedDate.subtract(const Duration(days: 1)));
-    
-  //   final res = await supabase
-  //      .from('ppic_form_details')
-  //     .select('''
-  //       qty, 
-  //       material!inner(box_per_pallet, division_description),
-  //       ppic_forms!inner(tanggal)
-  //     ''')
-  //     .eq('material.division_description', 'Branded Export')
-  //     .eq('ppic_forms.tanggal', dateHmin1);
-  //   double pallets = 0;
-  //   for (var row in (res as List)) {
-  //     double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
-  //     pallets += (row['qty'] ?? 0) / (bpp == 0 ? 1 : bpp);
-  //   }
+Future<void> _exportToExcel() async {
+    // Cegah eksekusi ganda jika tombol diklik berulang kali
+    if (isLoading) return;
 
-  //   int totalProduk = pallets.ceil();
-  //   double totalRitase = (totalProduk / 28.0);
-  //   if (totalRitase < 1 && totalProduk > 0) totalRitase = 1.0;
+    if (marshoDataList.isEmpty && cookingOilDataList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Data kosong, tidak ada yang bisa diekspor"), backgroundColor: Colors.orange),
+      );
+      return;
+    }
 
-  //   return [BufferItem(asalProduk: "Produksi", totalProduk: totalProduk, totalRitase: totalRitase.ceilToDouble())];
-  // }
+    setState(() => isLoading = true);
+
+    try {
+      var excel = Excel.createExcel();
+      Sheet sheetObject = excel['Daily_Review_Report'];
+      excel.delete('Sheet1'); // Hapus sheet bawaan kosong
+
+      // 1. Definisikan Style
+      CellStyle headerStyle = CellStyle(
+        bold: true,
+        horizontalAlign: HorizontalAlign.Center,
+        // backgroundColorHex: '#ECEFF1', // Warna BlueGrey[50]
+      );
+
+      CellStyle grandTotalStyle = CellStyle(
+        bold: true,
+        // backgroundColorHex: '#E0E0E0', // Warna Grey[300]
+      );
+
+      // 2. Buat Header Kolom
+      List<String> columns = [
+        'Location', 'Kapasitas', 'Max Utilize', 'H Pagi (PP)', 'H Pagi (%)',
+        'Deliv Plan (H-1)', 'Prod Plan (H-1)', 'Predict Occ', 'Prod Plan (H+1)',
+        'Deliv Plan (H+1)', 'Final Occ', 'Sisa Kapasitas'
+      ];
+
+      for (var i = 0; i < columns.length; i++) {
+        var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = TextCellValue(columns[i]);
+        cell.cellStyle = headerStyle;
+      }
+
+      int currentRow = 1;
+
+      // Fungsi pembantu untuk mengisi baris data ke sheet excel
+      void appendDataRows(List<MasterReviewDailyItem> items, {bool isTotal = false}) {
+        for (var item in items) {
+          sheetObject.appendRow([
+            TextCellValue(item.location),
+            IntCellValue(item.kapasitas),
+            IntCellValue(item.maxUtilize),
+            IntCellValue(item.hPagi),
+            DoubleCellValue(double.parse(item.hPagiPersen.toStringAsFixed(2))),
+            IntCellValue(item.actOutbound),
+            IntCellValue(item.productionPlanHmin1),
+            IntCellValue(item.predictOccupancy),
+            IntCellValue(item.productionPlanHplus1),
+            IntCellValue(item.deliveryPlanHplus1),
+            IntCellValue(item.finalOccupancy),
+            IntCellValue(item.sisaKapasitas),
+          ]);
+
+          if (isTotal) {
+            for (var col = 0; col < columns.length; col++) {
+              sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow)).cellStyle = grandTotalStyle;
+            }
+          }
+          currentRow++;
+        }
+      }
+
+      // 3. Masukkan Data MARSHO
+      appendDataRows(marshoDataList);
+
+      // 4. Masukkan Data COOKING OIL
+      appendDataRows(cookingOilDataList);
+
+      // 5. Masukkan Data GRAND TOTAL
+      appendDataRows(totalDataList, isTotal: true);
+
+      // 4. Proses Encoding & Download menggunakan FileSaver (Aman untuk Web & Mobile)
+      var fileBytes = excel.encode();
+      if (fileBytes != null) {
+        String formattedDate = DateFormat('yyyyMMdd').format(selectedDate);
+        String fileName = "Master_Review_Daily_$formattedDate";
+
+        await FileSaver.instance.saveFile(
+          name: fileName,
+          bytes: Uint8List.fromList(fileBytes),
+          ext: 'xlsx',
+          mimeType: MimeType.microsoftExcel,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Data berhasil diekspor ke Excel"), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Export Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Terjadi kesalahan saat eksport: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
 
   void _calculateGrandTotal() {
     List<MasterReviewDailyItem> combined = [...marshoDataList, ...cookingOilDataList];
@@ -274,8 +337,6 @@ RealtimeChannel? _realtimeChannel;
     ];
   }
 
-  // --- UI COMPONENTS ---
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -288,20 +349,6 @@ RealtimeChannel? _realtimeChannel;
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
-                    // child: Column(
-                    //   crossAxisAlignment: CrossAxisAlignment.start,
-                    //   children: [
-                    //     _buildSectionTitle("MARSHO WAREHOUSE"),
-                    //     _buildDataTable(marshoDataList),
-                    //     const SizedBox(height: 20),
-                    //     _buildSectionTitle("COOKING OIL"),
-                    //     _buildDataTable(cookingOilDataList, hideHeader: true),
-                    //     const SizedBox(height: 10),
-                    //     _buildDataTable(totalDataList, hideHeader: true, isTotal: true),
-                    //     const SizedBox(height: 30),
-                    //     // _buildBufferTable(),
-                    //   ],
-                    // ),
                     child: _buildUnifiedTable(),
                   ),
           ),
@@ -310,11 +357,8 @@ RealtimeChannel? _realtimeChannel;
     );
   }
 Widget _buildUnifiedTable() {
-  // Gabungkan semua baris ke dalam satu list DataRow
   List<DataRow> allRows = [];
 
-  // 1. Bagian MARSHO
- // allRows.add(_buildHeaderRow("MARSHO WAREHOUSE")); // Baris Judul
   allRows.addAll(marshoDataList.map((item) => _buildRow(item, false)));
 
   // 2. Spasi antar tabel (Opsional)
@@ -330,74 +374,103 @@ Widget _buildUnifiedTable() {
   return SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     child: DataTable(
-      columnSpacing: 20, // Atur spacing yang konsisten
-      headingRowColor: MaterialStateProperty.all(Colors.blueGrey[50]),
-      dataRowHeight: 45,
+      columnSpacing: 20, 
+      headingRowColor: WidgetStateProperty.all(Colors.blueGrey[50]),
+      dataRowMinHeight: 45,
+      dataRowMaxHeight: 45,
       columns: _buildColumns(),
       rows: allRows,
     ),
   );
 }
 
-// Helper untuk membuat baris judul di tengah tabel
-DataRow _buildHeaderRow(String title) {
-  return DataRow(
-    color: MaterialStateProperty.all(Colors.grey[100]),
-    cells: [
-      DataCell(Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
-      ...List.generate(11, (index) => const DataCell(SizedBox())), // Isi sel sisa dengan kosong
-    ],
-  );
-}
+// DataRow _buildHeaderRow(String title) {
+//   return DataRow(
+//     color: MaterialStateProperty.all(Colors.grey[100]),
+//     cells: [
+//       DataCell(Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
+//       ...List.generate(11, (index) => const DataCell(SizedBox())), // Isi sel sisa dengan kosong
+//     ],
+//   );
+// }
   Widget _buildHeader() {
+    final now = DateTime.now();
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
           const Text("Tanggal: "),
           const SizedBox(width: 10),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
                 initialDate: selectedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2030),
+                firstDate: DateTime(2025),
+                lastDate: DateTime(now.year + 100),
               );
               if (picked != null) {
                 setState(() => selectedDate = picked);
                 loadAllData();
               }
             },
-            child: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
+            //child: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
+             icon: const Icon(Icons.calendar_today),
+            label: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
           ),
-         
-         
+         const Spacer(), // Dorong tombol ke sisi paling kanan row
+         _buildActionButton(
+          icon: Icons.file_download,
+          color: Colors.green,
+          tooltip: "Export Excel",
+          onPressed: _exportToExcel,
+         ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-    );
-  }
+Widget _buildActionButton({
+  required IconData icon, 
+  required Color color, 
+  required String tooltip, 
+  required VoidCallback onPressed
+}) {
+  return Container(
+    height: 55,
+    decoration: BoxDecoration(
+      // 🔥 Menggunakan .withValues() sesuai standar Flutter terbaru agar bebas warning
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
+    ),
+    child: IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 26),
+      tooltip: tooltip,
+    ),
+  );
+}
+  // Widget _buildSectionTitle(String title) {
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(vertical: 8.0),
+  //     child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  //   );
+  // }
 
-  Widget _buildDataTable(List<MasterReviewDailyItem> data, {bool hideHeader = false, bool isTotal = false}) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: hideHeader ? 0 : 56,
-        columnSpacing: 20,
-        headingRowColor: MaterialStateProperty.all(Colors.blueGrey[50]),
-        dataRowHeight: 45,
-        columns: _buildColumns(),
-        rows: data.map((item) => _buildRow(item, isTotal)).toList(),
-      ),
-    );
-  }
+  // Widget _buildDataTable(List<MasterReviewDailyItem> data, {bool hideHeader = false, bool isTotal = false}) {
+  //   return SingleChildScrollView(
+  //     scrollDirection: Axis.horizontal,
+  //     child: DataTable(
+  //       headingRowHeight: hideHeader ? 0 : 56,
+  //       columnSpacing: 20,
+  //       headingRowColor: MaterialStateProperty.all(Colors.blueGrey[50]),
+  //       dataRowHeight: 45,
+  //       columns: _buildColumns(),
+  //       rows: data.map((item) => _buildRow(item, isTotal)).toList(),
+  //     ),
+  //   );
+  // }
 
   List<DataColumn> _buildColumns() {
     return [
@@ -442,28 +515,20 @@ DataRow _buildHeaderRow(String title) {
 DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
   final fmt = NumberFormat('#,###');
   final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
-  
-  // // Definisi Warna
-  // const colorTosca = Color(0xFFD1F2EB); // Hijau Tosca Terang
-  // const colorBlue = Color(0xFFEBF5FB);  // Biru Terang
-  // const colorPurple = Color(0xFFF5EEF8); // Ungu Terang
-  // const colorOrange = Color(0xFFFEF5E7); // Orange Terang
-
-  // Helper fungsi sel berwarna
-  DataCell _cCell(String text, Color color, {TextStyle? tStyle}) {
-    return DataCell(
-      Container(
-        color: color,
-        alignment: Alignment.center,
-        width: double.infinity,
-        height: double.infinity,
-        child: Text(text, style: tStyle ?? style),
-      ),
-    );
-  }
+  //DataCell _cCell(String text, Color color, {TextStyle? tStyle}) {
+    //return DataCell(
+  //     Container(
+  //       color: color,
+  //       alignment: Alignment.center,
+  //       width: double.infinity,
+  //       height: double.infinity,
+  //       child: Text(text, style: tStyle ?? style),
+  //     ),
+  //   );
+  // }
 
   return DataRow(
-    color: isTotal ? MaterialStateProperty.all(Colors.grey[300]) : null,
+    color: isTotal ? WidgetStateProperty.all(Colors.grey[300]) : null,
     cells: [
     //   DataCell(Text(item.location, style: style)),
     //   DataCell(Text(fmt.format(item.kapasitas), style: style)),

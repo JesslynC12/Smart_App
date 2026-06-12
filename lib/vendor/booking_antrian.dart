@@ -30,6 +30,7 @@ class _ScheduleSelectionPageState extends State<ScheduleSelectionPage> {
   bool _isSaving = false;
   Map<String, dynamic>? _shippingData;
   String? _selectedTime;
+  List<String> _timeSlots = [];
 final TextEditingController _otherReasonController = TextEditingController(); // Tambahkan ini
   // final List<String> _timeSlots = [
   //   '08:00', '09:00', '10:00', '11:00', 
@@ -46,16 +47,16 @@ final List<String> _rescheduleReasons = [
     'Other'
 ];
 
-  final List<String> _timeSlots = [
- '07:00 - 09:00',
-  '09:00 - 11:00',
-  '11:00 - 13:00', // Jam Istirahat
-  '13:00 - 15:00',
-  '15:00 - 17:00',
-  '17:00 - 19:00',
-  '19:00 - 21:00',
-  '21:00 - 23:00',
-];
+//   final List<String> _timeSlots = [
+//  '07:00 - 09:00',
+//   '09:00 - 11:00',
+//   '11:00 - 13:00', // Jam Istirahat
+//   '13:00 - 15:00',
+//   '15:00 - 17:00',
+//   '17:00 - 19:00',
+//   '19:00 - 21:00',
+//   '21:00 - 23:00',
+// ];
 
 Map<String, int> _bookedCounts = {};
 //final int _maxCapacity = 14;
@@ -69,14 +70,49 @@ Map<String, int> _bookedCounts = {};
   }
 
 
-// Fungsi baru untuk menjalankan urutan muat data yang benar
-  Future<void> _loadInitialData() async {
-    await _loadData(); // 1. Muat detail shipment dulu
-    if (_shippingData != null) {
-      await _checkAvailability(); // 2. Hitung slot berdasarkan tanggal & gudang shipment tersebut
-    }
-  }
+// // Fungsi baru untuk menjalankan urutan muat data yang benar
+//   Future<void> _loadInitialData() async {
+//     await _loadData(); // 1. Muat detail shipment dulu
+//     if (_shippingData != null) {
+//       await _checkAvailability(); // 2. Hitung slot berdasarkan tanggal & gudang shipment tersebut
+//     }
+//   }
+Future<void> _loadInitialData() async {
+  await _loadData(); // 1. Muat detail shipment dulu
+  if (_shippingData != null) {
+    final warehouseId = _shippingData?['warehouse_id'];
+    
+    setState(() {
+      if (warehouseId == 6) {
+        // Slot khusus Gudang 6
+        _timeSlots = [
+          '08:00 - 10:00',
+          '10:00 - 12:00',
+          '12:00 - 14:00',
+          '14:00 - 16:00',
+          '16:00 - 18:00',
+          '18:00 - 20:00',
+          '20:00 - 22:00',
+          '22:00 - 24:00',
+        ];
+      } else {
+        // Slot Default untuk Gudang 1, 2, 3
+        _timeSlots = [
+          '07:00 - 09:00',
+          '09:00 - 11:00',
+          '11:00 - 13:00',
+          '13:00 - 15:00',
+          '15:00 - 17:00',
+          '17:00 - 19:00',
+          '19:00 - 21:00',
+          '21:00 - 23:00',
+        ];
+      }
+    });
 
+    await _checkAvailability(); // 2. Hitung slot berdasarkan tanggal & gudang
+  }
+}
 
   // Future<void> _loadData() async {
   //   try {
@@ -259,9 +295,38 @@ Future<void> _loadData() async {
   }
 }
 
+// int _getMaxCapacity(String timeSlot) {
+//   final warehouseId = _shippingData?['warehouse_id'];
+//   bool isRestTime = timeSlot == '11:00 - 13:00'|| timeSlot == '17:00 - 19:00';
+
+//   if (warehouseId == 1) {
+//     return isRestTime ? 4 : 8;
+//   } else if (warehouseId == 2) {
+//     return isRestTime ? 1 : 3;
+//   } else if (warehouseId == 3) {
+//     return isRestTime ? 2 : 4;
+//   }
+  
+//   return 14; // Default jika ID lain
+// }
 int _getMaxCapacity(String timeSlot) {
   final warehouseId = _shippingData?['warehouse_id'];
-  bool isRestTime = timeSlot == '11:00 - 13:00';
+
+  // ================= ATURAN KHUSUS GUDANG 6 =================
+  if (warehouseId == 6) {
+    if (timeSlot == '08:00 - 10:00') return 6;
+    if (timeSlot == '10:00 - 12:00') return 4;
+    if (timeSlot == '12:00 - 14:00') return 4;
+    if (timeSlot == '14:00 - 16:00') return 6;
+    if (timeSlot == '16:00 - 18:00') return 6;
+    if (timeSlot == '18:00 - 20:00') return 3;
+    if (timeSlot == '20:00 - 22:00') return 5;
+    if (timeSlot == '22:00 - 24:00') return 6;
+    return 0; // Jaga-jaga jika ada slot tidak dikenal
+  }
+
+  // ================= ATURAN GUDANG LAIN (1, 2, 3) =================
+  bool isRestTime = timeSlot == '11:00 - 13:00' || timeSlot == '17:00 - 19:00';
 
   if (warehouseId == 1) {
     return isRestTime ? 4 : 8;
@@ -273,7 +338,6 @@ int _getMaxCapacity(String timeSlot) {
   
   return 14; // Default jika ID lain
 }
-
 
 //   Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
 //     if (_selectedTime == null) return;
@@ -1153,83 +1217,139 @@ String _getCheckInTime(String timeSlot) {
   return "$checkInStart - $checkInEnd";
 }
 
+// String _getCheckInTime(String timeSlot) {
+//   final warehouseId = _shippingData?['warehouse_id'];
+  
+//   // Ambil jam mulai (misal "08:00" dari "08:00 - 10:00")
+//   String startTimeStr = timeSlot.split(" - ")[0];
+//   String endTimeStr = timeSlot.split(" - ")[1];
+
+//   DateFormat format = DateFormat("HH:mm");
+//   DateTime startDt = format.parse(startTimeStr);
+//   DateTime endDt = format.parse(endTimeStr);
+
+//   // Jika Gudang 6, kurangi 1 jam 30 menit. Selain itu kurangi 2 jam.
+//   int minutesToSubtract = (warehouseId == 6) ? 90 : 120;
+
+//   DateTime checkInStart = startDt.subtract(Duration(minutes: minutesToSubtract));
+//   DateTime checkInEnd = endDt.subtract(Duration(minutes: minutesToSubtract));
+
+//   return "${format.format(checkInStart)} - ${format.format(checkInEnd)}";
+// }
+
+// Future<void> _checkAvailability() async {
+//   try {
+//     String filterDate = _shippingData!['stuffing_date'].toString().split(' ')[0];
+//     final int targetWarehouseId = _shippingData!['warehouse_id'];
+//    // Kita query ke assignments karena jam_booking ada di sana
+//     // Kita join ke request untuk memfilter berdasarkan tanggal dan gudang
+//     // final response = await supabase
+//     //     .from('shipping_assignments')
+//     //     .select('jam_booking')
+//     //     .eq('status_assignment', 'accepted')
+//     //     .eq('request.stuffing_date', _shippingData!['stuffing_date'])
+//     //     .eq('request.storage_location', _shippingData!['storage_location'])
+//     //     .not('jam_booking', 'is', null);
+
+//     final response = await supabase
+//         .from('shipping_assignments')
+//         .select('''
+//           jam_booking,
+//           request:shipping_id (
+//             stuffing_date,
+//             warehouse_id,
+//             group_id,
+//             shipping_id
+//           )
+//         ''') // <--- PERBAIKAN: Tambahkan request:shipping_id agar bisa difilter
+//         //.eq('status_assignment', 'accepted')
+//         .inFilter('status_assignment', [
+//           'accepted', 
+//           'on going', 
+//           'check in',
+//           'kelayakan unit',
+//           'loading', 
+//           'weighbridge', 
+//           'keluar'
+//         ])
+//         .eq('request.stuffing_date', filterDate)
+//         //.eq('request.warehouse_id', _shippingData!['warehouse_id'])
+//         .eq('request.warehouse_id', targetWarehouseId)
+//         .not('jam_booking', 'is', null);
+
+//     Map<String, int> counts = {};
+//     Map<String, Set<String>> uniqueVehiclesPerSlot = {};
+//     if (response != null) {
+//     for (var row in response as List) {
+//       String? time = row['jam_booking'];
+//     //   if (time != null) {
+//     //     counts[time] = (counts[time] ?? 0) + 1;
+//     //   }
+//     // }
+//     final req = row['request'];
+      
+//       if (time == null || req == null) continue;
+
+//       // --- LOGIKA IDENTITAS KENDARAAN ---
+//       // Jika pesanan adalah bagian dari grup, gunakan ID Grup sebagai identitas kendaraan.
+//       // Jika pesanan tunggal, gunakan Shipping ID sebagai identitas kendaraan.
+//       String vehicleKey = req['group_id'] != null 
+//           ? "GRP_${req['group_id']}" 
+//           : "SHIP_${req['shipping_id']}";
+
+//           if (!uniqueVehiclesPerSlot.containsKey(time)) {
+//         uniqueVehiclesPerSlot[time] = {vehicleKey};
+//       } else {
+//         uniqueVehiclesPerSlot[time]!.add(vehicleKey);
+//       }
+//     }
+//     }
+
+//     // 2. Konversi hasil Set menjadi jumlah (integer) untuk ditampilkan di grid
+//     uniqueVehiclesPerSlot.forEach((time, vehicles) {
+//       counts[time] = vehicles.length;
+//     });
+
+//     setState(() {
+//       _bookedCounts = counts;
+//       _isLoading = false;
+//     });
+//   } catch (e) {
+//     print("Error checking slots: $e");
+//   }
+// }
 Future<void> _checkAvailability() async {
   try {
-    String filterDate = _shippingData!['stuffing_date'].toString().split(' ')[0];
-   // Kita query ke assignments karena jam_booking ada di sana
-    // Kita join ke request untuk memfilter berdasarkan tanggal dan gudang
-    // final response = await supabase
-    //     .from('shipping_assignments')
-    //     .select('jam_booking')
-    //     .eq('status_assignment', 'accepted')
-    //     .eq('request.stuffing_date', _shippingData!['stuffing_date'])
-    //     .eq('request.storage_location', _shippingData!['storage_location'])
-    //     .not('jam_booking', 'is', null);
+    if (_shippingData == null) return;
 
-    final response = await supabase
-        .from('shipping_assignments')
-        .select('''
-          jam_booking,
-          request:shipping_id (
-            stuffing_date,
-            warehouse_id,
-            group_id,
-            shipping_id
-          )
-        ''') // <--- PERBAIKAN: Tambahkan request:shipping_id agar bisa difilter
-        //.eq('status_assignment', 'accepted')
-        .inFilter('status_assignment', [
-          'accepted', 
-          'on going', 
-          'check in',
-          'kelayakan unit',
-          'loading', 
-          'weighbridge', 
-          'keluar'
-        ])
-        .eq('request.stuffing_date', filterDate)
-        .eq('request.warehouse_id', _shippingData!['warehouse_id'])
-        .not('jam_booking', 'is', null);
+    final rawDate = _shippingData!['stuffing_date'];
+    final String filterDate = DateFormat('yyyy-MM-dd').format(DateTime.parse(rawDate.toString()));
+    final int targetWarehouseId = int.parse(_shippingData!['warehouse_id'].toString());
+
+    // Panggil fungsi database secara langsung
+    final List<dynamic> response = await supabase.rpc('get_booked_slots', params: {
+      'target_date': filterDate,
+      'target_warehouse_id': targetWarehouseId,
+    });
 
     Map<String, int> counts = {};
-    Map<String, Set<String>> uniqueVehiclesPerSlot = {};
-    if (response != null) {
-    for (var row in response as List) {
-      String? time = row['jam_booking'];
-    //   if (time != null) {
-    //     counts[time] = (counts[time] ?? 0) + 1;
-    //   }
-    // }
-    final req = row['request'];
-      
-      if (time == null || req == null) continue;
-
-      // --- LOGIKA IDENTITAS KENDARAAN ---
-      // Jika pesanan adalah bagian dari grup, gunakan ID Grup sebagai identitas kendaraan.
-      // Jika pesanan tunggal, gunakan Shipping ID sebagai identitas kendaraan.
-      String vehicleKey = req['group_id'] != null 
-          ? "GRP_${req['group_id']}" 
-          : "SHIP_${req['shipping_id']}";
-
-          if (!uniqueVehiclesPerSlot.containsKey(time)) {
-        uniqueVehiclesPerSlot[time] = {vehicleKey};
-      } else {
-        uniqueVehiclesPerSlot[time]!.add(vehicleKey);
+    for (var row in response) {
+      String? slot = row['slot_time'];
+      int total = int.parse(row['total_booked'].toString());
+      if (slot != null) {
+        counts[slot] = total;
       }
     }
-    }
-
-    // 2. Konversi hasil Set menjadi jumlah (integer) untuk ditampilkan di grid
-    uniqueVehiclesPerSlot.forEach((time, vehicles) {
-      counts[time] = vehicles.length;
-    });
 
     setState(() {
       _bookedCounts = counts;
       _isLoading = false;
     });
+
+    print("DEBUG RPC SLOTS: $_bookedCounts");
   } catch (e) {
-    print("Error checking slots: $e");
+    print("Error RPC: $e");
+    setState(() => _isLoading = false);
   }
 }
 

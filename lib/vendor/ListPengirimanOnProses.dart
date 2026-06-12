@@ -336,6 +336,7 @@ Future<void> _fetchOngoingOrders() async {
 
     setState(() {
       _dataList = groupedMap.values.toList();
+      _filteredPlanningList = List<Map<String, dynamic>>.from(_dataList);
       _isLoading = false;
     });
     _filterDataBySearch();
@@ -777,11 +778,12 @@ Widget _buildTopFilterBar() {
 }
 
 Future<void> _selectSingleDate() async {
+  final now = DateTime.now();
   final DateTime? picked = await showDatePicker(
     context: context,
     initialDate: _selectedDate,
-    firstDate: DateTime(2023),
-    lastDate: DateTime(2100),
+    firstDate: DateTime(2025),
+    lastDate: DateTime(now.year + 100),
     locale: const Locale('id', 'ID'),
     builder: (context, child) {
       return Theme(
@@ -797,7 +799,14 @@ Future<void> _selectSingleDate() async {
       );
     },
   );
-}
+  if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      _fetchOngoingOrders(); // Fetch ulang data menggunakan tanggal baru
+    }
+  }
+
 
   // // --- UI CARD DETAIL (GABUNGAN PLANNING + AKSI) ---
   // Widget _buildDetailedOngoingCard(Map<String, dynamic> item) {

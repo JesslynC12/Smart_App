@@ -6,11 +6,9 @@ import 'dart:async';
 class DetailsDOGbjPage extends StatefulWidget {
   const DetailsDOGbjPage({super.key});
 
-
   @override
   State<DetailsDOGbjPage> createState() => _DetailsDOGbjPageState();
 }
-
 
 class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
   final supabase = Supabase.instance.client;
@@ -18,18 +16,13 @@ class _DetailsDOGbjPageState extends State<DetailsDOGbjPage> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _dataList = [];
   List<Map<String, dynamic>> _warehouseList = [];
+  List<Map<String, dynamic>> _filteredDataList = [];
+final TextEditingController _searchController = TextEditingController();
 
-  
-
-
-  // Variabel untuk melacak baris mana yang sedang dibuka (berdasarkan shipping_id)
   int? _expandedId;
 
-
-  // State input sementara
   int? _selectedSLoc;
-  //String? _selectedDedicated;
-String? _currentUserName; // Untuk menyimpan nama dari public.profiles
+String? _currentUserName; 
 
   @override
   void initState() {
@@ -38,20 +31,64 @@ String? _currentUserName; // Untuk menyimpan nama dari public.profiles
     _fetchData();
     _fetchWarehouse();
     _setupRealtime();
+    _searchController.addListener(_filterDataByDONumber);
   }
 
   void _setupRealtime() {
-    // Memantau tabel shipping_request_details
-    // Jika ada data masuk ke tabel ini (dari proses List DO), halaman ini akan refresh otomatis
     _realtimeSubscription = supabase
         .from('shipping_request')
-        .stream(primaryKey: ['shipping_id']) // Sesuaikan dengan PK tabel Anda
+        .stream(primaryKey: ['shipping_id'])
         .listen((_) {
-          _fetchData(); // Panggil fetch data setiap ada perubahan di DB
+          _fetchData(); 
         });
   }
+void _filterDataByDONumber() {
+  final query = _searchController.text.trim().toLowerCase();
+  
+  if (query.isEmpty) {
+    setState(() {
+      _filteredDataList = List.from(_dataList);
+    });
+  } else {
+    setState(() {
+      _filteredDataList = _dataList.where((item) {
+        final topSo = (item['so'] ?? '').toString().toLowerCase();
+        if (topSo.contains(query)) return true;
 
+        final List dos = item['delivery_order'] ?? [];
 
+        return dos.any((doItem) {
+          // 1. Cek Nomor DO
+          final doNumber = (doItem['do_number'] ?? '').toString().toLowerCase();
+          
+          // 2. Cek Nomor SO Per Item (untuk grouped request)
+          final soPerItem = (doItem['parent_so'] ?? '').toString().toLowerCase();
+
+          // 3. Cek Customer (ID & Nama)
+          final customer = doItem['customer'] ?? {};
+          final customerId = (customer['customer_id'] ?? '').toString().toLowerCase();
+          final customerName = (customer['customer_name'] ?? '').toString().toLowerCase();
+
+          if (doNumber.contains(query) || 
+              soPerItem.contains(query) || 
+              customerId.contains(query) || 
+              customerName.contains(query)) {
+            return true;
+          }
+
+          // 4. Cek Detail Material (ID & Nama) di dalam do_details
+          final List details = doItem['do_details'] ?? [];
+          return details.any((det) {
+            final materialId = (det['material_id'] ?? '').toString().toLowerCase();
+            final materialName = (det['material']?['material_name'] ?? '').toString().toLowerCase();
+            
+            return materialId.contains(query) || materialName.contains(query);
+          });
+        });
+      }).toList();
+    });
+  }
+}
   // Future<void> _fetchData() async {
   //   try {
   //     final response = await supabase.from('shipping_request').select('''
@@ -117,7 +154,7 @@ Future<void> _fetchWarehouse() async {
         .from('warehouse')
         .select('warehouse_id, warehouse_name, lokasi')
         .inFilter('warehouse_id', [1, 2, 3, 6])
-        .eq('status', 'active') // Opsional: hanya ambil yang aktif
+        .eq('status', 'active') 
         .order('warehouse_name');
 
     setState(() {
@@ -151,21 +188,22 @@ Future<void> _fetchData() async {
 
 if (mounted) {
     setState(() {
-      // PROSES GROUPING DI SINI
       _dataList = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
+      _filterDataByDONumber();
       _isLoading = false;
     });
 }
   } catch (e) {
     if (mounted) setState(() => _isLoading = false);
     debugPrint("Realtime Error: $e");
-    // ... handle error
+  
   }
 }
 
 @override
   void dispose() {
-    _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat pindah halaman
+    _realtimeSubscription?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -310,34 +348,90 @@ if (mounted) {
 // }
 
 
+  // @override
+  // Widget build(BuildContext context) {
+  //   return Scaffold(
+  //     backgroundColor: Colors.grey[100],
+  //     // appBar: AppBar(
+  //     //   title: const Text("DO Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+  //     //   backgroundColor: Colors.red.shade700,
+  //     //   foregroundColor: Colors.white,
+  //     // ),
+  //     body: _isLoading && _dataList.isEmpty
+  //         ? const Center(child: CircularProgressIndicator())
+  //         : _dataList.isEmpty
+  //             ? _buildEmptyState()
+  //             : ListView.builder(
+  //                 itemCount: _dataList.length,
+  //                 padding: const EdgeInsets.all(10),
+  //                 itemBuilder: (context, index) {
+  //                   final item = _dataList[index];
+  //                   final sid = item['shipping_id'];
+  //                   final bool isExpanded = _expandedId == sid;
+
+
+  //                   return _buildExpandableCard(item, sid, isExpanded);
+  //                 },
+  //               ),
+  //   );
+  // }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      // appBar: AppBar(
-      //   title: const Text("DO Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isLoading && _dataList.isEmpty
           ? const Center(child: CircularProgressIndicator())
-          : _dataList.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  itemCount: _dataList.length,
-                  padding: const EdgeInsets.all(10),
-                  itemBuilder: (context, index) {
-                    final item = _dataList[index];
-                    final sid = item['shipping_id'];
-                    final bool isExpanded = _expandedId == sid;
-
-
-                    return _buildExpandableCard(item, sid, isExpanded);
-                  },
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: "Cari DO, SO, Customer, atau Material...",
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.grey),
+                              onPressed: () {
+                                _searchController.clear();
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: Colors.white,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                  ),
                 ),
+                
+                Expanded(
+                  child: _filteredDataList.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          itemCount: _filteredDataList.length,
+                          padding: const EdgeInsets.all(10),
+                          itemBuilder: (context, index) {
+                            final item = _filteredDataList[index];
+                            final sid = item['shipping_id'];
+                            final bool isExpanded = _expandedId == sid;
+
+                            return _buildExpandableCard(item, sid, isExpanded);
+                          },
+                        ),
+                ),
+              ],
+            ),
     );
-
-
   }
   Future<void> _fetchUserProfile() async {
   try {
@@ -356,12 +450,11 @@ if (mounted) {
   } catch (e) {
     debugPrint("Error fetch profil: $e");
     setState(() {
-      _currentUserName = "System GBJ"; // Fallback jika gagal
+      _currentUserName = "System GBJ"; 
     });
   }
 }
  
-  // 1. Tombol Cancel di Form Input (Perbaikan Casting)
 Widget _buildActionForm(Map<String, dynamic> item) {
   return Padding(
     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -474,8 +567,6 @@ Widget _buildActionForm(Map<String, dynamic> item) {
   );
 }
 
-
-// 2. Fungsi Bulk Action (Optimasi Request)
 Future<void> _processShippingRequest(Map<String, dynamic> item, String actionType) async {
   if (_selectedSLoc == null) {
     _showSnackBar("Harap pilih lokasi warehouse", Colors.orange);
@@ -486,7 +577,6 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
   final List<int> idsToProcess = item['group_id'] != null
       ? List<int>.from(item['grouped_ids'])
       : [item['shipping_id'] as int];
-
 
   try {
     setState(() => _isLoading = true);
@@ -511,8 +601,6 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
         'createdDODetail_by': _currentUserName ?? 'Unknown Admin', // Sesuaikan dengan user login Anda
       }).inFilter('shipping_id', idsToProcess);
 
-
-    // // 3. Insert ke Vendor Request (Tetap loop karena insert beda baris)
     // final List<Map<String, dynamic>> inserts = idsToProcess.map((sid) => {
     //   'shipping_id': sid,
     //   'status': 'waiting approval',
@@ -534,213 +622,6 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
   }
 }
 
-// Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded) {
-//   final List dos = item['delivery_order'] ?? [];
-//   final bool isGroupRow = item['group_id'] != null;
-
-
-//   return Card(
-//     elevation: isExpanded ? 4 : 1,
-//     margin: const EdgeInsets.only(bottom: 12),
-//     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-//     child: Column(
-//       children: [
-//         Theme(
-//           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-//           child: ListTile(
-//             onTap: () {
-//               setState(() {
-//                 _expandedId = isExpanded ? null : sid;
-//                 _selectedSLoc = null;
-//                 //_selectedDedicated = null;
-//               });
-//             },
-//             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-//             leading: CircleAvatar(
-//               backgroundColor: isGroupRow ? Colors.blue.shade700 : (isExpanded ? Colors.red.shade700 : Colors.blueGrey[400]),
-//               child: Icon(isGroupRow ? Icons.layers : Icons.inventory_2, color: Colors.white, size: 20),
-//             ),
-           
-//             // --- INI ADALAH BAGIAN YANG ANDA TANYAKAN ---
-//             // title: Row(
-//             //   children: [
-//             //     // Expanded(
-//             //     //   child: Text(
-//             //     //     isGroupRow ? "Grup SO: ${item['display_so'].join(', ')}" : "SO: ${item['so'] ?? '-'}",
-//             //     //     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-//             //     //     overflow: TextOverflow.ellipsis,
-//             //     //   ),
-//             //     // ),
-//             //     if (isGroupRow)
-//             //       Container(
-//             //         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-//             //         decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(12)),
-//             //         child: Text("ID GRP: ${item['group_id']}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-//             //       ),
-//             //   ],
-//             // ),
-//             // -------------------------------------------
-// // --- BAGIAN YANG DIUBAH ---
-//             title: Row(
-//               children: [
-//                 Icon(
-//                   isGroupRow ? Icons.layers : Icons.local_shipping, 
-//                   size: 18, 
-//                   color: Colors.red.shade700
-//                 ),
-//                 const SizedBox(width: 8),
-//                 Text(
-//                   isGroupRow ? "GROUP ID: ${item['group_id']}" : "SHIP ID: ${item['shipping_id']}",
-//                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-//                 ),
-//                 const SizedBox(width: 12),
-//               ],
-//             ),
-
-//             subtitle: Column(
-//               crossAxisAlignment: CrossAxisAlignment.start,
-//               children: [
-//                 const SizedBox(height: 6),
-//                 // Text("📅 RDD: ${_formatDate(item['rdd'])} | 🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
-//                 //      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
-//     //             Builder(
-//     //   builder: (context) {
-//     //     if (isGroupRow && item['all_rdds'] != null) {
-//     //       List<String?> rdds = List<String?>.from(item['all_rdds']);
-//     //       return Column(
-//     //         crossAxisAlignment: CrossAxisAlignment.start,
-//     //         children: rdds.map((r) => Padding(
-//     //           padding: const EdgeInsets.only(bottom: 2),
-//     //           child: Text("📅 RDD: ${_formatDate(r)}",
-//     //               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
-//     //         )).toList(),
-//     //       );
-//     //     }
-//     //     // Tampilan default untuk single data
-//     //     return Text("📅 RDD: ${_formatDate(item['rdd'])}",
-//     //         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87));
-//     //   },
-//     // ),
-//     // Tetap tampilkan Stuffing (biasanya stuffing disamakan dalam satu grup proses)
-//     Text("🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
-//         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
-//                 const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1)),
-               
-//                 // --- TABEL DETAIL MATERIAL (SESUAI GAMBAR REFERENSI) ---
-// ...dos.map((doItem) {
-//   final List details = doItem['do_details'] ?? [];
-//   // Ambil nomor SO pendukungnya
-//   final String soPerItem = doItem['parent_so']?.toString() ?? item['so']?.toString() ?? "-";
-//   final String rddSpesifik = _formatDate(doItem['rdd_origin'] ?? item['rdd']);
-
-
-//   return Container(
-//     margin: const EdgeInsets.only(bottom: 12),
-//     decoration: BoxDecoration(
-//       color: Colors.white,
-//       borderRadius: BorderRadius.circular(8),
-//       border: Border.all(color: Colors.grey[300]!), // Border abu tipis
-//     ),
-//     child: Column(
-//       children: [
-//         // --- RDD Diletakkan DI LUAR BOX (DI ATASNYA) ---
-//         // Padding(
-//         //   padding: const EdgeInsets.only(left: 4, bottom: 4),
-//         //   child: Row(
-//         //     children: [
-//         //       Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-//         //       const SizedBox(width: 6),
-//         //       Text(
-//         //         "RDD: $rddSpesifik",
-//         //         style: TextStyle(
-//         //           fontSize: 12, 
-//         //           fontWeight: FontWeight.bold, 
-//         //           color: Colors.red.shade900
-//         //         ),
-//         //       ),
-//         //     ],
-//         //   ),
-//         // ),
-//         // HEADER BOX (DO - SO - CUSTOMER)
-//         Container(
-//           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//           decoration: BoxDecoration(
-//             color: Colors.red.shade100, // Background abu sangat muda sesuai gambar
-//             borderRadius: const BorderRadius.only(
-//               topLeft: Radius.circular(8), 
-//               topRight: Radius.circular(8)
-//             ),
-//           ),
-//           child: Row(
-//             children: [
-//               // 1. DO NUMBER (Kiri - Biru)
-//               Text(
-//                 "DO: ${doItem['do_number']}", 
-//                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black)
-//               ),
-//               const Spacer(),
-//               Text(
-//                   "SO: $soPerItem", 
-//                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)
-//                 ),
-              
-//               const Spacer(),
-
-//               // 3. CUSTOMER NAME (Kanan - Hitam Bold)
-//               Text(
-//                 // (doItem['customer']?['customer_name'] ?? "-").toString().toUpperCase(), 
-//                 "${doItem['customer']?['customer_id'] ?? '-'} - ${(doItem['customer']?['customer_name'] ?? '-').toString().toUpperCase()}",
-//                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)
-//               ),
-//             ],
-//           ),
-//         ),
-        
-//         // TABEL ISI MATERIAL (Sesuai gambar: No Mat | Nama Mat | Qty)
-//         Table(
-//           columnWidths: const {
-//             0: FlexColumnWidth(1.2), // No Mat
-//             1: FlexColumnWidth(4),   // Nama Material
-//             2: FlexColumnWidth(1),   // Qty
-//           },
-//           children: details.map((det) => TableRow(
-//             children: [
-//               Padding(
-//                 padding: const EdgeInsets.all(10), 
-//                 child: Text(det['material_id']?.toString() ?? "-", style: const TextStyle(fontSize: 11))
-//               ),
-//               Padding(
-//                 padding: const EdgeInsets.all(10), 
-//                 child: Text(det['material']?['material_name'] ?? "-", style: const TextStyle(fontSize: 11))
-//               ),
-//               Padding(
-//                 padding: const EdgeInsets.all(10), 
-//                 child: Text(
-//                   det['qty']?.toString() ?? "0", 
-//                   textAlign: TextAlign.right, // Qty rata kanan agar rapi
-//                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)
-//                 )
-//               ),
-//             ],
-//           )).toList(),
-//         ),
-//       ],
-//     ),
-//   );
-// }).toList(),
-//               ],
-//             ),
-//             trailing: Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
-//           ),
-//         ),
-       
-//         // Form Input saat di-Expand (Gunakan item bukan sid)
-//         if (isExpanded) _buildActionForm(item),
-//       ],
-//     ),
-//   );
-// }
-
 Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded) {
   final List dos = item['delivery_order'] ?? [];
   final bool isGroupRow = item['group_id'] != null;
@@ -756,7 +637,6 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
           child: ListTile(
             onTap: () {
               setState(() {
-                // Toggle hanya untuk menampilkan Form Input
                 _expandedId = isExpanded ? null : sid;
                 _selectedSLoc = null;
               });
@@ -780,7 +660,6 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
         // ),
         
         // const Divider(height: 1, indent: 16, endIndent: 16),
-        // 🔥 FIX DI SINI (pakai Column, bukan subtitle)
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -794,7 +673,6 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
                   ),
                 ),
                 const SizedBox(height: 12),
-                //const SizedBox(width: 60), // 🔥 jarak
                 Text(
                   "🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
                   style: const TextStyle(
@@ -813,20 +691,17 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
         ),
 
         const Divider(height: 1, indent: 16, endIndent: 16),
-
-        // --- BAGIAN DETAIL: SELALU TERBUKA ---
         ...dos.map((doItem) {
           final List details = doItem['do_details'] ?? [];
           final String soPerItem = doItem['parent_so']?.toString() ?? item['so']?.toString() ?? "-";
           final String rddSpesifik = _formatDate(doItem['rdd_origin'] ?? item['rdd']);
-// Format No Cust - Nama Cust
+
   final String customerInfo = "${doItem['customer']?['customer_id'] ?? '-'} - ${(doItem['customer']?['customer_name'] ?? '-').toString().toUpperCase()}";
 return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. RDD Text (Di luar kotak, tepat di atas Header)
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 4),
           child: Row(
@@ -845,7 +720,6 @@ return Padding(
           ),
         ),
 
-        // 2. Kontainer Utama (Header Pink + Tabel Putih)
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -854,28 +728,23 @@ return Padding(
           ),
           child: Column(
             children: [
-              // HEADER WARNA PINK (DO - SO - CUSTOMER)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  // Warna pink muda sesuai gambar
                   color: const Color(0xFFFCE4EC), 
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // DO di Kiri
                     Text(
                       "DO: ${doItem['do_number']}", 
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)
                     ),
-                    // SO di Tengah
                     Text(
                       "SO: $soPerItem", 
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)
                     ),
-                    // Customer di Kanan
                     Text(
                       customerInfo, 
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)
@@ -884,7 +753,6 @@ return Padding(
                 ),
               ),
               
-              // TABEL DETAIL MATERIAL (Background Putih)
               Table(
                 columnWidths: const {
                   0: FlexColumnWidth(1.2), 
@@ -920,11 +788,10 @@ return Padding(
   );
 }).toList(),
 
-        // --- BAGIAN FORM INPUT: HANYA TAMPIL JIKA DIKLIK ---
         if (isExpanded) 
           _buildActionForm(item) 
         else 
-          const SizedBox(height: 12), // Memberi sedikit ruang di bawah jika form tertutup
+          const SizedBox(height: 12),
       ],
     ),
   );
@@ -946,7 +813,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
         // Inisialisasi list SO agar tidak duplikat
         groupedMap[gId]!['display_so'] = [req['so']];
         //groupedMap[gId]!['all_rdds'] = [req['rdd']];
-        // SUNTIK RDD KE TIAP DO AWAL
         List dos = List.from(req['delivery_order'] ?? []);
         for (var d in dos) {
           d['rdd_origin'] = req['rdd']; // Simpan RDD asli di sini
@@ -955,7 +821,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
       } else {
         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
        
-      //  // Tambahkan RDD jika belum ada di list (unik)
       //   List<String?> rdds = List<String?>.from(groupedMap[gId]!['all_rdds']);
       //   if (!rdds.contains(req['rdd'])) {
       //     rdds.add(req['rdd']);
@@ -967,7 +832,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
 
 
         for (var ndo in newDos) {
-          ndo['parent_so'] = req['so']; // Simpan SO di tiap DO
+          ndo['parent_so'] = req['so'];
           ndo['rdd_origin'] = req['rdd'];
           currentDos.add(ndo);
         }
@@ -1029,8 +894,6 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
  try {
     setState(() => _isLoading = true);
 
-// 1. Catat ke Tabel Riwayat (shipping_pending_history)
-    // Kita gunakan Future.wait untuk memproses semua ID jika itu sebuah grup
     final List<Map<String, dynamic>> historyInserts = idsToCancel.map((sid) => {
       'shipping_id': sid,
       'reason': reasonController.text.trim(),
@@ -1039,31 +902,20 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
     }).toList();
 
     await supabase.from('shipping_pending_history').insert(historyInserts);
-
-    // 2. Update Status di Tabel Utama (shipping_request)
-    // Menggunakan .inFilter agar lebih efisien daripada loop for
     await supabase.from('shipping_request').update({
       'status': 'pending',
       // 'pending_reason': reasonController.text.trim(),
       // 'pending_at': DateTime.now().toIso8601String(),
     }).inFilter('shipping_id', idsToCancel);
 
-    // 2. TAMBAHAN: HAPUS BARIS DI TABEL DETAILS
-    // Ini yang akan membuat data hilang dari UI karena filter !inner
-    // await supabase.from('shipping_request_details')
-    //     .delete()
-    //     .inFilter('shipping_id', idsToCancel);
-
     _showSnackBar("Pending Berhasil", Colors.grey.shade800);
     
-    // Reset state UI
     setState(() {
       _expandedId = null;
       _selectedSLoc = null;
       //_selectedDedicated = null;
     });
     
-    // Refresh data agar list terupdate
     await _fetchData();
     
   } catch (e) {
@@ -1072,7 +924,6 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
   }
 }
 
-  // --- HELPER WIDGETS ---
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       isDense: true,

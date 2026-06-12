@@ -613,6 +613,8 @@ Future<void> _exportCustomerToExcel() async {
   TextEditingController report,
   TextEditingController dataLog,
   TextEditingController jenisQcf,
+  TextEditingController podScan,
+    TextEditingController podAsli,
 ) async {
   try {
     await supabase.from('customer').upsert({
@@ -624,6 +626,8 @@ Future<void> _exportCustomerToExcel() async {
       'report_area': report.text,
       'data_log': dataLog.text,
       'jenis': jenisQcf.text,
+      'pod_scan': int.tryParse(podScan.text) ?? 0,
+        'pod_asli': int.tryParse(podAsli.text) ?? 0,
     });
 
     if (mounted) {
@@ -658,10 +662,13 @@ Future<void> _exportCustomerToExcel() async {
   final kotaController = TextEditingController(text: customer?['kota'] ?? '');
   final dataLogController = TextEditingController(text: customer?['data_log'] ?? '');
   final jenisQcfController = TextEditingController(text: customer?['jenis'] ?? '');
+  final podScanController = TextEditingController(text: customer?['pod_scan']?.toString() ?? '');
+    final podAsliController = TextEditingController(text: customer?['pod_asli']?.toString() ?? '');
 
-    final f1 = FocusNode(); final f2 = FocusNode(); final f3 = FocusNode();
-    final f4 = FocusNode(); final f5 = FocusNode(); final f6 = FocusNode();
-    final f7 = FocusNode(); final f8 = FocusNode();
+   final f1 = FocusNode(); final f2 = FocusNode(); final f3 = FocusNode();
+final f4 = FocusNode(); final f5 = FocusNode(); final f6 = FocusNode();
+final f7 = FocusNode(); final f8 = FocusNode(); final f9 = FocusNode();
+final f10 = FocusNode();
 
     showDialog(
       context: context,
@@ -673,19 +680,22 @@ Future<void> _exportCustomerToExcel() async {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTextField(idController, 'No Cust *', f1, f2, !isEdit, isNumber: true),
-              _buildTextField(nameController, 'Nama Customer *', f2, f3, true),
-              _buildTextField(cityController, 'City', f3, f4, true),
-              _buildTextField(reportController, 'Report Area', f5, f6, true),
-              _buildTextField(areaController, 'Area *', f6, f7, true),
-              _buildTextField(kotaController, 'Kota', f4, f5, true),
-              _buildTextField(dataLogController, 'Data Log', f7, f8, true),
-                _buildTextField(
-                jenisQcfController,
-                'Jenis QCF',
-                f8,
-                null,
-                true,
+             _buildTextField(idController, 'No Cust *', f1, f2, !isEdit, isNumber: true),
+  _buildTextField(nameController, 'Nama Customer *', f2, f3, true),
+  _buildTextField(cityController, 'City *', f3, f4, true),
+  _buildTextField(kotaController, 'Kota', f4, f5, true),
+  _buildTextField(reportController, 'Report Area', f5, f6, true), // f5 ke f6
+  _buildTextField(areaController, 'Area *', f6, f7, true),       // f6 ke f7
+  _buildTextField(dataLogController, 'Data Log', f7, f8, true),   // f7 ke f8
+  _buildTextField(jenisQcfController, 'Jenis QCF', f8, f9, true), // f8 ke f9
+  _buildTextField(podScanController, 'POD Scan *', f9, f10, true, isNumber: true), // f9 ke f10
+  _buildTextField(
+    podAsliController,
+    'POD Asli *',
+    f10,
+    null, // Yang terakhir tidak punya 'next'
+    true,
+                  isNumber: true,
                 isLast: true,
                 onSave: () {
                   _validateAndSave(
@@ -698,6 +708,8 @@ Future<void> _exportCustomerToExcel() async {
                     kotaController,
                     dataLogController,
                     jenisQcfController,
+                    podScanController,
+                    podAsliController,
                   );
                 },
               ),
@@ -726,6 +738,8 @@ Future<void> _exportCustomerToExcel() async {
               kotaController,
               dataLogController,
               jenisQcfController,
+              podScanController,
+              podAsliController,
             );
           },
           child: const Text("Simpan"),
@@ -745,18 +759,34 @@ Future<void> _exportCustomerToExcel() async {
   TextEditingController kota,
   TextEditingController dataLog,
   TextEditingController jenisQcf,
+  TextEditingController podScan,
+    TextEditingController podAsli,
 ) {
-  if (id.text.isEmpty || name.text.isEmpty || area.text.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("No Customer, Nama, dan Area wajib diisi!"),
-        backgroundColor: Colors.orange,
-      ),
-    );
-    return;
-  }
+  // if (id.text.isEmpty || name.text.isEmpty || area.text.isEmpty) {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     const SnackBar(
+  //       content: Text("No Customer, Nama, dan Area wajib diisi!"),
+  //       backgroundColor: Colors.orange,
+  //     ),
+  //   );
+  //   return;
+  // }
+  if (id.text.trim().isEmpty ||
+        name.text.trim().isEmpty ||
+        city.text.trim().isEmpty ||
+        area.text.trim().isEmpty ||
+        podScan.text.trim().isEmpty ||
+        podAsli.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("No Customer, Nama, City, Area, POD Scan, dan POD Asli wajib diisi!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-  _saveData(isEdit, id, name, city, kota, area, report, dataLog, jenisQcf);
+ _saveData(isEdit, id, name, city, kota, area, report, dataLog, jenisQcf, podScan, podAsli);
 }
 
   Widget _buildTextField(TextEditingController controller, String label, FocusNode current, FocusNode? next, bool enabled, {bool isNumber = false, bool isLast = false, VoidCallback? onSave}) {
@@ -996,7 +1026,8 @@ setState(() {
                           DataColumn(label: Text('Kota', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Data Log', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Jenis QCF', style: TextStyle(fontWeight: FontWeight.bold))),
-                         // DataColumn(label: Text('POD Area', style: TextStyle(fontWeight: FontWeight.bold))),
+                         DataColumn(label: Text('POD Scan', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('POD Asli', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Aksi', style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
                         source: dataContent,
@@ -1054,6 +1085,8 @@ class CustomerDataSource extends DataTableSource {
       DataCell(Text(cust['kota'] ?? '-')),
       DataCell(Text(cust['data_log'] ?? '-')),
       DataCell(Text(cust['jenis'] ?? '-')),
+      DataCell(Text(cust['pod_scan']?.toString() ?? '0')),
+      DataCell(Text(cust['pod_asli']?.toString() ?? '0')),
       DataCell(Row(
         mainAxisSize: MainAxisSize.min,
         children: [

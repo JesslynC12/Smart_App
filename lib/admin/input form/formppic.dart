@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 class PPICFormPage extends StatefulWidget {
   const PPICFormPage({super.key});
@@ -252,6 +253,10 @@ Future<void> _fetchUserProfile() async {
   }
 
   Widget _buildRowInput(int index) {
+    final currentMaterial = _materialList.firstWhere(
+      (m) => m['material_id'] == _rows[index]['material_id'],
+      orElse: () => {},
+    );
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
@@ -299,18 +304,56 @@ Future<void> _fetchUserProfile() async {
             const SizedBox(height: 10),
             Row(
               children: [
+                // Expanded(
+                //   flex: 2,
+                  // child: DropdownButtonFormField<int>(
+                  //   isExpanded: true,
+                  //   decoration: const InputDecoration(labelText: "Material", border: OutlineInputBorder()),
+                  //   value: _rows[index]['material_id'],
+                  //   // PERBAIKAN 3: Pastikan mapping item menggunakan casting 'as int'
+                  //   items: _materialList.map((m) => DropdownMenuItem<int>(
+                  //     value: m['material_id'] as int, 
+                  //     child: Text("${m['material_id']} - ${m['material_name']}", overflow: TextOverflow.ellipsis)
+                  //   )).toList(),
+                  //   onChanged: (val) => setState(() => _rows[index]['material_id'] = val),
+                  //   validator: (v) => v == null ? "!" : null,
+                  // ),
+                //),
                 Expanded(
                   flex: 2,
-                  child: DropdownButtonFormField<int>(
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: "Material", border: OutlineInputBorder()),
-                    value: _rows[index]['material_id'],
-                    // PERBAIKAN 3: Pastikan mapping item menggunakan casting 'as int'
-                    items: _materialList.map((m) => DropdownMenuItem<int>(
-                      value: m['material_id'] as int, 
-                      child: Text("${m['material_id']} - ${m['material_name']}", overflow: TextOverflow.ellipsis)
-                    )).toList(),
-                    onChanged: (val) => setState(() => _rows[index]['material_id'] = val),
+                  child: DropdownSearch<Map<String, dynamic>>(
+                    items: (filter, loadProps) => _materialList,
+                    itemAsString: (Map<String, dynamic> m) => "${m['material_id']} - ${m['material_name']}",
+                    compareFn: (item, selectedItem) => item['material_id'] == selectedItem['material_id'],
+                    selectedItem: currentMaterial.isEmpty ? null : currentMaterial,
+                    decoratorProps: const DropDownDecoratorProps(
+                      decoration: InputDecoration(
+                        labelText: "Material",
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      ),
+                    ),
+                    popupProps: PopupProps.menu(
+                      showSearchBox: true, // Mengaktifkan kolom search
+                      searchFieldProps: const TextFieldProps(
+                        decoration: InputDecoration(
+                          hintText: "Cari No / Nama Material...",
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      itemBuilder: (context, item, isDisabled, isSelected) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Text("${item['material_id']} - ${item['material_name']}")
+                        );
+                      },
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _rows[index]['material_id'] = val?['material_id'];
+                      });
+                    },
                     validator: (v) => v == null ? "!" : null,
                   ),
                 ),

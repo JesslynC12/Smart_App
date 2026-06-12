@@ -1210,11 +1210,12 @@ Widget _buildTopFilterBar() {
 
 
 Future<void> _selectSingleDate() async {
+  final now = DateTime.now();
   final DateTime? picked = await showDatePicker(
     context: context,
     initialDate: _selectedDate,
-    firstDate: DateTime(2023),
-    lastDate: DateTime(2100),
+    firstDate: DateTime(2025),
+    lastDate: DateTime(now.year + 100),
     locale: const Locale('id', 'ID'),
     builder: (context, child) {
       return Theme(

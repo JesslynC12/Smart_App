@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'dart:typed_data'; // Untuk Uint8List
-import 'dart:io' as io;   // Gunakan alias 'io' agar tidak bentrok
-import 'package:flutter/foundation.dart' show kIsWeb; // Cek platform
+import 'dart:typed_data';
 import 'package:excel/excel.dart' hide Border;
-import 'package:path_provider/path_provider.dart';
-import 'package:file_saver/file_saver.dart'; // Solusi terbaik untuk simpan file
+import 'package:file_saver/file_saver.dart';
 
-// --- MODELS ---
 class InDashboardItem {
   final String name;
   final String shift;
@@ -43,14 +39,12 @@ class _DashboardCombinedPageState extends State<DashboardCombinedPage> {
   final supabase = Supabase.instance.client;
   RealtimeChannel? _realtimeChannel;
 
-  // Filters State
   bool isRangeMode = false;
   DateTime startDate = DateTime.now();
   DateTime endDate = DateTime.now();
   String selectedLokasi = 'Semua Lokasi';
   List<String> lokasiOptions = ['Semua Lokasi', 'Rungkut', 'Tambak Langon'];
 
-  // Data State
   bool isLoading = false;
   List<InDashboardItem> tableData = [];
   List<InDashboardItem> grandTotalData = [];
@@ -80,66 +74,6 @@ class _DashboardCombinedPageState extends State<DashboardCombinedPage> {
       callback: (payload) => _refreshAllData(),
     )..subscribe();
   }
-
-  // Future<void> loadDashboardData() async {
-  //   setState(() => isLoading = true);
-  //   try {
-  //     final sDate = DateFormat('yyyy-MM-dd').format(startDate);
-  //     final eDate = isRangeMode ? DateFormat('yyyy-MM-dd').format(endDate) : sDate;
-  //     final lokasiFilter = [selectedLokasi];
-
-  //     // 1. Fetch Table Data via RPC
-  //     final response = await supabase.rpc('get_dashboard_checker_stats_v3', params: {
-  //       'p_start_date': sDate,
-  //       'p_end_date': eDate,
-  //       'p_lokasi': lokasiFilter,
-  //     });
-
-  //     List<InDashboardItem> tempList = [];
-  //     int tTruck = 0, tBox = 0, tA = 0, tB = 0, tC = 0, tD = 0;
-
-  //     for (var item in (response as List)) {
-  //       var d = InDashboardItem(
-  //         name: item['checker_name'] ?? 'N/A',
-  //         truck: item['truck_count'] ?? 0,
-  //         box: item['total_qty'] ?? 0,
-  //         countA: item['cat_a'] ?? 0,
-  //         countB: item['cat_b'] ?? 0,
-  //         countC: item['cat_c'] ?? 0,
-  //         countD: item['cat_d'] ?? 0,
-  //       );
-  //       tempList.add(d);
-  //       tTruck += d.truck; tBox += d.box; tA += d.countA; tB += d.countB; tC += d.countC; tD += d.countD;
-  //     }
-
-  //     // 2. Fetch Bar Chart Data (Outbound by Division)
-  //     final barRes = await supabase.rpc('get_outbound_by_division', params: {
-  //       'p_start': sDate, 'p_end': eDate
-  //     });
-  //     final List<ChartData> tempBar = (barRes as List).map((e) => 
-  //       ChartData(e['division'], (e['count'] as int).toDouble(), Colors.blue)
-  //     ).toList();
-
-  //     // 3. Fetch Pie Chart Data (Shift Distribution)
-  //     final pieRes = await supabase.rpc('get_shift_distribution', params: {
-  //       'p_start': sDate, 'p_end': eDate
-  //     });
-  //     final List<ChartData> tempPie = (pieRes as List).map((e) => 
-  //       ChartData(e['shift'], (e['count'] as int).toDouble(), e['shift'] == 'Shift 1' ? Colors.teal : Colors.purple)
-  //     ).toList();
-
-  //     setState(() {
-  //       tableData = tempList;
-  //       barDataDivisi = tempBar;
-  //       pieDataShift = tempPie;
-  //       grandTotalData = [InDashboardItem(name: "GRAND TOTAL", truck: tTruck, box: tBox, countA: tA, countB: tB, countC: tC, countD: tD)];
-  //     });
-  //   } catch (e) {
-  //     debugPrint("Error Dashboard: $e");
-  //   } finally {
-  //     setState(() => isLoading = false);
-  //   }
-  // }
 
 // Future<void> loadDashboardData() async {
 //     setState(() => isLoading = true);
@@ -231,7 +165,6 @@ Future<void> loadDashboardData() async {
     final eDate = isRangeMode ? DateFormat('yyyy-MM-dd').format(endDate) : sDate;
     final lokasiFilter = [selectedLokasi];
 
-    // Panggil RPC (Pastikan SQL RPC Anda mereturn kolom 'shift')
     final response = await supabase.rpc('get_dashboard_checker_stats_v4', params: {
       'p_start_date': sDate,
       'p_end_date': eDate,
@@ -243,8 +176,7 @@ Future<void> loadDashboardData() async {
       return;
     }
 
-    // 1. Map data mentah dari DB ke List Dart
-    List<InDashboardItem> rawData = (response as List).map((item) {
+    List<InDashboardItem> rawData = (response).map((item) {
       return InDashboardItem(
         name: item['checker_name'] ?? 'N/A',
         shift: item['shift']?.toString() ?? '*', 
@@ -619,7 +551,7 @@ gridData: FlGridData(
           drawVerticalLine: false,
           horizontalInterval: maxVal > 50 ? 10 : (maxVal > 20 ? 5 : 2),
           getDrawingHorizontalLine: (value) => FlLine(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             strokeWidth: 1,
           ),
         ),
@@ -653,11 +585,11 @@ Future<void> fetchWarehouseChartData() async {
       });
 
       if (response != null && (response as List).isNotEmpty) {
-        barDataWarehouse = (response as List).map((item) {
+        barDataWarehouse = (response).map((item) {
           return ChartData(
             item['warehouse_name']?.toString() ?? 'N/A',
             double.tryParse(item['count'].toString()) ?? 0.0,
-            _getWarehouseColor((response as List).indexOf(item)),
+            _getWarehouseColor((response).indexOf(item)),
           );
         }).toList();
       } else {
@@ -1011,68 +943,70 @@ Widget _buildPerformanceSection() {
     ],
   );
 }
-Widget _buildCheckerBarChart() {
-  // Ambil hanya data checker asli (bukan subtotal/empty)
-  final checkerData = tableData.where((e) => !e.isSubtotal && e.name.isNotEmpty).toList();
+
+// Widget _buildCheckerBarChart() {
+//   // Ambil hanya data checker asli (bukan subtotal/empty)
+//   final checkerData = tableData.where((e) => !e.isSubtotal && e.name.isNotEmpty).toList();
   
-  if (checkerData.isEmpty) return const Center(child: Text("No Data"));
+//   if (checkerData.isEmpty) return const Center(child: Text("No Data"));
 
-  return BarChart(
-    BarChartData(
-      alignment: BarChartAlignment.spaceAround,
-      maxY: checkerData.map((e) => e.truck).reduce((a, b) => a > b ? a : b) * 1.2,
-      barGroups: checkerData.asMap().entries.map((e) {
-        return BarChartGroupData(
-          x: e.key,
-          barRods: [
-            BarChartRodData(
-              toY: e.key.toDouble(), // Jumlah Truk
-              color: Colors.blueAccent,
-              width: 16,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-            )
-          ],
-        );
-      }).toList(),
-      titlesData: FlTitlesData(
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            getTitlesWidget: (v, m) => Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Transform.rotate(
-                angle: -0.5,
-                child: Text(checkerData[v.toInt()].name.split(' ')[0], style: const TextStyle(fontSize: 9)),
-              ),
-            ),
-          ),
-        ),
-        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
-        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-      ),
-    ),
-  );
-}
-Widget _buildCategoryPieChart() {
-  if (grandTotalData.isEmpty) return const SizedBox();
-  var total = grandTotalData.first;
+//   return BarChart(
+//     BarChartData(
+//       alignment: BarChartAlignment.spaceAround,
+//       maxY: checkerData.map((e) => e.truck).reduce((a, b) => a > b ? a : b) * 1.2,
+//       barGroups: checkerData.asMap().entries.map((e) {
+//         return BarChartGroupData(
+//           x: e.key,
+//           barRods: [
+//             BarChartRodData(
+//               toY: e.key.toDouble(), // Jumlah Truk
+//               color: Colors.blueAccent,
+//               width: 16,
+//               borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+//             )
+//           ],
+//         );
+//       }).toList(),
+//       titlesData: FlTitlesData(
+//         bottomTitles: AxisTitles(
+//           sideTitles: SideTitles(
+//             showTitles: true,
+//             getTitlesWidget: (v, m) => Padding(
+//               padding: const EdgeInsets.only(top: 8),
+//               child: Transform.rotate(
+//                 angle: -0.5,
+//                 child: Text(checkerData[v.toInt()].name.split(' ')[0], style: const TextStyle(fontSize: 9)),
+//               ),
+//             ),
+//           ),
+//         ),
+//         leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
+//         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+//         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+//       ),
+//     ),
+//   );
+// }
 
-  List<PieChartSectionData> sections = [
-    PieChartSectionData(value: total.countA.toDouble(), title: 'A', color: Colors.green, radius: 50),
-    PieChartSectionData(value: total.countB.toDouble(), title: 'B', color: Colors.blue, radius: 50),
-    PieChartSectionData(value: total.countC.toDouble(), title: 'C', color: Colors.orange, radius: 50),
-    PieChartSectionData(value: total.countD.toDouble(), title: 'D', color: Colors.red, radius: 50),
-  ];
+// Widget _buildCategoryPieChart() {
+//   if (grandTotalData.isEmpty) return const SizedBox();
+//   var total = grandTotalData.first;
 
-  return PieChart(
-    PieChartData(
-      sections: sections,
-      centerSpaceRadius: 40,
-      sectionsSpace: 2,
-    ),
-  );
-}
+//   List<PieChartSectionData> sections = [
+//     PieChartSectionData(value: total.countA.toDouble(), title: 'A', color: Colors.green, radius: 50),
+//     PieChartSectionData(value: total.countB.toDouble(), title: 'B', color: Colors.blue, radius: 50),
+//     PieChartSectionData(value: total.countC.toDouble(), title: 'C', color: Colors.orange, radius: 50),
+//     PieChartSectionData(value: total.countD.toDouble(), title: 'D', color: Colors.red, radius: 50),
+//   ];
+
+//   return PieChart(
+//     PieChartData(
+//       sections: sections,
+//       centerSpaceRadius: 40,
+//       sectionsSpace: 2,
+//     ),
+//   );
+// }
 
   // Widget _buildTopFilter() {
   //   return Card(
@@ -1228,7 +1162,7 @@ Widget _buildTopFilter() {
             ),
           ),
 
-          const SizedBox(width: 75), // Jarak antar grup filter
+          const SizedBox(width: 75),
 
           // 3. LOKASI GUDANG
           const Text("Lokasi: ", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1245,7 +1179,7 @@ Widget _buildTopFilter() {
             },
           ),
 
-          const Spacer(), // Mendorong button ke paling kanan
+          const Spacer(),
 
           // 4. BUTTON ACTIONS
           IconButton(
@@ -1275,28 +1209,30 @@ Widget _buildTopFilter() {
   //     );
   //   });
   // }
-  Widget _buildChartsSection() {
-    return LayoutBuilder(builder: (context, constraints) {
-      return Container(
-        height: 300,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Kepadatan Aktivitas per Gudang", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            //Expanded(child: _buildHorizontalBarChart()),
-            Container(
-  height: (barDataWarehouse.length * 50.0) + 100, // Tinggi dinamis sesuai jumlah gudang
-  padding: const EdgeInsets.only(right: 20),
-  child: _buildHorizontalBarChart(),
-)
-          ],
-        ),
-      );
-    });
-  }
+
+//   Widget _buildChartsSection() {
+//     return LayoutBuilder(builder: (context, constraints) {
+//       return Container(
+//         height: 300,
+//         padding: const EdgeInsets.all(16),
+//         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             const Text("Kepadatan Aktivitas per Gudang", style: TextStyle(fontWeight: FontWeight.bold)),
+//             const SizedBox(height: 20),
+//             //Expanded(child: _buildHorizontalBarChart()),
+//             Container(
+//   height: (barDataWarehouse.length * 50.0) + 100, // Tinggi dinamis sesuai jumlah gudang
+//   padding: const EdgeInsets.only(right: 20),
+//   child: _buildHorizontalBarChart(),
+// )
+//           ],
+//         ),
+//       );
+//     });
+//   }
+
 Widget _buildChartCard(String title, Widget chart) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1315,78 +1251,78 @@ Widget _buildChartCard(String title, Widget chart) {
     );
   }
 
-  Widget _buildBarChart() {
-    if (barDataDivisi.isEmpty) return const Center(child: Text("No Data"));
-    double maxVal = barDataDivisi.map((e) => e.value).fold(0, (prev, e) => e > prev ? e : prev);
+  // Widget _buildBarChart() {
+  //   if (barDataDivisi.isEmpty) return const Center(child: Text("No Data"));
+  //   double maxVal = barDataDivisi.map((e) => e.value).fold(0, (prev, e) => e > prev ? e : prev);
     
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        maxY: maxVal * 1.2,
-        barGroups: barDataDivisi.asMap().entries.map((e) {
-          return BarChartGroupData(x: e.key, barRods: [
-            BarChartRodData(toY: e.value.value, color: Colors.blueAccent, width: 22, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))
-          ], showingTooltipIndicators: [0]);
-        }).toList(),
-        titlesData: FlTitlesData(
-          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (v, m) => Padding(padding: const EdgeInsets.only(top: 10), child: Transform.rotate(angle: -0.5, child: Text(barDataDivisi[v.toInt()].label, style: const TextStyle(fontSize: 9)))))),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        // barTouchData: BarTouchData(
-        //   enabled: false,
-        //   touchTooltipData: BarTouchTooltipData(
-        //     getTooltip: (_) => Colors.transparent,
-        //     tooltipPadding: EdgeInsets.zero,
-        //     tooltipMargin: 8,
-        //     getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(rod.toY.round().toString(), const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 11))
-        //   )
-        // ),
-         barTouchData: BarTouchData(
-          enabled: false,
-  touchTooltipData: BarTouchTooltipData(
-    tooltipPadding: EdgeInsets.zero,
-    tooltipMargin: 8,
-    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-      return BarTooltipItem(
-        rod.toY.round().toString(),
-        const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 11),
-          //color: Colors.white,
-        );
-    }
-      ),
-         ),
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-      ),
-    );
-  }
+  //   return BarChart(
+  //     BarChartData(
+  //       alignment: BarChartAlignment.spaceAround,
+  //       maxY: maxVal * 1.2,
+  //       barGroups: barDataDivisi.asMap().entries.map((e) {
+  //         return BarChartGroupData(x: e.key, barRods: [
+  //           BarChartRodData(toY: e.value.value, color: Colors.blueAccent, width: 22, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))
+  //         ], showingTooltipIndicators: [0]);
+  //       }).toList(),
+  //       titlesData: FlTitlesData(
+  //         bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (v, m) => Padding(padding: const EdgeInsets.only(top: 10), child: Transform.rotate(angle: -0.5, child: Text(barDataDivisi[v.toInt()].label, style: const TextStyle(fontSize: 9)))))),
+  //         leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  //         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  //         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  //       ),
+  //       // barTouchData: BarTouchData(
+  //       //   enabled: false,
+  //       //   touchTooltipData: BarTouchTooltipData(
+  //       //     getTooltip: (_) => Colors.transparent,
+  //       //     tooltipPadding: EdgeInsets.zero,
+  //       //     tooltipMargin: 8,
+  //       //     getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(rod.toY.round().toString(), const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 11))
+  //       //   )
+  //       // ),
+  //        barTouchData: BarTouchData(
+  //         enabled: false,
+  // touchTooltipData: BarTouchTooltipData(
+  //   tooltipPadding: EdgeInsets.zero,
+  //   tooltipMargin: 8,
+  //   getTooltipItem: (group, groupIndex, rod, rodIndex) {
+  //     return BarTooltipItem(
+  //       rod.toY.round().toString(),
+  //       const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 11),
+  //         //color: Colors.white,
+  //       );
+  //   }
+  //     ),
+  //        ),
+  //       gridData: const FlGridData(show: false),
+  //       borderData: FlBorderData(show: false),
+  //     ),
+  //   );
+  // }
 
-  Widget _buildPieChart() {
-    if (pieDataShift.isEmpty) return const Center(child: Text("No Data"));
-    double total = pieDataShift.fold(0, (sum, item) => sum + item.value);
+  // Widget _buildPieChart() {
+  //   if (pieDataShift.isEmpty) return const Center(child: Text("No Data"));
+  //   double total = pieDataShift.fold(0, (sum, item) => sum + item.value);
 
-    return Column(
-      children: [
-        Expanded(
-          child: PieChart(
-            PieChartData(
-              sectionsSpace: 4, centerSpaceRadius: 40,
-              sections: pieDataShift.map((e) {
-                final perc = (e.value / total * 100).toStringAsFixed(1);
-                return PieChartSectionData(color: e.color, value: e.value, title: '$perc%', radius: 60, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white));
-              }).toList(),
-            ),
-          ),
-        ),
-        Wrap(
-          spacing: 10,
-          children: pieDataShift.map((e) => Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: e.color), const SizedBox(width: 4), Text("${e.label}: ${e.value.round()}", style: const TextStyle(fontSize: 10))])).toList(),
-        )
-      ],
-    );
-  }
+  //   return Column(
+  //     children: [
+  //       Expanded(
+  //         child: PieChart(
+  //           PieChartData(
+  //             sectionsSpace: 4, centerSpaceRadius: 40,
+  //             sections: pieDataShift.map((e) {
+  //               final perc = (e.value / total * 100).toStringAsFixed(1);
+  //               return PieChartSectionData(color: e.color, value: e.value, title: '$perc%', radius: 60, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white));
+  //             }).toList(),
+  //           ),
+  //         ),
+  //       ),
+  //       Wrap(
+  //         spacing: 10,
+  //         children: pieDataShift.map((e) => Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: e.color), const SizedBox(width: 4), Text("${e.label}: ${e.value.round()}", style: const TextStyle(fontSize: 10))])).toList(),
+  //       )
+  //     ],
+  //   );
+  // }
 
   // Widget _buildDataTable(List<InDashboardItem> data, String title, {bool isTotal = false}) {
   //   final fmt = NumberFormat('#,###');
@@ -1464,7 +1400,8 @@ Widget _buildChartCard(String title, Widget chart) {
     // Besarkan spasi antar kolom agar tabel melebar ke samping
     columnSpacing: 35, 
     headingRowHeight: isTotal ? 0 : 48, 
-    dataRowHeight: 45, // Besarkan tinggi baris agar tidak sesak
+   dataRowMinHeight: 45,
+    dataRowMaxHeight: 45,
     horizontalMargin: 20,
     headingRowColor: WidgetStateProperty.all(Colors.blueGrey[50]),
     columns: const [
@@ -1675,7 +1612,7 @@ Future<void> exportToExcel() async {
         ext: 'xlsx',
         mimeType: MimeType.microsoftExcel,
       );
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Data berhasil diekspor ke Excel"), backgroundColor: Colors.green),
       );

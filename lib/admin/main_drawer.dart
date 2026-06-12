@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/display/daily-occupancy.dart';
+import 'package:project_app/admin/display/daily_occupancy.dart';
 import 'package:project_app/admin/display/dashboard_logistik.dart';
 import 'package:project_app/admin/display/indashboard.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
@@ -11,6 +11,7 @@ import 'package:project_app/admin/input%20form/Listloading_page.dart';
 import 'package:project_app/admin/input%20form/pod_page.dart';
 import 'package:project_app/admin/input%20form/posKeluar_page.dart';
 import 'package:project_app/admin/input%20form/weighbridge_page.dart';
+import 'package:project_app/admin/master%20data/master_user_vendor.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/vendor/ListPengirimanOnProses.dart';
 import 'package:project_app/vendor/historyorder_page.dart';
@@ -31,7 +32,6 @@ import 'package:project_app/admin/master data/customer_master.dart';
 import 'package:project_app/admin/master data/manage_user_vendor.dart';
 import 'package:project_app/admin/master data/material_master.dart';
 import 'package:project_app/admin/master data/vendor_transportasi_master.dart';
-import 'package:project_app/admin/master data/enrollment_vendor_page.dart';
 import 'package:project_app/admin/master data/warehouse_master.dart';
 import 'package:project_app/admin/master data/manage_user.dart';
 
@@ -222,9 +222,9 @@ class MainDrawer extends StatelessWidget {
                 DynamicTabPage.of(context)?.openTab("In Dashboard", DashboardCombinedPage());
               }),
                if (_hasAccess('DashboardLogistik'))
-               _menuItem(context, Icons.dashboard_customize_rounded, "Logistics Dashboard", Colors.green, onTap: () {
+               _menuItem(context, Icons.dashboard, "Dashboard Logistik", Colors.blue, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Logistics Dashboard", LogisticDashboardPage());
+                DynamicTabPage.of(context)?.openTab("Dashboard Logistik", LogisticDashboardPage());
               }),
 
             // if (_hasAccess('ListComplain'))
@@ -267,9 +267,13 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen Checker", const CheckerPaginatedPage());
               }),
-              _menuItem(context, Icons.business_rounded, "Manajemen Vendor", Colors.deepPurple, onTap: () {
+              _menuItem(context, Icons.business_center_outlined, "Manajemen User Vendor", Colors.yellow, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Manajemen Vendor", const VendorPaginatedPage());
+                DynamicTabPage.of(context)?.openTab("Manajemen User Vendor", const VendorAccountsPage());
+              }),
+              _menuItem(context, Icons.business_rounded, "Manajemen Vendor Details", Colors.deepPurple, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Manajemen Vendor Details", const VendorPaginatedPage());
               }),
               // _menuItem(context, Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent, onTap: () {
               //   Navigator.pop(context);

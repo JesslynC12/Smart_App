@@ -24,6 +24,7 @@ class _VehicleControlFormState extends State<VehicleControlFormState> {
   DateTime _selectedDate = DateTime.now();
   String _dateFilterType = 'stuffing_date'; // Default: Shipping Date
   final TextEditingController _searchController = TextEditingController();
+  // final ScrollController _verticalScrollController = ScrollController();
 RealtimeChannel? _channel;
 RealtimeChannel? _assignmentsChannel;
   RealtimeChannel? _requestsChannel;
@@ -136,7 +137,7 @@ void _initRealtimeStreams() {
   // Langkah 1: Fungsi otomatis ketika pertama kali klik "CHECK-IN KEDATANGAN"
   Future<void> _registerCheckInTimestamp(Map<String, dynamic> item,{String? lateReason}) async {
     try {
-      setState(() => _isLoading = true);
+      //setState(() => _isLoading = true);
 
       final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
       final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
@@ -180,18 +181,19 @@ Future<void> _handleCheckIn(Map<String, dynamic> item) async {
     int.parse(startTimeStr.split(":")[0]),
     int.parse(startTimeStr.split(":")[1]),
   );
-
+// 💡 PERUBAHAN DI SINI: Kurangi waktu booking dengan 15 menit
+  DateTime bookingLimitTime = bookingTime.subtract(const Duration(minutes: 15));
   // 3. Cek apakah tanggal stuffing adalah hari ini
   String stuffingDateStr = request['stuffing_date'] ?? "";
   bool isToday = DateFormat('yyyy-MM-dd').format(now) == stuffingDateStr;
 
-  if (!isToday) {
-    _showSnackBar("Check-in hanya bisa dilakukan pada tanggal Stuffing!", Colors.orange);
-    return;
-  }
+  // if (!isToday) {
+  //   _showSnackBar("Check-in hanya bisa dilakukan pada tanggal Stuffing!", Colors.orange);
+  //   return;
+  // }
 
   // 4. Deteksi Terlambat (Jika waktu sekarang > jam booking)
-  if (now.isAfter(bookingTime)) {
+  if (now.isAfter(bookingLimitTime)) {
     _showLateCheckInDialog(item);
   } else {
     // _openCheckInTab(item);
@@ -284,7 +286,7 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text("Anda telah melewati batas jam booking. Silakan masukkan alasan keterlambatan:"),
+          const Text("⚠️ Batas check-in adalah 15 menit sebelum jam booking dimulai. Silakan masukkan alasan keterlambatan:"),
           const SizedBox(height: 10),
           TextField(
             controller: reasonController,

@@ -42,9 +42,11 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
   // AMBIL DATA WAREHOUSE DARI DATABASE UNTUK DROPDOWN
   Future<void> _fetchWarehouses() async {
     try {
+      final List<int> allowedIds = [12, 13, 6, 1];
       final data = await Supabase.instance.client
           .from('warehouse')
           .select('warehouse_id, warehouse_name')
+          .inFilter('warehouse_id', allowedIds)
           .order('warehouse_name', ascending: true);
 
       setState(() {

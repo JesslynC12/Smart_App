@@ -149,13 +149,19 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                     _buildHeader(),
                     const SizedBox(height: 32),
                     _customTextField(
-                      label: 'NIK Vendor (ID 8 Karakter)',
+                      label: 'NIK Vendor',
                       controller: nikController,
-                      hint: 'Masukkan 8 karakter NIK',
+                      hint: 'Masukkan NIK',
                       icon: Icons.badge_outlined,
-                      inputFormatters: [LengthLimitingTextInputFormatter(8)],
-                      validator: (v) =>
-                          v!.length != 8 ? 'NIK harus 8 karakter' : null,
+                     // inputFormatters: [LengthLimitingTextInputFormatter(8)],
+                      // validator: (v) =>
+                      //     v!.length != 8 ? 'NIK harus 8 karakter' : null,
+                      validator: (v) {
+    if (v == null || v.trim().isEmpty) {
+      return 'NIK wajib diisi'; // Hanya memvalidasi jika kosong
+    }
+    return null;
+  },
                     ),
                     _customTextField(
                       label: 'Nama Admin Vendor',

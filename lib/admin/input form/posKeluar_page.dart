@@ -1326,11 +1326,12 @@ Widget _buildTopFilterBar() {
 
 
 Future<void> _selectSingleDate() async {
+  final now = DateTime.now();
   final DateTime? picked = await showDatePicker(
     context: context,
     initialDate: _selectedDate,
-    firstDate: DateTime(2023),
-    lastDate: DateTime(2100),
+    firstDate: DateTime(2025),
+    lastDate: DateTime(now.year + 100),
     locale: const Locale('id', 'ID'),
     builder: (context, child) {
       return Theme(
@@ -1695,6 +1696,36 @@ Future<void> _selectSingleDate() async {
 
     
 // }
+Widget _buildModernCheckbox({
+    required String title,
+    required bool value,
+    required VoidCallback onChanged,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onChanged,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: value ? Colors.green.shade50 : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: value ? Colors.green.shade400 : Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Checkbox(
+              value: value,
+              activeColor: Colors.green.shade700,
+              visualDensity: VisualDensity.compact,
+              onChanged: (_) => onChanged(),
+            ),
+            Text(title, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
 
 Widget _buildPlanningCard(Map<String, dynamic> item,int sid, bool isExpanded) {
   final Map<String, dynamic> request = item['request'] ?? {};
@@ -2217,7 +2248,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
 
         // ===== CHECKBOX SECTION =====
         Container(
@@ -2271,55 +2302,71 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                 children: [
 
                   // SEGEL SMART
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: _isSegelSmart,
-                        activeColor: Colors.green.shade700,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        onChanged: (val) {
-                          setState(() {
-                            _isSegelSmart = val!;
-                          });
-                        },
-                      ),
-                      const Text(
-                        "Segel SMART",
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
+        //           Row(
+        //             mainAxisSize: MainAxisSize.min,
+        //             children: [
+        //               Checkbox(
+        //                 value: _isSegelSmart,
+        //                 activeColor: Colors.green.shade700,
+        //                 shape: RoundedRectangleBorder(
+        //                   borderRadius: BorderRadius.circular(4),
+        //                 ),
+        //                 onChanged: (val) {
+        //                   setState(() {
+        //                     _isSegelSmart = val!;
+        //                   });
+        //                 },
+        //               ),
+        //               const Text(
+        //                 "Segel SMART",
+        //                 style: TextStyle(fontSize: 12),
+        //               ),
+        //             ],
+        //           ),
 
-                  // SEGEL PELAYARAN
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: _isSegelPelayaran,
-                        activeColor: Colors.green.shade700,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        onChanged: (val) {
-                          setState(() {
-                            _isSegelPelayaran = val!;
-                          });
-                        },
-                      ),
-                      const Text(
-                        "Segel Pelayaran",
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+        //           // SEGEL PELAYARAN
+        //           Row(
+        //             mainAxisSize: MainAxisSize.min,
+        //             children: [
+        //               Checkbox(
+        //                 value: _isSegelPelayaran,
+        //                 activeColor: Colors.green.shade700,
+        //                 shape: RoundedRectangleBorder(
+        //                   borderRadius: BorderRadius.circular(4),
+        //                 ),
+        //                 onChanged: (val) {
+        //                   setState(() {
+        //                     _isSegelPelayaran = val!;
+        //                   });
+        //                 },
+        //               ),
+        //               const Text(
+        //                 "Segel Pelayaran",
+        //                 style: TextStyle(fontSize: 12),
+        //               ),
+        //             ],
+        //           ),
+        //         ],
+        //       ),
+        //     ],
+        //   ),
+        // ),  
+        _buildModernCheckbox(
+                      title: "Segel SMART",
+                      value: _isSegelSmart,
+                      onChanged: () => setState(() => _isSegelSmart = !_isSegelSmart),
+                    ),
+                    // IMPLEMENTASI TOMBOL MODERN SEGEL PELAYARAN
+                    _buildModernCheckbox(
+                      title: "Segel Pelayaran",
+                      value: _isSegelPelayaran,
+                      onChanged: () => setState(() => _isSegelPelayaran = !_isSegelPelayaran),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),  
         const SizedBox(height: 24),
 
         // --- TOMBOL ACTION ---

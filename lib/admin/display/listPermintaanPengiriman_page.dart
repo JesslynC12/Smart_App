@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/display/assignVendor_page.dart';
+import 'package:project_app/admin/display/assign_vendor_page.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';

@@ -21,19 +21,55 @@ class _VendorPaginatedPageState extends State<VendorPaginatedPage> {
   final TextEditingController _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _vendors = [];
+  List<Map<String, dynamic>> _masterVendorList = [];
+  List<String> _existingAreas = [];
   bool _isLoading = true;
   String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _initializeAllData();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+Future<void> _initializeAllData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final results = await Future.wait([
+        supabase.from('vendor_transportasi').select('*, master_vendor(nik, vendor_name)').order('id', ascending: true),
+        supabase.from('master_vendor').select('nik, vendor_name').order('vendor_name', ascending: true),
+      ]);
+
+      final ruteData = List<Map<String, dynamic>>.from(results[0]);
+      
+      // Ambil daftar area unik dari data rute yang sudah ada untuk dropdown Area
+      final Set<String> uniqueAreas = {};
+      for (var rute in ruteData) {
+        if (rute['area'] != null && rute['area'].toString().trim().isNotEmpty) {
+          uniqueAreas.add(rute['area'].toString().toUpperCase().trim());
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _vendors = ruteData;
+          _masterVendorList = List<Map<String, dynamic>>.from(results[1]);
+          _existingAreas = uniqueAreas.toList()..sort();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error Initialize: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
 Future<void> _exportVendorToExcel() async {
@@ -53,21 +89,25 @@ Future<void> _exportVendorToExcel() async {
       TextCellValue('ID'), TextCellValue('Vendor Name'), TextCellValue('No Vendor'),
       TextCellValue('ID Rekomendasi'), TextCellValue('ID Standarisasi'), TextCellValue('QCF'),
       TextCellValue('Area'), TextCellValue('City'), TextCellValue('Jenis QCF'),
-      TextCellValue('Type Unit'), TextCellValue('Winner Rank'), TextCellValue('Alokasi (%)'),
-      TextCellValue('Transportation Mode'), TextCellValue('Alokasi Container'), TextCellValue('Cost Type'),
+      TextCellValue('Type Unit'), TextCellValue('Winner Rank'),TextCellValue('Transportation Mode'),  TextCellValue('Alokasi (%)'),
+      TextCellValue('Alokasi Container'), TextCellValue('Cost Type'),
       TextCellValue('Fixed Cost'), TextCellValue('Variable Cost'), TextCellValue('Lokasi Gudang'),
       TextCellValue('Remark'), TextCellValue('Lead Time'), TextCellValue('POD Return'),
-      TextCellValue('Shipment Type'), TextCellValue('Shipping Conditions'), TextCellValue('Special Proc'),
+      TextCellValue('Shipment Type'), TextCellValue('Shipping Conditions'), TextCellValue('Special Proc'),TextCellValue('Part Funct'),
       TextCellValue('Vehicle Type'),
     ];
     sheetObject.appendRow(headers);
 
-    // --- 2. ISI DATA ---
     for (var v in _vendors) {
+        final masterData = v['master_vendor'] as Map<String, dynamic>?;
+        final String vendorName = masterData?['vendor_name'] ?? v['vendor_name'] ?? "-";
+        final String noVendor = masterData?['nik'] ?? v['no_vendor'] ?? "-";
       sheetObject.appendRow([
         TextCellValue(v['id']?.toString() ?? ""),
-        TextCellValue(v['vendor_name'] ?? ""),
-        TextCellValue(v['no_vendor'] ?? ""),
+        TextCellValue(vendorName),
+          TextCellValue(noVendor),
+        //TextCellValue(v['vendor_name'] ?? ""),
+       // TextCellValue(v['no_vendor'] ?? ""),
         TextCellValue(v['id_rekomendasi_winner'] ?? ""),
         TextCellValue(v['id_standarisasi'] ?? ""),
         TextCellValue(v['qcf'] ?? ""),
@@ -76,8 +116,8 @@ Future<void> _exportVendorToExcel() async {
         TextCellValue(v['jenis_qcf'] ?? ""),
         TextCellValue(v['type_unit'] ?? ""),
         IntCellValue(int.tryParse(v['winner_rank']?.toString() ?? "0") ?? 0),
-        DoubleCellValue((v['alokasi_persen'] ?? 0.0) * 100), // Kembalikan ke format 0-100
-        TextCellValue(v['transportation_mode'] ?? ""),
+         TextCellValue(v['transportation_mode'] ?? ""),
+        DoubleCellValue(double.tryParse(v['alokasi_persen']?.toString() ?? "0.0") ?? 0.0),
         TextCellValue(v['alokasi_container'] ?? ""),
         TextCellValue(v['fix_var_cost'] ?? ""),
         DoubleCellValue(double.tryParse(v['fixed_cost']?.toString() ?? "0") ?? 0.0),
@@ -89,18 +129,19 @@ Future<void> _exportVendorToExcel() async {
         TextCellValue(v['shipment_type'] ?? ""),
         TextCellValue(v['shipping_conditions'] ?? ""),
         TextCellValue(v['special_proc_indicator'] ?? ""),
+        TextCellValue(v['part_funct'] ?? ""),
         TextCellValue(v['vehicle_type'] ?? ""),
       ]);
     }
 
     // --- 3. SAVE / DOWNLOAD ---
-    var fileBytes = excel.save();
+    
     String fileName = "Master_Vendor_${DateTime.now().millisecondsSinceEpoch}.xlsx";
-
+var fileBytes = excel.save(fileName: fileName);
     if (kIsWeb) {
       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       final url = html.Url.createObjectUrlFromBlob(content);
-      html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+      //html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
       html.Url.revokeObjectUrl(url);
     } else {
       final directory = await getApplicationDocumentsDirectory();
@@ -135,54 +176,134 @@ Future<void> _importVendorFromExcel() async {
 
     for (int i = 1; i < sheet.maxRows; i++) {
       var row = sheet.rows[i];
-      if (row.isEmpty || row[1] == null) continue; // Skip jika nama vendor kosong
+      // if (row.isEmpty || row[1] == null) continue; // Skip jika nama vendor kosong
 
-      double? alokasiRaw = double.tryParse(row[11]?.value?.toString() ?? "0");
+      // double? alokasiRaw = double.tryParse(row[11]?.value?.toString() ?? "0");
       
-      final Map<String, dynamic> data = {
-        'vendor_name': row[1]?.value?.toString().toUpperCase().trim(),
-        'no_vendor': row[2]?.value?.toString().trim(),
-        'id_rekomendasi_winner': row[3]?.value?.toString().toUpperCase().trim(),
-        'id_standarisasi': row[4]?.value?.toString().toUpperCase().trim(),
-        'qcf': row[5]?.value?.toString().trim(),
-        'area': row[6]?.value?.toString().toUpperCase().trim(),
-        'city': row[7]?.value?.toString().toUpperCase().trim(),
-        'jenis_qcf': row[8]?.value?.toString().trim(),
-        'type_unit': row[9]?.value?.toString().trim(),
-        'winner_rank': int.tryParse(row[10]?.value?.toString() ?? ""),
-        'alokasi_persen': alokasiRaw != null ? alokasiRaw / 100 : 0, // Konversi balik ke desimal
-        'transportation_mode': row[12]?.value?.toString().trim(),
-        'alokasi_container': row[13]?.value?.toString().trim(),
-        'fix_var_cost': row[14]?.value?.toString().trim(),
-        'fixed_cost': double.tryParse(row[15]?.value?.toString() ?? "0"),
-        'variable_cost': double.tryParse(row[16]?.value?.toString() ?? "0"),
-        'lokasi_gudang': row[17]?.value?.toString().trim(),
-        'remark': row[18]?.value?.toString().trim(),
-        'lead_time': int.tryParse(row[19]?.value?.toString() ?? ""),
-        'pod_return': row[20]?.value?.toString().trim(),
-        'shipment_type': row[21]?.value?.toString().trim(),
-        'shipping_conditions': row[22]?.value?.toString().trim(),
-        'special_proc_indicator': row[23]?.value?.toString().trim(),
-        'vehicle_type': row[24]?.value?.toString().trim(),
-      };
+      // final Map<String, dynamic> data = {
+      //   'vendor_name': row[1]?.value?.toString().toUpperCase().trim(),
+      //   'nik': row[2]?.value?.toString().trim(),
+      //   'id_rekomendasi_winner': row[3]?.value?.toString().toUpperCase().trim(),
+      //   'id_standarisasi': row[4]?.value?.toString().toUpperCase().trim(),
+      //   'qcf': row[5]?.value?.toString().trim(),
+      //   'area': row[6]?.value?.toString().toUpperCase().trim(),
+      //   'city': row[7]?.value?.toString().toUpperCase().trim(),
+      //   'jenis_qcf': row[8]?.value?.toString().trim(),
+      //   'type_unit': row[9]?.value?.toString().trim(),
+      //   'winner_rank': int.tryParse(row[10]?.value?.toString() ?? ""),
+      //   'alokasi_persen': alokasiRaw != null ? alokasiRaw / 100 : 0, // Konversi balik ke desimal
+      //   'transportation_mode': row[12]?.value?.toString().trim(),
+      //   'alokasi_container': row[13]?.value?.toString().trim(),
+      //   'fix_var_cost': row[14]?.value?.toString().trim(),
+      //   'fixed_cost': double.tryParse(row[15]?.value?.toString() ?? "0"),
+      //   'variable_cost': double.tryParse(row[16]?.value?.toString() ?? "0"),
+      //   'lokasi_gudang': row[17]?.value?.toString().trim(),
+      //   'remark': row[18]?.value?.toString().trim(),
+      //   'lead_time': int.tryParse(row[19]?.value?.toString() ?? ""),
+      //   'pod_return': row[20]?.value?.toString().trim(),
+      //   'shipment_type': row[21]?.value?.toString().trim(),
+      //   'shipping_conditions': row[22]?.value?.toString().trim(),
+      //   'special_proc_indicator': row[23]?.value?.toString().trim(),
+      //   'vehicle_type': row[24]?.value?.toString().trim(),
+      // };
+    if (row.isEmpty || row.length < 25) continue;
+        
+        // Skip jika NIK / No Vendor (Kolom 21 -> indeks 20) kosong karena mandatory foreign key
+        if (row[20]?.value == null) continue;
 
-      final idValue = int.tryParse(row[0]?.value.toString() ?? "");
-      if (idValue != null) data['id'] = idValue;
+        // --- HELPER PARSER LOKAL ---
+        int? parseInt(dynamic value) => value == null ? null : int.tryParse(value.toString().trim());
+        double? parseDouble(dynamic value) => value == null ? null : double.tryParse(value.toString().trim());
+
+        // LOGIKA AUTO-CONVERT PERSEN KE DESIMAL
+        double? parsePercentage(dynamic value) {
+          if (value == null) return null;
+          String cleanValue = value.toString().trim();
+          if (cleanValue.isEmpty) return null;
+
+          if (cleanValue.contains('%')) {
+            cleanValue = cleanValue.replaceAll('%', '').trim();
+            double? number = double.tryParse(cleanValue);
+            return number != null ? number / 100 : null;
+          }
+
+          double? directNumber = double.tryParse(cleanValue);
+          if (directNumber != null) {
+            if (directNumber > 1) return directNumber / 100;
+            return directNumber; 
+          }
+          return null;
+        }
+
+        // --- MAPPING 25 KOLOM SESUAI URUTAN PERMINTAAN ---
+        final Map<String, dynamic> data = {
+          // Kolom 1 - 6 (Indeks 0 - 5)
+          'id_rekomendasi_winner': row[0]?.value?.toString().toUpperCase().trim(),
+          'id_standarisasi': row[1]?.value?.toString().toUpperCase().trim(),
+          'qcf': row[2]?.value?.toString().trim(),
+          'area': row[3]?.value?.toString().toUpperCase().trim(),
+          'city': row[4]?.value?.toString().toUpperCase().trim(),
+          'jenis_qcf': row[5]?.value?.toString().trim(),
+
+          // Kolom 7 - 12 (Indeks 6 - 11)
+          'type_unit': row[6]?.value?.toString().trim(),
+          'winner_rank': parseInt(row[7]?.value),
+          'vendor_name': row[8]?.value?.toString().toUpperCase().trim(),
+          'transportation_mode': row[9]?.value?.toString().toUpperCase().trim(),
+          'alokasi_persen': parsePercentage(row[10]?.value), // Otomatis jadi desimal (contoh: 0.7)
+          'alokasi_container': row[11]?.value?.toString().toUpperCase().trim(),
+
+          // Kolom 13 - 16 (Indeks 12 - 15)
+          'fix_var_cost': row[12]?.value?.toString().toUpperCase().trim(), // Cost Type
+          'fixed_cost': parseDouble(row[13]?.value),
+          'variable_cost': parseDouble(row[14]?.value),
+          'lokasi_gudang': row[15]?.value?.toString().toUpperCase().trim(),
+
+          // Kolom 17 - 22 (Indeks 16 - 21)
+          'remark': row[16]?.value?.toString().toUpperCase().trim(),
+          'lead_time': parseInt(row[17]?.value),
+          'pod_return': row[18]?.value?.toString().trim(), 
+          'shipment_type': row[19]?.value?.toString().trim(),
+          'nik': row[20]?.value?.toString().trim(), // No Vendor / NIK masuk ke field 'nik'
+          'shipping_conditions': row[21]?.value?.toString().trim(),
+
+          // Kolom 23 - 25 (Indeks 22 - 24)
+          'special_proc_indicator': row[22]?.value?.toString().toUpperCase().trim(),
+          'part_funct': row[23]?.value?.toString().trim(),
+          'vehicle_type': row[24]?.value?.toString().trim(),
+        };
+      // final idValue = int.tryParse(row[0]?.value.toString() ?? "");
+      // if (idValue != null) data['id'] = idValue;
 
       importData.add(data);
     }
 
     if (importData.isNotEmpty) {
       await supabase.from('vendor_transportasi').upsert(importData);
-      _fetchData();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Berhasil import ${importData.length} vendor"), backgroundColor: Colors.green));
+      _initializeAllData();
+     if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Berhasil mengimport ${importData.length} data vendor"), backgroundColor: Colors.green),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Tidak ada data valid yang ditemukan di file Excel"), backgroundColor: Colors.orange),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error Import: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal mengimport data: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error Import: $e"), backgroundColor: Colors.red));
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
 
 Widget _buildActionButton({required IconData icon, required Color color, required String tooltip, required VoidCallback onPressed}) {
   return Container(
@@ -200,17 +321,23 @@ Widget _buildActionButton({required IconData icon, required Color color, require
   );
 }
 
-  // --- FETCH DATA ---
   Future<void> _fetchData() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    //setState(() => _isLoading = true);
 
     try {
-      var query = supabase.from('vendor_transportasi').select();
+      var query = supabase.from('vendor_transportasi').select('*, master_vendor(nik, vendor_name)');
 
       if (_searchQuery.isNotEmpty) {
         // Pencarian berdasarkan Nama Vendor atau No Vendor
-        query = query.or('vendor_name.ilike.%$_searchQuery%,no_vendor.ilike.%$_searchQuery%');
+        query = query.or(
+         'city.ilike.%$_searchQuery%,'
+          'area.ilike.%$_searchQuery%,'
+          'nik.ilike.%$_searchQuery%,'
+          'id_rekomendasi_winner.ilike.%$_searchQuery%,'
+          'id_standarisasi.ilike.%$_searchQuery%,'
+          'master_vendor.vendor_name.ilike.%$_searchQuery%'
+        );
       }
 
       final data = await query.order('id', ascending: true);
@@ -222,11 +349,57 @@ Widget _buildActionButton({required IconData icon, required Color color, require
         });
       }
     } catch (e) {
-      debugPrint("Error Fetch: $e");
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint("Mencoba fallback search query...");
+      _fetchDataFallback();
     }
   }
+Future<void> _fetchDataFallback() async {
+    try {
+      // Ambil data dasar rute
+      var query = supabase.from('vendor_transportasi').select('*, master_vendor(nik, vendor_name)');
+      
+      // Filter kolom lokal rute (City, Area, NIK)
+      if (_searchQuery.isNotEmpty) {
+        query = query.or('city.ilike.%$_searchQuery%, area.ilike.%$_searchQuery%, nik.ilike.%$_searchQuery%');
+      }
+      
+      final data = await query.order('id', ascending: true);
+      List<Map<String, dynamic>> temporaryList = List<Map<String, dynamic>>.from(data);
 
+      // Jika hasil pencarian lokal kosong, kita cari berdasarkan Nama Vendor secara manual di memori (Client-side filtering)
+      // Cara ini 100% aman dari error database dan sangat cepat jika data di bawah 3000 baris.
+      if (_searchQuery.isNotEmpty) {
+        final dataFull = await supabase.from('vendor_transportasi').select('*, master_vendor(nik, vendor_name)').order('id', ascending: true);
+        final allData = List<Map<String, dynamic>>.from(dataFull);
+        
+        temporaryList = allData.where((v) {
+          final master = v['master_vendor'] as Map<String, dynamic>?;
+          final String vName = master?['vendor_name']?.toString().toLowerCase() ?? '';
+          final String city = v['city']?.toString().toLowerCase() ?? '';
+          final String area = v['area']?.toString().toLowerCase() ?? '';
+          final String nik = v['nik']?.toString().toLowerCase() ?? '';
+          final String idRekom = v['id_rekomendasi_winner']?.toString().toLowerCase() ?? '';
+          final String idStandar = v['id_standarisasi']?.toString().toLowerCase() ?? '';
+          final String q = _searchQuery.toLowerCase();
+          
+          return vName.contains(q) || city.contains(q) || area.contains(q) || nik.contains(q) || idRekom.contains(q) || idStandar.contains(q);
+        }).toList();
+      }
+
+      if (mounted) {
+        setState(() {
+          _vendors = temporaryList;
+          _isLoading = false;
+        });
+      }
+    } catch (err) {
+      debugPrint("Error Fallback Fetch: $err");
+      if (mounted) {
+        //setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal memuat data: $err"), backgroundColor: Colors.red));
+      }
+    }
+  }
   // --- DELETE DATA ---
   Future<void> _deleteVendor(int id) async {
     try {
@@ -260,7 +433,7 @@ Widget _buildActionButton({required IconData icon, required Color color, require
           ),
         );
       }
-      _fetchData();
+      _initializeAllData();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -465,7 +638,45 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     );
   }
 
-  // --- FORM DIALOG (Updated) ---
+  Widget _buildComboboxAreaField(TextEditingController ctrl, String label, List<String> options) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Autocomplete<String>(
+        optionsBuilder: (TextEditingValue textEditingValue) {
+          // Menampilkan semua pilihan jika kosong, jika diisi filter sesuai text
+          if (textEditingValue.text.isEmpty) return options;
+          return options.where((String option) => option.contains(textEditingValue.text.toUpperCase()));
+        },
+        onSelected: (String selection) {
+          ctrl.text = selection.toUpperCase();
+        },
+        fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+          // Sinkronisasi textController autocomplete dengan controller utama dialog
+          if (textController.text != ctrl.text) {
+            textController.text = ctrl.text;
+          }
+          textController.addListener(() {
+            ctrl.text = textController.text.toUpperCase();
+          });
+
+          return TextField(
+            controller: textController,
+            focusNode: focusNode,
+            decoration: InputDecoration(
+              labelText: label,
+              border: const OutlineInputBorder(),
+              isDense: true,
+              suffixIcon: const Icon(Icons.arrow_drop_down),
+            ),
+            onChanged: (val) {
+              ctrl.text = val.toUpperCase();
+            },
+          );
+        },
+      ),
+    );
+  }
+
  void _showFormDialog([Map<String, dynamic>? vendor]) {
     final bool isEdit = vendor != null;
 
@@ -474,8 +685,8 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     final idStandarController = TextEditingController(text: vendor?['id_standarisasi'] ?? '');
     final qcfController = TextEditingController(text: vendor?['qcf'] ?? '');
     final cityController = TextEditingController(text: vendor?['city'] ?? '');
-    final nameController = TextEditingController(text: vendor?['vendor_name'] ?? '');
-    final noVendorController = TextEditingController(text: vendor?['no_vendor'] ?? '');
+    // final nameController = TextEditingController(text: vendor?['vendor_name'] ?? '');
+    // final noVendorController = TextEditingController(text: vendor?['no_vendor'] ?? '');
     final transModeController = TextEditingController(text: vendor?['transportation_mode'] ?? '');
     final alokasiContainerController = TextEditingController(text: vendor?['alokasi_container'] ?? '');
     final fixedCostController = TextEditingController(text: vendor?['fixed_cost']?.toString() ?? '');
@@ -490,7 +701,7 @@ Widget _buildActionButton({required IconData icon, required Color color, require
 );
     final specialProcController = TextEditingController(text: vendor?['special_proc_indicator'] ?? '');
     
-    // Dropdown States
+   String? selectedNik = vendor?['nik'] ?? vendor?['master_vendor']?['nik'];
     String? selFixVar = vendor?['fix_var_cost'];
     String? selJenisQcf = vendor?['jenis_qcf'];
     String? selTypeUnit = vendor?['type_unit'];
@@ -515,99 +726,191 @@ Widget _buildActionButton({required IconData icon, required Color color, require
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // --- SECTION 1: IDENTITAS VENDOR ---
-                  _buildEditableDropdown(nameController, 'Vendor Name *', 
-                    ['BKE', 'BLI', 'BP', 'BWI', 'DEJAVU', 'DUNEX', 'GRAHA TRANS', 'IRON BIRD', 'JPM', 'KAMADJAJA', 'KARURA', 'KS', 'MIF', 'MK', 'PAJ', 'PELANGI', 'SAMPLE', 'SILKARGO', 'TPIL']),
                   
-                  Row(
-                    children: [
-                      Expanded(child: _buildField(noVendorController, 'No Vendor *', isNum: true)),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildField(idRekomController, 'ID Rekomendasi Winner *')),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Expanded(child: _buildField(idStandarController, 'ID Standarisasi *')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildField(qcfController, 'QCF *', isNum: true)),
-                    ],
-                  ),
-
-                  // --- SECTION 2: LOKASI & AREA ---
-                  _buildEditableDropdown(areaController, 'Area *', 
-                    ['BALI', 'BANTEN', 'GORONTALO', 'JABODETABEK', 'JAWA BARAT', 'JAWA TENGAH', 'JAWA TIMUR', 'KALIMANTAN BARAT', 'KALIMANTAN SELATAN', 'KALIMANTAN TENGAH', 'KALIMANTAN TIMUR', 'KALIMANTAN UTARA', 'KEPULAUAN RIAU', 'LAMPUNG', 'MALUKU', 'MALUKU UTARA', 'NTB', 'NTT', 'P. BANGKA & BELITUNG', 'PAPUA', 'PAPUA BARAT', 'RIAU', 'SULAWESI SELATAN', 'SULAWESI TENGGARA', 'SULAWESI TENGAH', 'SULAWESI UTARA', 'SUMATERA BARAT', 'SUMATERA SELATAN', 'SUMATERA UTARA']),
+    //               _buildEditableDropdown(nameController, 'Vendor Name *', 
+    //                 ['BKE', 'BLI', 'BP', 'BWI', 'DEJAVU', 'DUNEX', 'GRAHA TRANS', 'IRON BIRD', 'JPM', 'KAMADJAJA', 'KARURA', 'KS', 'MIF', 'MK', 'PAJ', 'PELANGI', 'SAMPLE', 'SILKARGO', 'TPIL']),
                   
-                  Row(
-                    children: [
-                      Expanded(child: _buildField(cityController, 'City *')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Lokasi Gudang', selGudang, ['RUNGKUT', 'TAMBAK LANGON'], (v) => setDialogState(() => selGudang = v))),
-                    ],
-                  ),
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildField(noVendorController, 'No Vendor *', isNum: true)),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildField(idRekomController, 'ID Rekomendasi Winner *')),
+    //                 ],
+    //               ),
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildField(idStandarController, 'ID Standarisasi *')),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildField(qcfController, 'QCF *', isNum: true)),
+    //                 ],
+    //               ),
 
-                  // --- SECTION 3: KLASIFIKASI & UNIT ---
-                  Row(
-                    children: [
-                      Expanded(child: _buildDropdownField('Jenis QCF *', selJenisQcf, ['AP', 'DP', 'STO', 'DEDICATED'], (v) => setDialogState(() => selJenisQcf = v))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Type Unit *', selTypeUnit, ['CDD', 'CDE', 'CONT', 'CONT (KA)', 'FUSO', 'WB', 'SAMPLE'], (v) => setDialogState(() => selTypeUnit = v))),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Expanded(child: _buildDropdownField('Vehicle Type', selVehicType, ['CDD', 'CDE', 'FUS', 'WBX', 'BL042', 'BL033'], (v) => setDialogState(() => selVehicType = v))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Winner Rank *', selRank, ['1','2','3','4','5','6','7','8','9'], (v) => setDialogState(() => selRank = v))),
-                    ],
-                  ),
+    //               // --- SECTION 2: LOKASI & AREA ---
+    //               _buildEditableDropdown(areaController, 'Area *', 
+    //                 ['BALI', 'BANTEN', 'GORONTALO', 'JABODETABEK', 'JAWA BARAT', 'JAWA TENGAH', 'JAWA TIMUR', 'KALIMANTAN BARAT', 'KALIMANTAN SELATAN', 'KALIMANTAN TENGAH', 'KALIMANTAN TIMUR', 'KALIMANTAN UTARA', 'KEPULAUAN RIAU', 'LAMPUNG', 'MALUKU', 'MALUKU UTARA', 'NTB', 'NTT', 'P. BANGKA & BELITUNG', 'PAPUA', 'PAPUA BARAT', 'RIAU', 'SULAWESI SELATAN', 'SULAWESI TENGGARA', 'SULAWESI TENGAH', 'SULAWESI UTARA', 'SUMATERA BARAT', 'SUMATERA SELATAN', 'SUMATERA UTARA']),
+                  
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildField(cityController, 'City *')),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildDropdownField('Lokasi Gudang', selGudang, ['RUNGKUT', 'TAMBAK LANGON'], (v) => setDialogState(() => selGudang = v))),
+    //                 ],
+    //               ),
 
-                  // --- SECTION 4: OPERASIONAL & LOGISTIK ---
-                  Row(
-                    children: [
-                      Expanded(child: _buildField(transModeController, 'Transportation Mode')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildField(alokasiContainerController, 'Alokasi Container')),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      SizedBox(
-      width: 120, // Mengatur agar field lebih pendek
-      child: _buildField(
-        alokasiPersenController, 
-        'Alokasi', 
-        isDecimal: true,
-      ),
-    ),
-                      //Expanded(child: _buildField(alokasiPersenController, 'Alokasi %', isDecimal: true)),
-                      const SizedBox(width: 8),
-                      const Text(
-      "%", 
-      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-    ),
+    //               // --- SECTION 3: KLASIFIKASI & UNIT ---
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildDropdownField('Jenis QCF *', selJenisQcf, ['AP', 'DP', 'STO', 'DEDICATED'], (v) => setDialogState(() => selJenisQcf = v))),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildDropdownField('Type Unit *', selTypeUnit, ['CDD', 'CDE', 'CONT', 'CONT (KA)', 'FUSO', 'WB', 'SAMPLE'], (v) => setDialogState(() => selTypeUnit = v))),
+    //                 ],
+    //               ),
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildDropdownField('Vehicle Type', selVehicType, ['CDD', 'CDE', 'FUS', 'WBX', 'BL042', 'BL033'], (v) => setDialogState(() => selVehicType = v))),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildDropdownField('Winner Rank *', selRank, ['1','2','3','4','5','6','7','8','9'], (v) => setDialogState(() => selRank = v))),
+    //                 ],
+    //               ),
+
+    //               // --- SECTION 4: OPERASIONAL & LOGISTIK ---
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildField(transModeController, 'Transportation Mode')),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildField(alokasiContainerController, 'Alokasi Container')),
+    //                 ],
+    //               ),
+    //               Row(
+    //                 children: [
+    //                   SizedBox(
+    //   width: 120, // Mengatur agar field lebih pendek
+    //   child: _buildField(
+    //     alokasiPersenController, 
+    //     'Alokasi', 
+    //     isDecimal: true,
+    //   ),
+    // ),
+    //                   //Expanded(child: _buildField(alokasiPersenController, 'Alokasi %', isDecimal: true)),
+    //                   const SizedBox(width: 8),
+    //                   const Text(
+    //   "%", 
+    //   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    // ),
     
-    const SizedBox(width: 25), // Jarak antara grup Alokasi dengan field Lead Time
-                      Expanded(child: _buildField(leadTimeController, 'Lead Time (Hari)', isNum: true)),
+    // const SizedBox(width: 25), // Jarak antara grup Alokasi dengan field Lead Time
+    //                   Expanded(child: _buildField(leadTimeController, 'Lead Time (Hari)', isNum: true)),
+    //                 ],
+    //               ),
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildField(podReturnController, 'POD Return (Angka)', isNum: true)),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildDropdownField('Shipment Type', selShipType, ['ZBR2', 'ZBR3'], (v) => setDialogState(() => selShipType = v))),
+    //                 ],
+    //               ),
+    //               Row(
+    //                 children: [
+    //                   Expanded(child: _buildDropdownField('Shipping Condition', selShipCond, ['Y4', 'Y5'], (v) => setDialogState(() => selShipCond = v))),
+    //                   const SizedBox(width: 10),
+    //                   Expanded(child: _buildDropdownField('Part Funct', selPartFunct, ['ZE'], (v) => setDialogState(() => selPartFunct = v))),
+    //                 ],
+    //               ),
+
+    //               // --- SECTION 5: COSTING & REMARK ---
+    //               _buildField(specialProcController, 'Special Proc Indicator', isNum: true),
+    Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: DropdownButtonFormField<String>(
+                      value: _masterVendorList.any((v) => v['nik'] == selectedNik) ? selectedNik : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Pilih Vendor (NIK - Nama Vendor) *',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: _masterVendorList.map((v) {
+                        return DropdownMenuItem<String>(
+                          value: v['nik'].toString(),
+                          child: Text("${v['nik']} - ${v['vendor_name']}"),
+                        );
+                      }).toList(),
+                      onChanged: isEdit ? null : (val) { // Lock jika mode edit
+                        setDialogState(() {
+                          selectedNik = val;
+                        });
+                      },
+                    ),
+                  ),
+
+                  Row(
+                    children: [
+                      Expanded(child: _buildField(idRekomController, 'ID Rekomendasi Winner *')),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildField(idStandarController, 'ID Standarisasi *')),
                     ],
                   ),
                   Row(
                     children: [
-                      Expanded(child: _buildField(podReturnController, 'POD Return (Angka)', isNum: true)),
+                      Expanded(child: _buildField(qcfController, 'QCF *', isNum: true)),
                       const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Shipment Type', selShipType, ['ZBR2', 'ZBR3'], (v) => setDialogState(() => selShipType = v))),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Expanded(child: _buildDropdownField('Shipping Condition', selShipCond, ['Y4', 'Y5'], (v) => setDialogState(() => selShipCond = v))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildDropdownField('Part Funct', selPartFunct, ['ZE'], (v) => setDialogState(() => selPartFunct = v))),
+                      Expanded(child: _buildField(cityController, 'City *')),
                     ],
                   ),
 
-                  // --- SECTION 5: COSTING & REMARK ---
-                  _buildField(specialProcController, 'Special Proc Indicator', isNum: true),
+                  // --- 🔥 MODIFIKASI UTAMA: COMBOBOX AREA (Bisa Pilih & Ketik) ---
+                  _buildComboboxAreaField(areaController, 'Area *', _existingAreas),
+
+                  Row(
+                    children: [
+                      Expanded(child: _buildDropdownField('Lokasi Gudang', selGudang, ['RUNGKUT', 'TAMBAK LANGON'], (v) => setDialogState(() => selGudang = v))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildDropdownField('Jenis QCF *', selJenisQcf, ['AP', 'DP', 'STO', 'DEDICATED'], (v) => setDialogState(() => selJenisQcf = v))),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDropdownField('Type Unit *', selTypeUnit, ['CDD', 'CDE', 'CONT', 'CONT (KA)', 'FUSO', 'WB', 'SAMPLE'], (v) => setDialogState(() => selTypeUnit = v))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildDropdownField('Vehicle Type', selVehicType, ['CDD', 'CDE', 'FUS', 'WBX', 'BL042', 'BL033'], (v) => setDialogState(() => selVehicType = v))),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDropdownField('Winner Rank *', selRank, ['1','2','3','4','5','6','7','8','9'], (v) => setDialogState(() => selRank = v))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildField(transModeController, 'Transportation Mode')),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(child: _buildField(alokasiContainerController, 'Alokasi Container')),
+                      const SizedBox(width: 10),
+                      SizedBox(width: 120, child: _buildField(alokasiPersenController, 'Alokasi', isDecimal: true)),
+                      const SizedBox(width: 8),
+                      const Text("%", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(child: _buildField(leadTimeController, 'Lead Time (Hari)', isNum: true)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildField(podReturnController, 'POD Return (Angka)', isNum: true)),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDropdownField('Shipment Type', selShipType, ['ZBR2', 'ZBR3'], (v) => setDialogState(() => selShipType = v))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildDropdownField('Shipping Condition', selShipCond, ['Y4', 'Y5'], (v) => setDialogState(() => selShipCond = v))),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDropdownField('Part Funct', selPartFunct, ['ZE'], (v) => setDialogState(() => selPartFunct = v))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildField(specialProcController, 'Special Proc Indicator', isNum: true)),
+                    ],
+                  ),
                   Row(
                     children: [
                       Expanded(child: _buildDropdownField('Cost Type', selFixVar, ['FIX', 'VAR'], (v) => setDialogState(() => selFixVar = v))),
@@ -631,9 +934,12 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     foregroundColor: Colors.white,
   ),
   onPressed: () {
-    // 1. Validasi Kolom Wajib (*)
-    if (nameController.text.trim().isEmpty ||
-        noVendorController.text.trim().isEmpty ||
+   final selectedVendorMap = _masterVendorList.firstWhere((v) => v['nik'] == selectedNik, orElse: () => {});
+  final String currentVendorName = selectedVendorMap['vendor_name'] ?? '';
+
+    // if (nameController.text.trim().isEmpty ||
+    //     noVendorController.text.trim().isEmpty ||
+    if (selectedNik == null ||
         idRekomController.text.trim().isEmpty ||
         idStandarController.text.trim().isEmpty ||
         qcfController.text.trim().isEmpty ||
@@ -663,6 +969,8 @@ Widget _buildActionButton({required IconData icon, required Color color, require
                 // B. Konversi ke desimal (90 -> 0.9)
                 double? alokasiDesimal = alokasiInput != null ? alokasiInput / 100 : null;
                 final Map<String, dynamic> payload = {
+                  'nik': selectedNik, 
+                  'vendor_name': currentVendorName.toUpperCase(),
                   'id_rekomendasi_winner': idRekomController.text.toUpperCase(),
                   'id_standarisasi': idStandarController.text.toUpperCase(),
                   'qcf': qcfController.text, // Tetap angka
@@ -671,7 +979,7 @@ Widget _buildActionButton({required IconData icon, required Color color, require
                   'jenis_qcf': selJenisQcf,
                   'type_unit': selTypeUnit,
                   'winner_rank': int.tryParse(selRank ?? ''),
-                  'vendor_name': nameController.text.toUpperCase(),
+                  //'vendor_name': nameController.text.toUpperCase(),
                   'transportation_mode': transModeController.text.toUpperCase(),
                   //'alokasi_persen': double.tryParse(alokasiPersenController.text),
                   'alokasi_persen': alokasiDesimal,
@@ -684,7 +992,7 @@ Widget _buildActionButton({required IconData icon, required Color color, require
                   'lead_time': int.tryParse(leadTimeController.text),
                   'pod_return': podReturnController.text, 
                   'shipment_type': selShipType,
-                  'no_vendor': noVendorController.text, // Tetap angka
+                  //'no_vendor': noVendorController.text, // Tetap angka
                   'shipping_conditions': selShipCond,
                   'special_proc_indicator': specialProcController.text.toUpperCase(),
                   'part_funct': selPartFunct,
@@ -818,7 +1126,7 @@ Row(
       child: TextField(
         controller: _searchController,
         decoration: InputDecoration(
-          labelText: "Cari Nama atau No Vendor...",
+          labelText: "Cari Nama, No Vendor, Kota, atau Area...",
           prefixIcon: const Icon(Icons.search),
           suffixIcon: _searchController.text.isNotEmpty
         ? IconButton(
@@ -865,12 +1173,13 @@ Row(
                     width: double.infinity,
                     child: PaginatedDataTable(
                       rowsPerPage: 10,
-                      columnSpacing: 15,
+                      columnSpacing: 20,
                       columns: const [
                         DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('No Vendor', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('Nama', style: TextStyle(fontWeight: FontWeight.bold))),
-                        
+                        DataColumn(label: Text('ID Rekomendasi', style: TextStyle(fontWeight: FontWeight.bold))),
+    DataColumn(label: Text('ID Standarisasi', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('QCF', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('Area', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('City', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -915,10 +1224,16 @@ class VendorDataSource extends DataTableSource {
     if (index >= data.length) return null;
     final v = data[index];
 
+final masterVendor = v['master_vendor'] as Map<String, dynamic>?;
+    final String displayNoVendor = masterVendor?['nik'] ?? v['no_vendor'] ?? v['nik'] ?? '-';
+    final String displayVendorName = masterVendor?['vendor_name'] ?? v['vendor_name'] ?? '-';
+
     return DataRow(cells: [
       DataCell(Text(v['id'].toString())),
-      DataCell(Text(v['no_vendor'] ?? '-')),
-      DataCell(Text(v['vendor_name'] ?? '-')),
+      DataCell(Text(displayNoVendor)), 
+      DataCell(Text(displayVendorName)),
+     DataCell(Text(v['id_rekomendasi_winner'] ?? '-')),
+      DataCell(Text(v['id_standarisasi'] ?? '-')),
       DataCell(Text(v['qcf'] ?? '-')),
       DataCell(Text(v['area'] ?? '-')),
       DataCell(Text(v['city'] ?? '-')),

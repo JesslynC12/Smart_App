@@ -317,6 +317,7 @@ static Future<User?> login(String identifier, String password) async {
 
     // 1. Cek jika input user bukan email (asumsi itu adalah NIK atau NIK Vendor)
     if (!identifier.contains('@')) {
+      // Validasi apakah Email terdaftar di database tabel profiles
       final response = await _supabase
           .from('profiles')
           .select('email')
@@ -326,7 +327,7 @@ static Future<User?> login(String identifier, String password) async {
       final List<dynamic> findUserList = response ?? [];
 
       if (findUserList.isEmpty) {
-        throw Exception('NIK tidak terdaftar.');
+        throw Exception('Akun belum terdaftar. Silakan melakukan registrasi.');
       }
 
       // Jika ditemukan lebih dari 1 akun (Biasanya pada NIK Vendor)
@@ -337,7 +338,19 @@ static Future<User?> login(String identifier, String password) async {
       // Ambil email dari satu-satunya baris yang ditemukan
       emailForAuth = findUserList[0]['email'];
     }
+else {
+      // Lakukan pengecekan manual apakah Email ini sudah terdaftar di tabel profiles
+      final checkEmail = await _supabase
+          .from('profiles')
+          .select('email')
+          .eq('email', emailForAuth)
+          .maybeSingle();
 
+      // Jika email tidak ditemukan di tabel profiles, langsung potong jalurnya di sini
+      if (checkEmail == null) {
+        throw Exception('Akun belum terdaftar. Silakan melakukan registrasi.');
+      }
+    }
     // 2. Proses Sign In ke Supabase Auth
     final authResponse = await _supabase.auth.signInWithPassword(
       email: emailForAuth,
@@ -366,12 +379,19 @@ static Future<User?> login(String identifier, String password) async {
     return null;
   } on AuthException catch (e) {
     String message = e.message;
-    if (message.contains("Invalid login credentials")|| message.contains("Email not confirmed")){
-      message = "Email/Password salah atau email Anda belum terverifikasi.";
-    }
+    // if (message.contains("Invalid login credentials")|| message.contains("Email not confirmed")){
+    //   message = "Email/Password salah atau email Anda belum terverifikasi.";
+    // }
+      if (message.contains("Invalid login credentials")) {
+        message = "Email atau Password yang Anda masukkan salah.";
+      } else if (message.contains("Email not confirmed")) {
+        message = "Email Anda belum terverifikasi. Silakan cek inbox email Anda.";
+      }
     throw Exception(message);
   } catch (e) {
-    throw Exception('Terjadi kesalahan: $e');
+    // throw Exception('Terjadi kesalahan: $e');
+    final errorMsg = e.toString().replaceAll('Exception: ', '');
+    throw Exception(errorMsg);
   }
 }
 
