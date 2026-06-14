@@ -20,13 +20,11 @@ class _VendorRequestPageState extends State<VendorRequestPage> {
   bool _isLoading = false;
   List<Map<String, dynamic>> _dataList = [];
 
-  // 3. Inisialisasi Plugin Notifikasi
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // Filter States
   String _selectedFilterLoc = "SEMUA";
   DateTimeRange? _selectedDateRange;
-String _dateFilterType = "STUFFING"; // Default filter ke RDD
+String _dateFilterType = "STUFFING"; 
 List<Map<String, dynamic>> _warehouseList = [];
 
   @override
@@ -53,7 +51,6 @@ Future<void> _fetchWarehouse() async {
     debugPrint("Error Fetch Warehouse: $e");
   }
 }
-// 4. Fungsi Inisialisasi Notifikasi
   void _initNotification() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -62,7 +59,6 @@ Future<void> _fetchWarehouse() async {
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  // 5. Fungsi Menampilkan Notifikasi Pop-up
   Future<void> _showRejectNotification(String vendorName, int shipId) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
@@ -76,7 +72,7 @@ Future<void> _fetchWarehouse() async {
         NotificationDetails(android: androidPlatformChannelSpecifics);
 
     await flutterLocalNotificationsPlugin.show(
-      shipId, // Menggunakan ID Shipping sebagai ID notifikasi
+      shipId, 
       '🚨 Order Ditolak Vendor!',
       'Vendor $vendorName menolak pesanan #$shipId. Segera cari vendor lain!',
       platformChannelSpecifics,
@@ -84,25 +80,22 @@ Future<void> _fetchWarehouse() async {
   }
 
   void _setupRealtime() {
-    // Kita memantau perubahan pada tabel shipping_request
-    // Karena halaman ini memfilter status 'waiting vendor delivery request'
+   
     _realtimeSubscription = supabase
         .from('shipping_request')
         .stream(primaryKey: ['shipping_id'])
         .listen((_) => _fetchVendorTargetData());
-          // 6. Listener Realtime KHUSUS untuk Notifikasi Reject
-    // Kita memantau tabel shipping_assignments untuk mendeteksi perubahan status ke 'rejected'
+       
     _assignmentSubscription = supabase
         .from('shipping_assignments')
-        .stream(primaryKey: ['id']) // Pastikan ada PK 'id' di tabel assignments
+        .stream(primaryKey: ['id']) 
         .listen((List<Map<String, dynamic>> data) {
       if (data.isNotEmpty) {
         final lastUpdate = data.last;
         if (lastUpdate['status_assignment'] == 'rejected') {
-          // Ambil nama vendor atau ID untuk notifikasi
-          // Catatan: Anda mungkin perlu query tambahan untuk nama vendor jika tidak ada di payload
+         
           _showRejectNotification(
-            "Transportasi", // Default name jika tidak ada di payload
+            "Transportasi", 
             lastUpdate['shipping_id'] ?? 0,
           );
         }
@@ -112,7 +105,7 @@ Future<void> _fetchWarehouse() async {
 
   @override
   void dispose() {
-    _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat pindah halaman
+    _realtimeSubscription?.cancel();
     _assignmentSubscription?.cancel();
     super.dispose();
   }
@@ -140,10 +133,7 @@ Future<void> _fetchWarehouse() async {
              master_vendor(vendor_name)
           )
           ''').eq('status', 'waiting assign vendor delivery')
-          //.eq('is_dedicated', 'dedicated') // Filter hanya yang DEDICATED
-          //.eq('shipping_assignments.status_assignment', 'rejected'); // Ambil yang pernah direject
-          //.or('status_assignment.eq.rejected,decision_for_unit.eq.DITOLAK', referencedTable: 'shipping_assignments');
-          .or(
+         .or(
           'status_assignment.eq.rejected,status_assignment.eq.rejected unit,status_assignment.eq.cancel booking,status_assignment.eq.no response', 
           referencedTable: 'shipping_assignments'
         );
@@ -153,7 +143,6 @@ Future<void> _fetchWarehouse() async {
       }
 
       if (_selectedDateRange != null) {
-        // Menentukan kolom mana yang difilter berdasarkan pilihan dropdown
       String dateColumn = _dateFilterType == "RDD" ? 'rdd' : 'stuffing_date';
         query = query
            .gte(dateColumn, _selectedDateRange!.start.toIso8601String())
@@ -163,26 +152,15 @@ Future<void> _fetchWarehouse() async {
       final response = await query.order('shipping_id', ascending: false);
       if (mounted) {
       setState(() {
-      //   _dataList = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
-      //   _isLoading = false;
-      // });
-      // }
-      // 1. Jalankan grouping data Anda seperti biasa
     List<Map<String, dynamic>> rawGrouped = _getGroupedDisplayData(List<Map<String, dynamic>>.from(response));
 
-    // 2. Loop setiap Card (baik grup maupun single) untuk membersihkan duplikasi vendor
     for (var item in rawGrouped) {
       Map<String, Map<String, dynamic>> uniqueRejects = {};
-      
-      // Ambil data dari key 'reject_history' (sesuai alias di query .select)
-      //final List rejects = item['shipping_assignments'] as List? ?? [];
-      
-      // Ambil ID yang ada di dalam grup ini (jika single, maka hanya contains dirinya sendiri)
+    
       List<int> groupShipIds = item['group_id'] != null 
           ? List<int>.from(item['grouped_ids']) 
           : [item['shipping_id']];
 
-          // 3. Cari di data asli (response) semua riwayat reject untuk ID-ID tersebut
       for (var originalRow in (response as List)) {
         if (groupShipIds.contains(originalRow['shipping_id'])) {
           //final List rejects = originalRow['shipping_assignments'] as List? ?? [];
@@ -195,23 +173,9 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
   const failedStatuses = ['rejected', 'rejected unit', 'cancel booking', 'no response'];
 
   if (failedStatuses.contains(statusAss)) {
-        //if (a['status_assignment'] == 'rejected'||a['status_assignment'] == 'rejected unit' || a['status_assignment'] == 'cancel booking') {
-          // Gunakan nama vendor sebagai KEY agar otomatis menimpa jika namanya sama (menjadi unik)
+      
           String vName = a['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-          // Menandai tipe penolakan agar UI bisa menyesuaikan warna/teks
-          //a['reject_type'] = (a['decision_for_unit'] == 'DITOLAK') ? 'INSPEKSI' : 'KONFIRMASI';
-          //a['reject_type'] = (a['status_assignment'] == 'rejected unit') ? 'INSPEKSI' : 'KONFIRMASI';
-          // Tentukan tipe reject untuk kebutuhan warna UI
-    // if (a['status_assignment'] == 'rejected unit') {
-    //   a['reject_type'] = 'INSPEKSI';
-    // } else if (a['status_assignment'] == 'cancel booking') {
-    //   a['reject_type'] = 'CANCEL'; // Tipe baru untuk cancel
-    // } else if (a['status_assignment'] == 'no response') {
-    //   a['reject_type'] = 'NO RESPONSE'; // Tipe baru untuk no response
-    // } else {
-    //   a['reject_type'] = 'KONFIRMASI';
-    // }
-    // Tentukan tipe reject untuk warna UI
+       
     if (statusAss == 'rejected unit') {
       a['reject_type'] = 'INSPEKSI';
     } else if (statusAss == 'no response') {
@@ -226,11 +190,10 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
       }
         }
       }
-      // Simpan list yang sudah unik ke dalam key baru 'unique_reject_list'
+    
       item['unique_reject_list'] = uniqueRejects.values.toList();
     }
 
-// RE-SORTING setelah unique_reject_list terisi
   rawGrouped.sort((a, b) {
     bool aHasReject = (a['unique_reject_list'] as List? ?? []).isNotEmpty;
     bool bHasReject = (b['unique_reject_list'] as List? ?? []).isNotEmpty;
@@ -257,8 +220,6 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
 
     for (var req in source) {
       if (req['group_id'] == null) {
-       // finalResult.add(Map<String, dynamic>.from(req));
-       // Untuk single data, tetap tempelkan rdd ke DO-nya agar konsisten saat looping di UI
         final Map<String, dynamic> singleData = Map<String, dynamic>.from(req);
         if (singleData['delivery_order'] != null) {
           for (var d in singleData['delivery_order']) {
@@ -271,20 +232,18 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
         if (!groupedMap.containsKey(gId)) {
           groupedMap[gId] = Map<String, dynamic>.from(req);
           groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
-        // Simpan SO induk ke dalam setiap DO di grup pertama
         if (groupedMap[gId]!['delivery_order'] != null) {
           for (var doItem in groupedMap[gId]!['delivery_order']) {
             doItem['parent_so'] = req['so']; 
-            doItem['rdd_origin'] = req['rdd']; // Simpan RDD asli
+            doItem['rdd_origin'] = req['rdd']; 
           }
         }
       } else {
         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
         
-        // Ambil DO baru dan tempelkan nomor SO-nya
         List newDos = List.from(req['delivery_order'] ?? []);
         for (var ndo in newDos) {
-          ndo['parent_so'] = req['so']; // Menandai SO asal untuk tiap DO
+          ndo['parent_so'] = req['so']; 
           ndo['rdd_origin'] = req['rdd'];
         }
 
@@ -295,24 +254,16 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
     }
   }
     finalResult.addAll(groupedMap.values);
-    //finalResult.sort((a, b) => (b['shipping_id'] as int).compareTo(a['shipping_id'] as int));
-    
-    // --- PERBAIKAN LOGIKA SORTING DISINI ---
+   
   finalResult.sort((a, b) {
-    // 1. Cek apakah ada riwayat reject (menggunakan unique_reject_list yang sudah kita buat sebelumnya)
-    // Catatan: Karena unique_reject_list diisi setelah grouping di _fetchVendorTargetData, 
-    // pastikan sorting ini dilakukan SETELAH list unik tersebut terisi.
+  
     
     bool aIsRejected = (a['unique_reject_list'] as List? ?? []).isNotEmpty;
     bool bIsRejected = (b['unique_reject_list'] as List? ?? []).isNotEmpty;
 
-    // 2. Jika A direject dan B tidak, A naik ke atas
     if (aIsRejected && !bIsRejected) return -1;
-    // 3. Jika B direject dan A tidak, B naik ke atas
     if (!aIsRejected && bIsRejected) return 1;
 
-    // 4. Jika keduanya sama-sama direject atau sama-sama bersih, 
-    // urutkan berdasarkan Shipping ID terbaru (descending)
     return (b['shipping_id'] as int).compareTo(a['shipping_id'] as int);
   });
     return finalResult;
@@ -322,11 +273,6 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
   Widget build(BuildContext context) {
     return Material(
       color: Colors.grey[100],
-      // appBar: AppBar(
-      //   title: const Text("Permintaan Vendor Tracking", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       child: Column(
         children: [
           _buildFilterBar(),
@@ -346,52 +292,6 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
     );
   }
 
-  // Widget _buildFilterBar() {
-  //   return Container(
-  //     padding: const EdgeInsets.all(12),
-  //     decoration: const BoxDecoration(color: Colors.white),
-  //     child: Row(
-  //       children: [
-  //         Expanded(
-  //           child: DropdownButtonFormField<String>(
-  //             value: _selectedFilterLoc,
-  //             decoration: _filterInputDecoration("Lokasi Gudang"),
-  //             items: ["SEMUA", "RUNGKUT", "TAMBAK LANGON"].map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 12)))).toList(),
-  //             onChanged: (val) {
-  //               setState(() => _selectedFilterLoc = val!);
-  //               _fetchVendorTargetData();
-  //             },
-  //           ),
-  //         ),
-  //         const SizedBox(width: 8),
-
-  //         Expanded(
-  //           child: InkWell(
-  //             onTap: _pickDateRange,
-  //             child: Container(
-  //               padding: const EdgeInsets.all(10),
-  //               decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(8)),
-  //               child: Row(
-  //                 children: [
-  //                   const Icon(Icons.calendar_month, size: 16, color: Colors.red),
-  //                   const SizedBox(width: 8),
-  //                   Text(_selectedDateRange == null ? "Filter RDD" : DateFormat('dd/MM').format(_selectedDateRange!.start), style: const TextStyle(fontSize: 12)),
-  //                 ],
-  //               ),
-  //             ),
-  //           ),
-  //         ),
-  //         IconButton(
-  //           onPressed: () { 
-  //             setState(() { _selectedFilterLoc = "SEMUA"; _selectedDateRange = null; }); 
-  //             _fetchVendorTargetData(); 
-  //           }, 
-  //           icon: const Icon(Icons.refresh, color: Colors.red)
-  //         )
-  //       ],
-  //     ),
-  //   );
-  // }
 
 Widget _buildFilterBar() {
   bool isDateActive = _selectedDateRange != null;
@@ -401,7 +301,7 @@ Widget _buildFilterBar() {
       color: Colors.white,
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05),
           blurRadius: 2,
           offset: const Offset(0, 2),
         )
@@ -409,16 +309,12 @@ Widget _buildFilterBar() {
     ),
     child: Row(
       children: [
-        // 1. Dropdown Lokasi Gudang (Flex 2)
         Expanded(
           flex: 2,
           child: DropdownButtonFormField<String>(
-            value: _selectedFilterLoc,
+            initialValue: _selectedFilterLoc,
             decoration: _filterInputDecoration("Gudang"),
             style: const TextStyle(fontSize: 11, color: Colors.black),
-            // items: ["SEMUA", "RUNGKUT", "TAMBAK LANGON"].map((e) => 
-            //   DropdownMenuItem(value: e, child: Text(e))
-            // ).toList(),
             items: [
       const DropdownMenuItem(value: "SEMUA", child: Text("SEMUA GUDANG")),
       ..._warehouseList.map((wh) {
@@ -437,76 +333,6 @@ Widget _buildFilterBar() {
         ),
         const SizedBox(width: 8),
 
-        // 2. Dropdown Tipe Tanggal (Flex 2)
-        
-//         Expanded(
-//           flex: 5,
-//           child: DropdownButtonFormField<String>(
-//             value: _dateFilterType,
-//             decoration: _filterInputDecoration("Berdasarkan"),
-//             style: const TextStyle(fontSize: 11, color: Colors.black),
-//             items: ["RDD", "STUFFING"].map((e) => 
-//               DropdownMenuItem(value: e, child: Text(e))
-//             ).toList(),
-//             onChanged: (val) {
-//               setState(() => _dateFilterType = val!);
-//               if (_selectedDateRange != null) _fetchVendorTargetData();
-//             },
-//           ),
-//         ),
-//         const SizedBox(width: 6),
-
-//         // 3. Tombol Pilih Rentang Tanggal (Flex 3)
-//         Expanded(
-//           flex: 3,
-//           child: InkWell(
-//             onTap: _pickDateRange,
-//             child: Container(
-//               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-//               decoration: BoxDecoration(
-//                 border: Border.all(color: Colors.grey.shade400),
-//                 borderRadius: BorderRadius.circular(8),
-//               ),
-//               child: Row(
-//                 mainAxisAlignment: MainAxisAlignment.center,
-//                 children: [
-//                   const Icon(Icons.calendar_month, size: 14, color: Colors.red),
-//                   const SizedBox(width: 4),
-//                   Flexible(
-//                     child: Text(
-//                       _selectedDateRange == null 
-//                           ? "Pilih Tgl" 
-//                           : "${DateFormat('dd/MM').format(_selectedDateRange!.start)}-${DateFormat('dd/MM').format(_selectedDateRange!.end)}",
-//                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-//                       overflow: TextOverflow.ellipsis,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ),
-//           ),
-//         ),
-
-//         // 4. Tombol Reset (Kecil)
-//         IconButton(
-//           constraints: const BoxConstraints(),
-//           padding: const EdgeInsets.only(left: 4),
-//           onPressed: () { 
-//             setState(() { 
-//               _selectedFilterLoc = "SEMUA"; 
-//               _selectedDateRange = null; 
-//               _dateFilterType = "RDD";
-//             }); 
-//             _fetchVendorTargetData(); 
-//           }, 
-//           icon: const Icon(Icons.refresh, color: Colors.red, size: 20)
-//         )
-//       ],
-//     ),
-//   );
-// }
-
-// 2. Filter Tanggal Unified (Mirip List DO)
         Expanded(
           flex: 5,
           child: Container(
@@ -516,7 +342,6 @@ Widget _buildFilterBar() {
             ),
             child: Row(
               children: [
-                // Bagian Dropdown Tipe (RDD/Stuffing)
                 Container(
                   padding: const EdgeInsets.only(left: 8, right: 4),
                   decoration: BoxDecoration(
@@ -583,7 +408,6 @@ Widget _buildFilterBar() {
           ),
         ),
 
-        // 3. Tombol Refresh/Reset
         if (isDateActive || _selectedFilterLoc != "SEMUA")
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.red, size: 20),
@@ -604,12 +428,7 @@ Widget _buildFilterBar() {
     final bool isGroup = item['group_id'] != null;
     final List dos = item['delivery_order'] ?? [];
     
-    // Perbaikan akses detail (Menangani List dari inner join)
-    // final List rawDetails = item['shipping_request_details'] ?? [];
-    // final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
-//final List rejectHistory = item['shipping_assignments'] ?? [];
 final List rejectHistory = item['unique_reject_list'] ?? [];
-// 2. Ambil data warehouse dari hasil join
     final warehouse = item['warehouse'];
     final String warehouseDisplay = warehouse != null 
         ? "${warehouse['lokasi']} - ${warehouse['warehouse_name']}"
@@ -622,7 +441,6 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Group & Lokasi
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -658,127 +476,18 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                      const SizedBox(width: 60),
                      const Spacer(),
                 _buildBadge(warehouseDisplay, Colors.red.shade700),
-//                       _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
                   ],
                   
                 ),
-  //              const Divider(height: 40),
-                // const SizedBox(height: 4),
-                // _infoText("🛠️ Status:", item['is_dedicated']?.toString().toUpperCase() ?? "-"),
-                // const Divider(height: 20),
-// // --- BAGIAN RIWAYAT REJECT ---
-//               if (rejectHistory.isNotEmpty) ...[
-//                 const SizedBox(height: 12),
-//                 Container(
-//                   padding: const EdgeInsets.all(8),
-//                   width: double.infinity,
-//                   decoration: BoxDecoration(
-//                     color: Colors.orange.shade50,
-//                     borderRadius: BorderRadius.circular(8),
-//                     border: Border.all(color: Colors.orange.shade200),
-//                   ),
-//                   child: Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       Row(
-//                         children: [
-//                           Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
-//                           const SizedBox(width: 4),
-//                           Text("Direject Oleh:", 
-//                             style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
-//                         ],
-//                       ),
-//                       const SizedBox(height: 4),
-//                       // Loop vendor yang reject
-//                       ...rejectHistory.map((rej) {
-//                         String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-//                         //String reason = rej['reason_rejected'] ?? "Tanpa alasan";
-//                         return Padding(
-//                           padding: const EdgeInsets.only(bottom: 2),
-//                           child: Text(
-//                             "• $vendorName",
-//                             style: const TextStyle(fontSize: 10, color: Colors.black87),
-//                           ),
-//                         );
-//                       }).toList(),
-//                     ],
-//                   ),
-//                 ),
-//               ],
-              
               const Divider(height: 30),
                 // List Table per DO
                 ...dos.map((doItem) {
                   final List doDetails = doItem['do_details'] ?? [];
                   final String rddSpesifik = _formatDate(doItem['rdd_origin'] ?? item['rdd']);
-                  final String custName = doItem['customer']?['customer_name'] ?? "-";
-                  final String custId = doItem['customer']?['customer_id']?.toString() ?? "-";
-
-                  // return Container(
-                  //   margin: const EdgeInsets.only(bottom: 12),
-                  //   decoration: BoxDecoration(
-                  //     border: Border.all(color: Colors.grey.shade200),
-                  //     borderRadius: BorderRadius.circular(8),
-                  //   ),
-    //               return Container(
-    // margin: const EdgeInsets.only(bottom: 12),
-    // decoration: BoxDecoration(
-    //   color: Colors.white,
-    //   borderRadius: BorderRadius.circular(8),
-    //   border: Border.all(color: Colors.grey[300]!), // Border abu tipis
-    // ),
-    // child: Column(
-    //   children: [
-    //     // HEADER BOX (DO - SO - CUSTOMER)
-    //     Container(
-    //       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    //       decoration: BoxDecoration(
-    //         color: Colors.pink.shade50, // Background abu sangat muda sesuai gambar
-    //         borderRadius: const BorderRadius.only(
-             
-    //         ),
-    //       ),
-    //                 child: Row(
-    //                   children: [
-    //                     // Container(
-    //                     //   padding: const EdgeInsets.all(8),
-    //                     //   color: Colors.grey.shade50,
-    //                     //   child: Row(
-    //                     //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    //                     //     children: [
-    //                           Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black)),
-    //                           const Spacer(),
-    //                           Text(
-    //               "SO: ${doItem['parent_so'] ?? item['so'] ?? '-'}", // Pastikan key 'so_number' sesuai data Anda
-    //               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-    //             ),
-    //             const Spacer(),
-    //                           Text("${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-    //                         ],
-    //                       ),
-    //                     ),
-    //                     Table(
-    //                       columnWidths: const {
-    //                         0: FlexColumnWidth(1.2), // No Mat
-    //                         1: FlexColumnWidth(4),   // Nama Mat
-    //                         2: FlexColumnWidth(1),   // Qty
-    //                       },
-    //                       children: doDetails.map((det) => TableRow(
-    //                         children: [
-    //                           _tablePadding(det['material']?['material_id']?.toString() ?? "-"),
-    //                           _tablePadding(det['material']?['material_name'] ?? "-"),
-    //                           _tablePadding(det['qty']?.toString() ?? "0", isBold: true, align: TextAlign.right),
-    //                         ],
-    //                       )).toList(),
-    //                     ),]
-    //                     ,
-    //               ),
-    //             );
-    //           }).toList(),
+                
     return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 1. Teks RDD Milik DO Ini
                       Padding(
                         padding: const EdgeInsets.only(left: 4, bottom: 4),
                         child: Row(
@@ -793,7 +502,6 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                         ),
                       ),
 
-                      // 2. Kontainer Detail DO
                       Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
@@ -838,20 +546,13 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                       ),
                     ],
                   );
-                }).toList(),
-                        // --- BAGIAN RIWAYAT REJECT (Diletakkan di bawah material) ---
+                }),
                         if (rejectHistory.isNotEmpty) ...[
                           const Divider(height: 1, thickness: 1),
                           Container(
                             padding: const EdgeInsets.all(10),
                             width: double.infinity,
                             decoration: BoxDecoration(
-                            //   color: Colors.yellow.shade200,
-                            //   borderRadius: const BorderRadius.only(
-                            //     bottomLeft: Radius.circular(8),
-                            //     bottomRight: Radius.circular(8),
-                            //   ),
-                            // ),
                             color: rejectHistory.any((r) => r['reject_type'] == 'INSPEKSI') 
           ? Colors.red.shade100 
           : Colors.yellow.shade200,
@@ -863,25 +564,7 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Row(
-                                //   children: [
-                                //     Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
-                                //     const SizedBox(width: 4),
-                                //     Text("Direject Oleh:", 
-                                //       style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
-                                //   ],
-                                // ),
-                                // const SizedBox(height: 4),
-                                // ...rejectHistory.map((rej) {
-                                //   String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-                                //   return Padding(
-                                //     padding: const EdgeInsets.only(bottom: 2),
-                                //     child: Text(
-                                //       "• $vendorName",
-                                //       style: const TextStyle(fontSize: 10, color: Colors.black87),
-                                //     ),
-                                //   );
-                                // }).toList(),
+                                
                                 Row(
           children: [
             Icon(Icons.report_problem, size: 14, 
@@ -895,45 +578,27 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
         const SizedBox(height: 6),
         ...rejectHistory.map((rej) {
           String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-          //String type = rej['reject_type'] == 'INSPEKSI' ? "UNIT DITOLAK SAAT CHECK-IN" : "VENDOR MENOLAK ORDER";
-          //String catatan = rej['catatan'] != null ? "\n   Ket: ${rej['catatan']}" : "";
+          
 String typeText = "";
 String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
-  // if (rej['reject_type'] == 'INSPEKSI') {
-  //   // Format untuk penolakan unit saat check-in
-  //   String detailCheckIn = (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) 
-  //       ? " - ${rej['catatan']}" 
-  //       : "";
-  //   typeText = "UNIT DITOLAK SAAT CHECK-IN$detailCheckIn";
-  // } else {
-  //   // Format untuk penolakan order oleh vendor
-  //   String detailReject = (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) 
-  //       ? " - ${rej['reason_rejected']}" 
-  //       : "";
-  //   typeText = "VENDOR MENOLAK ORDER$detailReject";
-  // }
+ 
   if (status == 'rejected unit') {
-    // Jika ditolak saat check-in kelayakan unit
     typeText = "UNIT DITOLAK SAAT CHECK-IN";
     if (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) {
       typeText += " - ${rej['catatan']}";
     }
   } 
   else if (status == 'no response') {
-    // Pesan khusus untuk No Response sesuai permintaan Anda
     typeText = "tidak merespon penugasan hingga batas waktu.";
   }
   else if (status == 'cancel booking') {
-    // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
    typeText = "BOOKING DIBATALKAN";
-    // Mengambil alasan pembatalan (Silakan sesuaikan kolomnya, di sini dicontohkan pakai 'reason_rejected' atau 'catatan')
-    var alasanCancel = rej['cancelled_reason'] ?? rej['catatan'];
+   var alasanCancel = rej['cancelled_reason'] ?? rej['catatan'];
     if (alasanCancel != null && alasanCancel.toString().isNotEmpty) {
       typeText += " - $alasanCancel";
     }
   } 
   else {
-    // Jika ditolak via konfirmasi penawaran awal oleh vendor (status == 'rejected' atau lainnya)
     typeText = "VENDOR MENOLAK ORDER";
     if (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) {
       typeText += " - ${rej['reason_rejected']}";
@@ -943,8 +608,8 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
               status == 'no response' 
-          ? "• Vendor ($vendorName) $typeText" // Format khusus No Response
-          : "• $vendorName: $typeText",        // Format standar lainnya
+          ? "• Vendor ($vendorName) $typeText" 
+          : "• $vendorName: $typeText",        
       style: TextStyle(
         fontSize: 10, 
         color: (status == 'rejected unit' || status == 'no response') 
@@ -956,7 +621,7 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
               ),
             ),
           );
-        }).toList(),
+        }),
                              ],
                   ),
                 ),
@@ -965,7 +630,6 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
           ),
         ),
 
-          // Tombol Proses
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: ElevatedButton.icon(
@@ -975,24 +639,10 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
                onPressed: () {
-    //   Navigator.push(
-    //     context,
-    //     MaterialPageRoute(
-    //       builder: (context) => AssignVendorPage(shippingId: item['shipping_id']),
-    //     ),
-    //   );
-    // },
-  //  final String shipId = item['shipping_id'].toString();
-              
-  //             DynamicTabPage.of(context)?.openTab(
-  //               "Assign Vendor Shipping #$shipId", 
-  //               AssignVendorPage(shippingId: item['shipping_id']),
-  //             );
-  //           },
+   
   final groupId = item['group_id'];
   final shipId = item['shipping_id'];
   
-  // 2. Tentukan Judul Tab secara dinamis
   String tabTitle;
   if (groupId != null) {
     tabTitle = "Assign Vendor Grup #$groupId";
@@ -1000,15 +650,14 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
     tabTitle = "Assign Vendor Shipping #$shipId";
   }
 
-  // 3. Panggil DynamicTab untuk membuka halaman di dalam bingkai
   DynamicTabPage.of(context)?.openTab(
     tabTitle, 
-    AssignVendorPage(shippingId: shipId), // ID yang dikirim tetap shippingId utama
+    AssignVendorPage(shippingId: shipId),
   );
 },
               icon: const Icon(Icons.send, color: Colors.white, size: 18),
               label: Text(
-                // isGroup ? "PROSES GRUP (${(item['grouped_ids'] as List).length} DATA)" : 
+                 
                 "PROSES PERMINTAAN VENDOR",
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
@@ -1019,8 +668,6 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
     );
   }
 
-
-  // --- UI Helpers ---
   Widget _infoText(String label, String value) {
     return RichText(
       text: TextSpan(
@@ -1047,7 +694,7 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
   Widget _buildBadge(String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: color, width: 0.5)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: color, width: 0.5)),
       child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
@@ -1056,39 +703,18 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
 
   Widget _buildEmptyState() => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.done_all, size: 64, color: Colors.grey[300]), const SizedBox(height: 16), const Text("Semua data sudah diproses", style: TextStyle(color: Colors.grey))]));
 
-  // // --- Logic ---
-  // Future<void> _submitToVendor(Map<String, dynamic> item) async {
-  //   final List ids = item['group_id'] != null ? item['grouped_ids'] : [item['shipping_id']];
-  //   try {
-  //     setState(() => _isLoading = true);
-  //     await supabase.from('shipping_request').update({'status': 'waiting vendor assignment'}).inFilter('shipping_id', ids);
-  //     final inserts = ids.map((id) => {'shipping_id': id, 'status': 'requested', 'id_profile': supabase.auth.currentUser?.id}).toList();
-  //     await supabase.from('vendor_delivery_request').insert(inserts);
-  //     _showSnackBar("Berhasil dikirim ke Vendor!", Colors.green);
-  //     _fetchVendorTargetData();
-  //   } catch (e) {
-  //     setState(() => _isLoading = false);
-  //     _showSnackBar("Gagal: $e", Colors.red);
-  //   }
-  // }
-
-  // Future<void> _pickDateRange() async {
-  //   DateTimeRange? picked = await showDateRangePicker(context: context, firstDate: DateTime(2023), lastDate: DateTime(2100), builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: Colors.red.shade700)), child: child!));
-  //   if (picked != null) { setState(() => _selectedDateRange = picked); _fetchVendorTargetData(); }
-  // }
-
   Future<void> _pickDateRange() async {
   DateTimeRange? picked = await showDateRangePicker(
     context: context,
     firstDate: DateTime(2023),
     lastDate: DateTime(2100),
     initialDateRange: _selectedDateRange,
-    locale: const Locale('id', 'ID'), // Memastikan kalender menggunakan Bahasa Indonesia
+    locale: const Locale('id', 'ID'), 
     builder: (context, child) {
       return Theme(
         data: Theme.of(context).copyWith(
           colorScheme: ColorScheme.light(
-            primary: Colors.red.shade700, // Warna tema utama (Header & Tombol)
+            primary: Colors.red.shade700, 
             onPrimary: Colors.white,
             onSurface: Colors.black,
           ),
@@ -1096,12 +722,11 @@ String status = rej['status_assignment']?.toString().toLowerCase() ?? "";
             style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
           ),
         ),
-        // --- BAGIAN KUNCI: MENGATUR UKURAN DIALOG ---
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(
-              maxWidth: 400,  // Membatasi lebar maksimal agar tidak full screen
-              maxHeight: 550, // Membatasi tinggi maksimal
+              maxWidth: 400, 
+              maxHeight: 550, 
             ),
             child: child!,
           ),

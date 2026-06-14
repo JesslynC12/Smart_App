@@ -58,13 +58,8 @@ void _filterDataByDONumber() {
         final List dos = item['delivery_order'] ?? [];
 
         return dos.any((doItem) {
-          // 1. Cek Nomor DO
           final doNumber = (doItem['do_number'] ?? '').toString().toLowerCase();
-          
-          // 2. Cek Nomor SO Per Item (untuk grouped request)
           final soPerItem = (doItem['parent_so'] ?? '').toString().toLowerCase();
-
-          // 3. Cek Customer (ID & Nama)
           final customer = doItem['customer'] ?? {};
           final customerId = (customer['customer_id'] ?? '').toString().toLowerCase();
           final customerName = (customer['customer_name'] ?? '').toString().toLowerCase();
@@ -75,8 +70,6 @@ void _filterDataByDONumber() {
               customerName.contains(query)) {
             return true;
           }
-
-          // 4. Cek Detail Material (ID & Nama) di dalam do_details
           final List details = doItem['do_details'] ?? [];
           return details.any((det) {
             final materialId = (det['material_id'] ?? '').toString().toLowerCase();
@@ -89,64 +82,6 @@ void _filterDataByDONumber() {
     });
   }
 }
-  // Future<void> _fetchData() async {
-  //   try {
-  //     final response = await supabase.from('shipping_request').select('''
-  //           *,
-  //           shipping_request_details!inner(*),
-  //           delivery_order(
-  //             do_number,
-  //             customer(customer_name),
-  //             do_details(qty, material_id, material(material_name))
-  //           )
-  //         ''').order('shipping_id', ascending: false);
-
-
-  //     setState(() {
-  //       _dataList = List<Map<String, dynamic>>.from(response);
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     if (mounted) {
-  //       setState(() => _isLoading = false);
-  //       _showSnackBar("Gagal ambil data: $e", Colors.red);
-  //     }
-  //   }
-  // }
-
-
-//   Future<void> _fetchData() async {
-//   try {
-//     final response = await supabase
-//         .from('shipping_request')
-//         .select('''
-//             *,
-//             shipping_request_details!inner(*),
-//             vendor_delivery_request!left(id),
-//             delivery_order(
-//               do_number,
-//               customer(customer_name),
-//               do_details(qty, material_id, material(material_name))
-//             )
-//           ''')
-//         // SYARAT 1: Belum ada di daftar vendor (otomatis hilang jika sudah di-insert)
-//         .isFilter('vendor_delivery_request', null)
-//         // SYARAT 2: Status bukan 'cancel' (otomatis hilang jika di-cancel)
-//         .not('status', 'eq', 'cancel')
-//         .order('shipping_id', ascending: false);
-
-
-//     setState(() {
-//       _dataList = List<Map<String, dynamic>>.from(response);
-//       _isLoading = false;
-//     });
-//   } catch (e) {
-//     if (mounted) {
-//       setState(() => _isLoading = false);
-//       _showSnackBar("Gagal ambil data: $e", Colors.red);
-//     }
-//   }
-// }
 
 Future<void> _fetchWarehouse() async {
   try {
@@ -207,174 +142,6 @@ if (mounted) {
     super.dispose();
   }
 
-  // Future<void> _simpanDanPindahkan(int sid) async {
-  //   if (_selectedSLoc == null || _selectedDedicated == null) {
-  //     _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
-  //     return;
-  //   }
-
-
-  //   try {
-  //     setState(() => _isLoading = true);
-
-
-  //     // 1. Update Detail (Simpan input user)
-  //     await supabase.from('shipping_request_details').update({
-  //       'storage_location': _selectedSLoc,
-  //       'is_dedicated': _selectedDedicated,
-  //     }).eq('shipping_id', sid);
-
-
-  //     // 2. Tandai agar masuk ke List Vendor (Kita asumsikan dengan kolom status atau flag baru)
-  //     // Misal kita update status di shipping_request menjadi 'to_vendor'
-  //     await supabase.from('shipping_request').update({
-  //       'status': 'waiting vendor delivery request',
-  //     }).eq('shipping_id', sid);
-
-
-  //     _showSnackBar("Berhasil! Data dipindahkan ke List Vendor", Colors.green);
-     
-  //     // Reset state & Refresh list (item akan otomatis hilang dari query !inner jika status berubah)
-  //     _expandedId = null;
-  //     _selectedSLoc = null;
-  //     _selectedDedicated = null;
-  //     await _fetchData();
-     
-  //   } catch (e) {
-  //     setState(() => _isLoading = false);
-  //     _showSnackBar("Gagal menyimpan: $e", Colors.red);
-  //   }
-  // }
-
-
-//   Future<void> _simpanDanPindahkan(int sid) async {
-//   if (_selectedSLoc == null || _selectedDedicated == null) {
-//     _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
-//     return;
-//   }
-
-
-//   try {
-//     setState(() => _isLoading = true);
-
-
-//     // 1. Update Detail Logistik (Gudang)
-//     await supabase.from('shipping_request_details').update({
-//       'storage_location': _selectedSLoc,
-//       'is_dedicated': _selectedDedicated,
-//     }).eq('shipping_id', sid);
-
-
-//     // 2. Update status di shipping_request menjadi waiting vendor
-//     await supabase.from('shipping_request').update({
-//       'status': 'waiting vendor delivery request',
-//     }).eq('shipping_id', sid);
-
-
-//     // 3. INSERT ke tabel vendor_delivery_request
-//     // Ini pemicu utama data HILANG dari list karena filter !left vendor_delivery_request
-//     await supabase.from('vendor_delivery_request').insert({
-//       'shipping_id': sid,
-//       'status': 'waiting approval', // Default status sesuai tabel Anda
-//       'id_profile': supabase.auth.currentUser?.id, // Mencatat admin yang memproses
-//     });
-
-
-//     _showSnackBar("Berhasil! Data diteruskan ke Vendor", Colors.green);
-
-
-//     // Reset UI state & Refresh (Data sid ini akan hilang dari list)
-//     setState(() {
-//       _expandedId = null;
-//       _selectedSLoc = null;
-//       _selectedDedicated = null;
-//     });
-//     await _fetchData();
-
-
-//   } catch (e) {
-//     setState(() => _isLoading = false);
-//     _showSnackBar("Gagal memindahkan data: $e", Colors.red);
-//   }
-// }
-
-
-// Future<void> _simpanDanPindahkan(Map<String, dynamic> item) async {
-//   if (_selectedSLoc == null || _selectedDedicated == null) {
-//     _showSnackBar("Harap isi Lokasi dan Status Dedicated", Colors.orange);
-//     return;
-//   }
-
-
-//   // Ambil semua ID (bisa satu atau banyak jika grup)
-//   final List<int> idsToProcess = item['group_id'] != null
-//       ? List<int>.from(item['grouped_ids'])
-//       : [item['shipping_id'] as int];
-
-
-//   try {
-//     setState(() => _isLoading = true);
-
-
-//     for (int sid in idsToProcess) {
-//       // 1. Update Detail Logistik
-//       await supabase.from('shipping_request_details').update({
-//         'storage_location': _selectedSLoc,
-//         'is_dedicated': _selectedDedicated,
-//       }).eq('shipping_id', sid);
-
-
-//       // 2. Update Status
-//       await supabase.from('shipping_request').update({
-//         'status': 'waiting assign vendor delivery',
-//       }).eq('shipping_id', sid);
-
-
-//       // // 3. Insert ke Vendor Request
-//       // await supabase.from('vendor_delivery_request').insert({
-//       //   'shipping_id': sid,
-//       //   'status': 'waiting approval',
-//       //   'id_profile': supabase.auth.currentUser?.id,
-//       // });
-//     }
-
-
-//     _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
-//     _expandedId = null;
-//     await _fetchData();
-//   } catch (e) {
-//     // ... handle error
-//   }
-// }
-
-
-  // @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     backgroundColor: Colors.grey[100],
-  //     // appBar: AppBar(
-  //     //   title: const Text("DO Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-  //     //   backgroundColor: Colors.red.shade700,
-  //     //   foregroundColor: Colors.white,
-  //     // ),
-  //     body: _isLoading && _dataList.isEmpty
-  //         ? const Center(child: CircularProgressIndicator())
-  //         : _dataList.isEmpty
-  //             ? _buildEmptyState()
-  //             : ListView.builder(
-  //                 itemCount: _dataList.length,
-  //                 padding: const EdgeInsets.all(10),
-  //                 itemBuilder: (context, index) {
-  //                   final item = _dataList[index];
-  //                   final sid = item['shipping_id'];
-  //                   final bool isExpanded = _expandedId == sid;
-
-
-  //                   return _buildExpandableCard(item, sid, isExpanded);
-  //                 },
-  //               ),
-  //   );
-  // }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -483,7 +250,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                   _buildLabel("Loading Location"),
                   DropdownButtonFormField<int>(
                     decoration: _inputDecoration("Pilih Lokasi"),
-                    value: _selectedSLoc,
+                    initialValue: _selectedSLoc,
                     items: _warehouseList.map((wh) {
           return DropdownMenuItem<int>(
             value: wh['warehouse_id'] as int,
@@ -498,24 +265,7 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                 ],
               ),
             ),
-            // const SizedBox(width: 12),
-            // Expanded(
-            //   child: Column(
-            //     crossAxisAlignment: CrossAxisAlignment.start,
-            //     children: [
-            //       _buildLabel("Dedicated Status"),
-            //       DropdownButtonFormField<String>(
-            //         decoration: _inputDecoration("Pilih Status"),
-            //         value: _selectedDedicated,
-            //         items: const [
-            //           DropdownMenuItem(value: "dedicated", child: Text("Dedicated", style: TextStyle(fontSize: 13))),
-            //           DropdownMenuItem(value: "non-dedicated", child: Text("Non-Dedicated", style: TextStyle(fontSize: 13))),
-            //         ],
-            //         onChanged: (val) => setState(() => _selectedDedicated = val),
-            //       ),
-            //     ],
-            //   ),
-            // ),
+           
           ],
         ),
        
@@ -533,7 +283,6 @@ Widget _buildActionForm(Map<String, dynamic> item) {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                // PERBAIKAN: Hapus "as int"
                 onPressed: () => _pendingRequest(item),
                 icon: const Icon(Icons.close, size: 18),
                 label: const Text("PENDING", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
@@ -580,40 +329,17 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
 
   try {
     setState(() => _isLoading = true);
-   
-    // 1. Update Detail Massal
-    // await supabase.from('shipping_request_details').update({
-    //   'storage_location': _selectedSLoc,
-    //   'is_dedicated': _selectedDedicated,
-    // }).inFilter('shipping_id', idsToProcess);
-
-
-    // // 2. Update Status Shipping Massal
-    // await supabase.from('shipping_request').update({
-    //   'status': 'waiting assign vendor delivery'
-    // }).inFilter('shipping_id', idsToProcess);
-    await supabase.from('shipping_request').update({
-        //'storage_location': _selectedSLoc,
-        //'is_dedicated': _selectedDedicated,
+ await supabase.from('shipping_request').update({
+       
         'warehouse_id': _selectedSLoc,
         'status': 'waiting assign vendor delivery',
         'createdDODetail_at': DateTime.now().toIso8601String(),
         'createdDODetail_by': _currentUserName ?? 'Unknown Admin', // Sesuaikan dengan user login Anda
       }).inFilter('shipping_id', idsToProcess);
-
-    // final List<Map<String, dynamic>> inserts = idsToProcess.map((sid) => {
-    //   'shipping_id': sid,
-    //   'status': 'waiting approval',
-    //   'id_profile': supabase.auth.currentUser?.id,
-    // }).toList();
-   
-    // await supabase.from('vendor_delivery_request').insert(inserts);
-   
-    _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
+ _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
     setState(() {
       _expandedId = null;
       _selectedSLoc = null;
-      //_selectedDedicated = null;
     });
     await _fetchData();
   } catch (e) {
@@ -648,18 +374,7 @@ Widget _buildExpandableCard(Map<String, dynamic> item, int sid, bool isExpanded)
                   : (isExpanded ? Colors.red.shade700 : Colors.blueGrey[400]),
               child: Icon(isGroupRow ? Icons.layers : Icons.local_shipping, color: Colors.white, size: 20),
             ),
-        //     title: Text(
-        //       isGroupRow ? "GROUP ID: ${item['group_id']}" : "SHIP ID: ${item['shipping_id']}",
-        //       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        //     ),
-          
-        //     subtitle: Text("🚛 Stuffing: ${_formatDate(item['stuffing_date'])}",
-        //         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
-        //     trailing: Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
-        //   ),
-        // ),
-        
-        // const Divider(height: 1, indent: 16, endIndent: 16),
+       
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -786,7 +501,7 @@ return Padding(
       ],
     ),
   );
-}).toList(),
+}),
 
         if (isExpanded) 
           _buildActionForm(item) 
@@ -810,26 +525,16 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
       if (!groupedMap.containsKey(gId)) {
         groupedMap[gId] = Map<String, dynamic>.from(req);
         groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
-        // Inisialisasi list SO agar tidak duplikat
         groupedMap[gId]!['display_so'] = [req['so']];
-        //groupedMap[gId]!['all_rdds'] = [req['rdd']];
         List dos = List.from(req['delivery_order'] ?? []);
         for (var d in dos) {
-          d['rdd_origin'] = req['rdd']; // Simpan RDD asli di sini
+          d['rdd_origin'] = req['rdd']; 
         }
         groupedMap[gId]!['delivery_order'] = dos;
       } else {
         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
-       
-      //   List<String?> rdds = List<String?>.from(groupedMap[gId]!['all_rdds']);
-      //   if (!rdds.contains(req['rdd'])) {
-      //     rdds.add(req['rdd']);
-      //   }
-      //   groupedMap[gId]!['all_rdds'] = rdds;
-
         List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
         List newDos = req['delivery_order'] ?? [];
-
 
         for (var ndo in newDos) {
           ndo['parent_so'] = req['so'];
@@ -837,7 +542,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
           currentDos.add(ndo);
         }
         groupedMap[gId]!['delivery_order'] = currentDos;
-
 
         if (!groupedMap[gId]!['display_so'].contains(req['so'])) {
           groupedMap[gId]!['display_so'].add(req['so']);
@@ -885,7 +589,6 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
     ),
   );
 
-  // if (confirm != true || reasonController.text.isEmpty) return;
   if (confirm != true || reasonController.text.trim().isEmpty) {
     if (confirm == true) _showSnackBar("Alasan wajib diisi!", Colors.orange);
     return;

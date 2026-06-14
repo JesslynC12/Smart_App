@@ -13,16 +13,13 @@ class _PPICFormPageState extends State<PPICFormPage> {
   final _formKey = GlobalKey<FormState>();
   final supabase = Supabase.instance.client;
 
-  // Header State
   DateTime _selectedDate = DateTime.now();
   late TextEditingController _dateController;
   String? _selectedProductionType;
 
-  // Data Master dari DB
   List<Map<String, dynamic>> _mesinList = [];
   List<Map<String, dynamic>> _materialList = [];
-  String? _currentUserName; // Untuk menampung nama dari tabel profiles
-  // Baris Input Dinamis
+  String? _currentUserName; 
   List<Map<String, dynamic>> _rows = []; 
   bool _isLoading = true;
 
@@ -42,8 +39,7 @@ class _PPICFormPageState extends State<PPICFormPage> {
       ]);
 
       setState(() {
-        // PERBAIKAN 1: Paksa konversi ID ke int secara eksplisit
-        // Seringkali data dari database dianggap dynamic, yang membuat Dropdown error
+       
         _mesinList = (results[0] as List).map((e) => {
           'mesin_id': int.parse(e['mesin_id'].toString()), 
           'nama_mesin': e['nama_mesin']
@@ -84,8 +80,6 @@ Future<void> _fetchUserProfile() async {
     });
   }
 }
-
-
 
   void _addRow() {
     setState(() {
@@ -167,11 +161,6 @@ Future<void> _fetchUserProfile() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text("Input PPIC Form"),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isLoading && _mesinList.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -242,7 +231,7 @@ Future<void> _fetchUserProfile() async {
         ),
         const SizedBox(height: 15),
         DropdownButtonFormField<String>(
-          value: _selectedProductionType,
+          initialValue: _selectedProductionType,
           decoration: const InputDecoration(labelText: "Production Type", border: OutlineInputBorder()),
           items: ['marsho', 'filling'].map((t) => DropdownMenuItem(value: t, child: Text(t.toUpperCase()))).toList(),
           onChanged: (val) => setState(() => _selectedProductionType = val),
@@ -277,7 +266,7 @@ Future<void> _fetchUserProfile() async {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: "Shift", border: OutlineInputBorder()),
-                    value: _rows[index]['shift'],
+                    initialValue: _rows[index]['shift'],
                     items: ['I', 'II', 'III'].map((s) => DropdownMenuItem(value: s, child: Text("Shift $s"))).toList(),
                     onChanged: (val) => setState(() => _rows[index]['shift'] = val),
                     validator: (v) => v == null ? "!" : null,
@@ -289,8 +278,7 @@ Future<void> _fetchUserProfile() async {
                   child: DropdownButtonFormField<int>(
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: "Mesin", border: OutlineInputBorder()),
-                    value: _rows[index]['mesin_id'],
-                    // PERBAIKAN 2: Pastikan mapping item menggunakan casting 'as int'
+                    initialValue: _rows[index]['mesin_id'],
                     items: _mesinList.map((m) => DropdownMenuItem<int>(
                       value: m['mesin_id'] as int, 
                       child: Text("${m['mesin_id']} - ${m['nama_mesin']}", overflow: TextOverflow.ellipsis)
@@ -304,21 +292,6 @@ Future<void> _fetchUserProfile() async {
             const SizedBox(height: 10),
             Row(
               children: [
-                // Expanded(
-                //   flex: 2,
-                  // child: DropdownButtonFormField<int>(
-                  //   isExpanded: true,
-                  //   decoration: const InputDecoration(labelText: "Material", border: OutlineInputBorder()),
-                  //   value: _rows[index]['material_id'],
-                  //   // PERBAIKAN 3: Pastikan mapping item menggunakan casting 'as int'
-                  //   items: _materialList.map((m) => DropdownMenuItem<int>(
-                  //     value: m['material_id'] as int, 
-                  //     child: Text("${m['material_id']} - ${m['material_name']}", overflow: TextOverflow.ellipsis)
-                  //   )).toList(),
-                  //   onChanged: (val) => setState(() => _rows[index]['material_id'] = val),
-                  //   validator: (v) => v == null ? "!" : null,
-                  // ),
-                //),
                 Expanded(
                   flex: 2,
                   child: DropdownSearch<Map<String, dynamic>>(
@@ -334,7 +307,7 @@ Future<void> _fetchUserProfile() async {
                       ),
                     ),
                     popupProps: PopupProps.menu(
-                      showSearchBox: true, // Mengaktifkan kolom search
+                      showSearchBox: true,
                       searchFieldProps: const TextFieldProps(
                         decoration: InputDecoration(
                           hintText: "Cari No / Nama Material...",

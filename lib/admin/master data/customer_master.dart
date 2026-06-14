@@ -35,19 +35,12 @@ final GlobalKey<PaginatedDataTableState> _tableKey = GlobalKey<PaginatedDataTabl
     super.dispose();
   }
 
-  // --- REFRESH / FETCH DATA ---
   Future<void> _fetchData() async {
   int? currentRowIndex;
-  // if (_tableKey.currentState != null) {
-  //   currentRowIndex = _tableKey.currentState!.pageRowIndex;
-  // }
   setState(() => _isLoading = true);
 
   try {
-    // Tambahkan range jika datanya sangat banyak, 
-    // atau pastikan kebijakan API Supabase Anda mengizinkan fetch besar.
     var query = supabase.from('customer').select();
-
     if (_searchQuery.isNotEmpty) {
       final isNumber = int.tryParse(_searchQuery) != null;
       if (isNumber) {
@@ -58,8 +51,6 @@ final GlobalKey<PaginatedDataTableState> _tableKey = GlobalKey<PaginatedDataTabl
       }
     }
 
- // Batasi 500 jika kosong, jika cari naikkan limitnya
-    // Gunakan order dan pastikan tidak ada limit yang tertahan
     final data = await query.order('customer_id', ascending: true).limit(_searchQuery.isEmpty ? 500 : 3000);
 
     if (mounted) {
@@ -67,9 +58,7 @@ final GlobalKey<PaginatedDataTableState> _tableKey = GlobalKey<PaginatedDataTabl
         _customers = List<Map<String, dynamic>>.from(data);
         _isLoading = false;
       });
-      // 2. Kembalikan ke posisi halaman sebelumnya
       if (currentRowIndex != null && _customers.isNotEmpty) {
-        // Jika baris yang dihapus adalah baris terakhir di data, pastikan index tidak out of bounds
         if (currentRowIndex >= _customers.length) {
           currentRowIndex = (_customers.length - 1).clamp(0, double.infinity).toInt();
         }
@@ -85,152 +74,6 @@ final GlobalKey<PaginatedDataTableState> _tableKey = GlobalKey<PaginatedDataTabl
     if (mounted) setState(() => _isLoading = false);
   }
 }
-
-// Future<void> _importCustomerFromExcel() async {
-//   try {
-//     // 1. Pilih File
-//     FilePickerResult? result = await FilePicker.platform.pickFiles(
-//       type: FileType.custom,
-//       allowedExtensions: ['xlsx'],
-//       withData: true, // Penting agar bisa dibaca di Web & Mobile
-//     );
-
-//     if (result == null) return; // User membatalkan
-
-//     setState(() => _isLoading = true);
-
-//     // 2. Baca Excel
-//     var bytes = result.files.first.bytes;
-//     var excel = Excel.decodeBytes(bytes!);
-//     var sheet = excel.tables.values.first; // Ambil sheet pertama
-
-//     List<Map<String, dynamic>> importData = [];
-
-//     // 3. Iterasi baris (mulai dari index 1 karena index 0 adalah Header)
-//     for (int i = 1; i < sheet.maxRows; i++) {
-//       var row = sheet.rows[i];
-//       if (row.isEmpty || row[0] == null) continue;
-
-//       // Ambil data berdasarkan urutan kolom (sesuaikan dengan urutan saat Export)
-//       // row[0] = No Cust, row[1] = Nama, dst.
-//       importData.add({
-//         'customer_id': int.tryParse(row[0]?.value.toString() ?? ""),
-//         'customer_name': row[1]?.value.toString()?? "-",
-//         'customer_type': row[2]?.value.toString()?? "-",
-//         'del_type': row[3]?.value.toString()?? "-",
-//         'city': row[4]?.value.toString()?? "-",
-//         'area': row[5]?.value.toString()?? "-",
-//         'report_area': row[6]?.value.toString()?? "-",
-//         'pod_area': row[7]?.value.toString()?? "-",
-//       });
-//     }
-
-//     if (importData.isEmpty) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text("File Excel kosong atau format salah"), backgroundColor: Colors.orange),
-//       );
-//       setState(() => _isLoading = false);
-//       return;
-//     }
-
-//     // 4. Kirim ke Supabase (Upsert)
-//     await supabase.from('customer').upsert(importData);
-
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(content: Text("Berhasil import ${importData.length} data customer")),
-//     );
-//     _fetchData(); // Refresh tabel
-
-//   // } catch (e) {
-//   //   setState(() => _isLoading = false);
-//   //   debugPrint("Import Error: $e");
-//   //   ScaffoldMessenger.of(context).showSnackBar(
-//   //     SnackBar(content: Text("Gagal Import: Format file mungkin tidak sesuai"), backgroundColor: Colors.red),
-//   //   );
-//   } catch (e) {
-//   setState(() => _isLoading = false);
-//   // Tampilkan pesan error asli (e) agar kita tahu salahnya di mana
-//   ScaffoldMessenger.of(context).showSnackBar(
-//     SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-//   );
-//   print("Detail Error Import: $e");
-// }
-//   }
-
-// Future<void> _importCustomerFromExcel() async {
-//   try {
-//     // Pastikan menggunakan FileType.any atau custom yang tepat
-//     FilePickerResult? result = await FilePicker.platform.pickFiles(
-//       type: FileType.custom,
-//       allowedExtensions: ['xlsx'],
-//       withData: true, // WAJIB untuk Web
-//     );
-
-//     if (result == null || result.files.isEmpty) {
-//       print("User membatalkan pilihan file");
-//       return; 
-//     }
-
-//     setState(() => _isLoading = true);
-
-//     // Ambil bytes dengan cara yang lebih aman
-//     final platformFile = result.files.first;
-//     final bytes = platformFile.bytes;
-
-//     if (bytes == null) {
-//       throw "Gagal membaca data file (Bytes kosong)";
-//     }
-
-//     var excel = Excel.decodeBytes(bytes);
-    
-//     // Pastikan ada table/sheet di dalamnya
-//     if (excel.tables.isEmpty) {
-//       throw "File Excel tidak memiliki sheet";
-//     }
-
-//     var sheet = excel.tables.values.first;
-//     List<Map<String, dynamic>> importData = [];
-
-//     // Loop data (abaikan header baris 0)
-//     for (int i = 1; i < sheet.maxRows; i++) {
-//       var row = sheet.rows[i];
-      
-//       // Lewati jika baris benar-benar kosong atau kolom ID (row[0]) kosong
-//       if (row.isEmpty || row[0] == null || row[0]?.value == null) continue;
-
-//       importData.add({
-//         'customer id': int.tryParse(row[0]?.value.toString() ?? ""),
-//         'customer name': row[1]?.value?.toString() ?? "-",
-//         'customer_type': row[2]?.value?.toString() ?? "-",
-//         'del_type': row[3]?.value?.toString() ?? "-",
-//         'city': row[4]?.value?.toString() ?? "-",
-//         'area': row[5]?.value?.toString() ?? "-",
-//         'report_area': row[6]?.value?.toString() ?? "-",
-//         'pod_area': row[7]?.value?.toString() ?? "-",
-//       });
-//     }
-
-//     if (importData.isEmpty) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text("Tidak ada data valid yang ditemukan di Excel"), backgroundColor: Colors.orange),
-//       );
-//     } else {
-//       await supabase.from('customer').upsert(importData);
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text("Berhasil import ${importData.length} data!"), backgroundColor: Colors.green),
-//       );
-//       _fetchData();
-//     }
-
-//   } catch (e) {
-//     print("Detail Error: $e");
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-//     );
-//   } finally {
-//     if (mounted) setState(() => _isLoading = false);
-//   }
-// }
 
 Future<void> _importCustomerFromExcel() async {
   try {
@@ -251,10 +94,6 @@ Future<void> _importCustomerFromExcel() async {
     if (excel.tables.isEmpty) throw "File tidak memiliki sheet";
 
     var sheet = excel.tables.values.first;
-
-    // ==============================
-    // 🔥 1. HEADER ALIAS (EXCEL → DB)
-    // ==============================
     final Map<String, String> headerAlias = {
       'no customer': 'customer_id',
       'nama customer': 'customer_name',
@@ -269,14 +108,8 @@ Future<void> _importCustomerFromExcel() async {
       'data log': 'data_log',
       'jenis': 'jenis',
     };
-
-    // ==============================
-    // 🔥 2. BACA HEADER
-    // ==============================
     var headerRow = sheet.rows.first;
-
     Map<String, int> columnIndex = {};
-
     for (int i = 0; i < headerRow.length; i++) {
       var header = headerRow[i]?.value?.toString().trim().toLowerCase();
       if (header == null || header.isEmpty) continue;
@@ -286,37 +119,19 @@ Future<void> _importCustomerFromExcel() async {
       }
     }
 
-    // ==============================
-    // 🔥 3. HELPER AMBIL VALUE (AMAN)
-    // ==============================
     dynamic getValue(List row, String field) {
       if (!columnIndex.containsKey(field)) return null;
-
       int colIndex = columnIndex[field]!;
-
-      // 🔥 CEK INDEX BIAR GA ERROR
       if (colIndex >= row.length) return null;
-
       var val = row[colIndex]?.value;
-
       if (val == null || val.toString().trim().isEmpty) return null;
-
       return val.toString();
     }
-
     List<Map<String, dynamic>> importData = [];
-
-    // ==============================
-    // 🔥 4. LOOP DATA
-    // ==============================
     for (int i = 1; i < sheet.maxRows; i++) {
       var row = sheet.rows[i];
-
       if (row.isEmpty) continue;
-
       var customerId = getValue(row, 'customer_id');
-
-      // ❗ wajib ada (primary key)
       if (customerId == null) continue;
 
       importData.add({
@@ -345,11 +160,7 @@ Future<void> _importCustomerFromExcel() async {
       return;
     }
 
-    // ==============================
-    // 🔥 5. SIMPAN KE DATABASE
-    // ==============================
     await supabase.from('customer').upsert(importData);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Berhasil import ${importData.length} data"),
@@ -360,7 +171,7 @@ Future<void> _importCustomerFromExcel() async {
     _fetchData();
 
   } catch (e) {
-    print("ERROR IMPORT: $e");
+    //print("ERROR IMPORT: $e");
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -373,81 +184,6 @@ Future<void> _importCustomerFromExcel() async {
   }
 }
 
-// Future<void> _exportCustomerToExcel() async {
-//   if (_customers.isEmpty) {
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       const SnackBar(content: Text("Tidak ada data untuk diekspor"), backgroundColor: Colors.orange),
-//     );
-//     return;
-//   }
-
-//   try {
-//     setState(() => _isLoading = true);
-
-//     var excel = Excel.createExcel();
-//     Sheet sheetObject = excel['Master_Customer'];
-//     excel.delete('Sheet1');
-
-//     // --- 1. HEADER ---
-//     List<CellValue> headers = [
-//       TextCellValue('No Cust'),
-//       TextCellValue('Nama Customer'),
-//       TextCellValue('Customer Type'),
-//       TextCellValue('Del Type'),
-//       TextCellValue('City'),
-//       TextCellValue('Area'),
-//       TextCellValue('Report Area'),
-//       TextCellValue('POD Area'),
-//     ];
-//     sheetObject.appendRow(headers);
-
-//     // --- 2. ISI DATA ---
-//     for (var cust in _customers) {
-//       sheetObject.appendRow([
-//         TextCellValue(cust['customer_id']?.toString() ?? ""),
-//         TextCellValue(cust['customer_name'] ?? "-"),
-//         TextCellValue(cust['customer_type'] ?? "-"),
-//         TextCellValue(cust['del_type'] ?? "-"),
-//         TextCellValue(cust['city'] ?? "-"),
-//         TextCellValue(cust['area'] ?? "-"),
-//         TextCellValue(cust['report_area'] ?? "-"),
-//         TextCellValue(cust['pod_area'] ?? "-"),
-//       ]);
-//     }
-
-//     // --- 3. PROSES SIMPAN/DOWNLOAD ---
-//     var fileBytes = excel.save();
-//     String fileName = "Master_Customer_${DateTime.now().millisecondsSinceEpoch}.xlsx";
-
-//     if (kIsWeb) {
-//       // Logic Web
-//       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//       final url = html.Url.createObjectUrlFromBlob(content);
-//       html.AnchorElement(href: url)
-//         ..setAttribute("download", fileName)
-//         ..click();
-//       html.Url.revokeObjectUrl(url);
-//       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Download dimulai..."), backgroundColor: Colors.green));
-//     } else {
-//       // Logic Android
-//       final directory = await getApplicationDocumentsDirectory();
-//       String filePath = '${directory.path}/$fileName';
-//       io.File(filePath)
-//         ..createSync(recursive: true)
-//         ..writeAsBytesSync(fileBytes!);
-
-//       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("File berhasil disimpan"), backgroundColor: Colors.green));
-//       await OpenFile.open(filePath);
-//     }
-
-//     setState(() => _isLoading = false);
-//   } catch (e) {
-//     setState(() => _isLoading = false);
-//     debugPrint("Export Error: $e");
-//     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal ekspor: $e"), backgroundColor: Colors.red));
-//   }
-// }
-
 bool _isExporting = false;
 Future<void> _exportCustomerToExcel() async {
   if (_isExporting) return;
@@ -457,14 +193,12 @@ Future<void> _exportCustomerToExcel() async {
       _isLoading = true;
       _isExporting = true;
     });
-
-    // 🔥 1. AMBIL SEMUA DATA DARI DATABASE (NO FILTER)
     final data = await supabase
         .from('customer')
         .select()
         .order('customer_id', ascending: true);
 
-    if (data == null || data.isEmpty) {
+    if (data.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Tidak ada data untuk diekspor"),
@@ -473,16 +207,11 @@ Future<void> _exportCustomerToExcel() async {
       );
       return;
     }
-
     List<Map<String, dynamic>> customers =
         List<Map<String, dynamic>>.from(data);
-
-    // 🔥 2. BUAT EXCEL
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Master_Customer'];
     excel.delete('Sheet1');
-
-    // 🔥 3. HEADER LENGKAP
     sheetObject.appendRow([
       TextCellValue('No Customer'),
       TextCellValue('Nama Customer'),
@@ -498,7 +227,6 @@ Future<void> _exportCustomerToExcel() async {
       TextCellValue('POD Scan'),
     ]);
 
-    // 🔥 4. ISI DATA
     for (var cust in customers) {
       sheetObject.appendRow([
         TextCellValue(cust['customer_id']?.toString() ?? ""),
@@ -515,9 +243,6 @@ Future<void> _exportCustomerToExcel() async {
         TextCellValue(cust['pod_scan']?.toString() ?? "0"),
       ]);
     }
-
-    // 🔥 5. SAVE FILE
-    //var fileBytes = excel.save();
     String fileName =
         "Master_Customer_${DateTime.now().millisecondsSinceEpoch}.xlsx";
 
@@ -579,7 +304,6 @@ Future<void> _exportCustomerToExcel() async {
   }
 }
 
-  // --- DELETE DATA ---
   Future<void> _deleteCustomer(int id) async {
     try {
       await supabase.from('customer').delete().match({'customer_id': id});
@@ -601,8 +325,6 @@ Future<void> _exportCustomerToExcel() async {
       }
     }
   }
-
-  // --- SAVE / EDIT DATA ---
   Future<void> _saveData(
   bool isEdit,
   TextEditingController id,
@@ -650,8 +372,6 @@ Future<void> _exportCustomerToExcel() async {
     );
   }
 }
-
-  // --- FORM DIALOG ---
   void _showFormDialog([Map<String, dynamic>? customer]) {
     final bool isEdit = customer != null;
     final idController = TextEditingController(text: customer?['customer_id']?.toString() ?? '');
@@ -684,32 +404,13 @@ final f10 = FocusNode();
   _buildTextField(nameController, 'Nama Customer *', f2, f3, true),
   _buildTextField(cityController, 'City *', f3, f4, true),
   _buildTextField(kotaController, 'Kota', f4, f5, true),
-  _buildTextField(reportController, 'Report Area', f5, f6, true), // f5 ke f6
-  _buildTextField(areaController, 'Area *', f6, f7, true),       // f6 ke f7
-  _buildTextField(dataLogController, 'Data Log', f7, f8, true),   // f7 ke f8
-  _buildTextField(jenisQcfController, 'Jenis QCF', f8, f9, true), // f8 ke f9
-  _buildTextField(podScanController, 'POD Scan *', f9, f10, true, isNumber: true), // f9 ke f10
-  _buildTextField(
-    podAsliController,
-    'POD Asli *',
-    f10,
-    null, // Yang terakhir tidak punya 'next'
-    true,
-                  isNumber: true,
-                isLast: true,
-                onSave: () {
-                  _validateAndSave(
-                    isEdit,
-                    idController,
-                    nameController,
-                    cityController,
-                    areaController,
-                    reportController,
-                    kotaController,
-                    dataLogController,
-                    jenisQcfController,
-                    podScanController,
-                    podAsliController,
+  _buildTextField(reportController, 'Report Area', f5, f6, true),
+  _buildTextField(areaController, 'Area *', f6, f7, true),      
+  _buildTextField(dataLogController, 'Data Log', f7, f8, true),   
+  _buildTextField(jenisQcfController, 'Jenis QCF', f8, f9, true), 
+  _buildTextField(podScanController, 'POD Scan *', f9, f10, true, isNumber: true),
+  _buildTextField(podAsliController,'POD Asli *', f10, null, true, isNumber: true, isLast: true, onSave: () {
+  _validateAndSave(isEdit,idController,nameController,cityController, areaController, reportController, kotaController,dataLogController,jenisQcfController,podScanController,podAsliController,
                   );
                 },
               ),
@@ -728,18 +429,8 @@ final f10 = FocusNode();
             foregroundColor: Colors.white,
           ),
           onPressed: () {
-            _validateAndSave(
-              isEdit,
-              idController,
-              nameController,
-              cityController,
-              areaController,
-              reportController,
-              kotaController,
-              dataLogController,
-              jenisQcfController,
-              podScanController,
-              podAsliController,
+            
+  _validateAndSave(isEdit,idController,nameController,cityController, areaController, reportController, kotaController,dataLogController,jenisQcfController,podScanController,podAsliController,
             );
           },
           child: const Text("Simpan"),
@@ -762,15 +453,6 @@ final f10 = FocusNode();
   TextEditingController podScan,
     TextEditingController podAsli,
 ) {
-  // if (id.text.isEmpty || name.text.isEmpty || area.text.isEmpty) {
-  //   ScaffoldMessenger.of(context).showSnackBar(
-  //     const SnackBar(
-  //       content: Text("No Customer, Nama, dan Area wajib diisi!"),
-  //       backgroundColor: Colors.orange,
-  //     ),
-  //   );
-  //   return;
-  // }
   if (id.text.trim().isEmpty ||
         name.text.trim().isEmpty ||
         city.text.trim().isEmpty ||
@@ -815,95 +497,6 @@ final f10 = FocusNode();
     );
   }
 
-//   @override
-//   Widget build(BuildContext context) {
-//     final DataTableSource dataContent = CustomerDataSource(
-//       _customers,
-//       context,
-//       onEdit: (cust) => _showFormDialog(cust),
-//       onDelete: (id) => _deleteCustomer(id),
-//     );
-
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Master Customer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-//         backgroundColor: Colors.red.shade700,
-//         foregroundColor: Colors.white,
-//       ),
-//       body: _isLoading
-//           ? const Center(child: CircularProgressIndicator())
-//           : SingleChildScrollView(
-//               padding: const EdgeInsets.all(50),
-//               child: Column(
-//                 children: [
-                  
-//                   // --- SEARCH BAR DENGAN ICON SILANG (CLEAR) ---
-//                   ValueListenableBuilder<TextEditingValue>(
-//                     valueListenable: _searchController,
-//                     builder: (context, value, child) {
-//                       return TextField(
-//                         controller: _searchController,
-//                         decoration: InputDecoration(
-//                           labelText: "Cari Nama Customer...",
-//                           prefixIcon: const Icon(Icons.search),
-//                           // Munculkan icon silang HANYA jika ada teks
-//                           suffixIcon: value.text.isNotEmpty
-//                               ? IconButton(
-//                                   icon: const Icon(Icons.clear),
-//                                   onPressed: () {
-//                                     _searchController.clear();
-//                                     _searchQuery = "";
-//                                     _fetchData(); // Ambil semua data lagi
-//                                   },
-//                                 )
-//                               : null,
-//                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-//                         ),
-//                         onSubmitted: (val) {
-//                           _searchQuery = val;
-//                           _fetchData();
-//                         },
-//                       );
-//                     },
-//                   ),
-//                   const SizedBox(height: 20),
-//                   SizedBox(
-//                     width: double.infinity,
-//                     child: Theme(
-//     // Opsional: Agar scrollbar selalu terlihat (khusus desktop/web)
-//     data: Theme.of(context).copyWith(scrollbarTheme: ScrollbarThemeData(
-//       thumbVisibility: WidgetStateProperty.all(true),
-//     )),
-//      child: PaginatedDataTable(
-//                      columnSpacing: 12, 
-//                         rowsPerPage: 10,
-//                       columns: const [
-//   DataColumn(label: Text('No Cust', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('Nama Customer', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('Del Type', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('City', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('Area', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('Report Area', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('POD Area', style: TextStyle(fontWeight: FontWeight.bold))),
-//   DataColumn(label: Text('Aksi', style: TextStyle(fontWeight: FontWeight.bold))),
-// ],
-//                       source: dataContent,
-//                     ),
-//                   ),
-//     ),
-//                 ],
-//               ),
-//             ),
-//       floatingActionButton: FloatingActionButton(
-//         onPressed: () => _showFormDialog(),
-//         backgroundColor: Colors.red.shade700,
-//         child: const Icon(Icons.add, color: Colors.white),
-//       ),
-//     );
-//   }
-
-
 @override
   Widget build(BuildContext context) {
     final DataTableSource dataContent = CustomerDataSource(
@@ -914,21 +507,14 @@ final f10 = FocusNode();
     );
 
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Master Customer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(50), // Saya kecilkan padding agar pas di mobile/web
+              padding: const EdgeInsets.all(50), 
               child: Column(
                 children: [
-                  // --- ROW PENCARIAN & TOMBOL EXPORT ---
                   Row(
                     children: [
-                      // Kolom Pencarian
                       Expanded(
                         child: ValueListenableBuilder<TextEditingValue>(
                           valueListenable: _searchController,
@@ -943,18 +529,9 @@ final f10 = FocusNode();
                                     ? IconButton(
                                         icon: const Icon(Icons.clear),
                                         onPressed: () {
-//                                           _searchController.clear();
-//                                         //   _searchQuery = "";
-//                                         //   _fetchData();
-//                                         // },
-//                                         setState(() {
-//     _searchQuery = ""; // Reset query
-//   });
-//   _fetchData(); // Ambil data awal lagi
-// },
 setState(() {
-                _searchController.clear(); // Hapus teks di controller
-                _searchQuery = "";         // Reset query pencarian
+                _searchController.clear(); 
+                _searchQuery = "";        
               });
               _fetchData();
                                         },
@@ -963,7 +540,6 @@ setState(() {
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                               ),
                               onChanged: (val) {
-    // Memanggil setState agar suffixIcon diupdate saat user mengetik
     setState(() {});
   },
                               onSubmitted: (val) {
@@ -985,9 +561,8 @@ setState(() {
     ),
 
     const SizedBox(width: 8),
-                      // TOMBOL EXPORT EXCEL
                       Container(
-                        height: 55, // Samakan tinggi dengan TextField
+                        height: 55, 
                         decoration: BoxDecoration(
                           color: Colors.green.shade50,
                           borderRadius: BorderRadius.circular(10),
@@ -1003,8 +578,6 @@ setState(() {
                   ),
 
                   const SizedBox(height: 20),
-
-                  // --- TABEL DATA ---
                   SizedBox(
                     width: double.infinity,
                     child: Theme(
@@ -1049,9 +622,9 @@ Widget _buildActionButton({required IconData icon, required Color color, require
   return Container(
     height: 55,
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: IconButton(
       onPressed: onPressed,
@@ -1062,7 +635,6 @@ Widget _buildActionButton({required IconData icon, required Color color, require
 }
 }
 
-// --- DATA SOURCE CLASS ---
 class CustomerDataSource extends DataTableSource {
   final List<Map<String, dynamic>> data;
   final BuildContext context;
@@ -1097,7 +669,6 @@ class CustomerDataSource extends DataTableSource {
     ]);
   }
 
-
   void _confirm(int id) {
     showDialog(
       context: context,
@@ -1108,8 +679,8 @@ class CustomerDataSource extends DataTableSource {
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
           ElevatedButton(
     style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.red.shade700, // Warna background tombol
-      foregroundColor: Colors.white,       // Warna teks/icon tombol
+      backgroundColor: Colors.red.shade700,
+      foregroundColor: Colors.white,      
     ),
             onPressed: () {
               onDelete(id);
@@ -1126,5 +697,4 @@ class CustomerDataSource extends DataTableSource {
   @override int get rowCount => data.length;
   @override int get selectedRowCount => 0;
 
-  
 }

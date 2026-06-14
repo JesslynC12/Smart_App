@@ -18,273 +18,11 @@ class _ComplainPageState extends State<ComplainPage> {
   bool _isLoading = false;
   String? _selectedJenisKomplain;
   
-  // Variabel untuk menyimpan material yang dipilih
   Map<String, dynamic>? _selectedMaterial;
 
   Map<String, dynamic> _headerData = {};
   List<Map<String, dynamic>> _materials = [];
 
-  // // --- FUNGSI SEARCH KE SUPABASE ---
-  // Future<void> _searchDO() async {
-  //   String input = _doController.text.trim();
-  //   if (input.isEmpty) return;
-
-  //   setState(() => _isLoading = true);
-
-  //   try {
-  //     final data = await Supabase.instance.client
-  //         .from('delivery_order')
-  //         .select('''
-  //           *,
-  //           customer (customer_name),
-  //           shipping_request (stuffing_date,stuffing_date,
-  //           rdd,
-  //           warehouse (warehouse_name)),
-  //           do_details (
-  //             details_id,
-  //             qty,
-  //             material (material_id, material_name, material_type, division_description)
-  //           )
-  //         ''')
-  //         .eq('do_number', input)
-  //         .maybeSingle();
-
-  //     if (data == null) {
-  //       _showSnackBar("No DO tidak ditemukan!");
-  //       setState(() => _isDataLoaded = false);
-  //     } else {
-  //       setState(() {
-  //         _isDataLoaded = true;
-  //         _selectedMaterial = null;
-          
-  //         // Mapping Header (Sesuaikan dengan kolom yang tersedia di DB Anda)
-  //         _headerData = {
-  //           "do_id": data['do_id'],
-  //           "do_number": data['do_number'],
-  //           "customer": data['customer']?['customer_name'] ?? "-",
-  //         // "tanggal": data['shipping_request']?['shipping_date'] != null 
-  //         "tanggal": (data['shipping_request'] != null && data['shipping_request']['stuffing_date'] != null)
-  //   ? DateFormat('dd MMM yyyy').format(DateTime.parse(data['shipping_request']['stuffing_date'])) 
-  //   : "Tanggal tidak ditemukan",
-  //           "no_kendaraan": "-", 
-  //           "jam_in": "-",
-  //           "jam_out": "-",
-  //           "rsby": "-",
-  //           "emkl": "-",
-  //           "gudang": "-",
-  //           "checker": "-",
-  //           "divisi": "-",
-  //           "type": "-",
-  //         };
-
-  //         // Mapping List Material
-  //         final List details = data['do_details'] as List;
-  //         _materials = details.asMap().entries.map((entry) {
-  //           int idx = entry.key;
-  //           var item = entry.value;
-  //           final mat = item['material'];
-  //           return {
-  //             "no": idx + 1,
-  //             "details_id": item['details_id'],
-  //             "no_mat": mat['material_id'].toString(), 
-  //             "nama": mat['material_name'] ?? "-",
-  //             "qty": item['qty'],
-  //             "tipe": mat['material_type'] ?? "-",
-  //             "divisi": mat['division_description'] ?? "-"
-  //           };
-  //         }).toList();
-  //       });
-  //     }
-  //   } catch (e) {
-  //     _showSnackBar("Terjadi kesalahan: ${e.toString()}");
-  //   } finally {
-  //     setState(() => _isLoading = false);
-  //   }
-  // }
-
-//   Future<void> _searchDO() async {
-//   String input = _doController.text.trim();
-//   if (input.isEmpty) return;
-
-//   setState(() => _isLoading = true);
-
-//   try {
-//     // 1. Cari DO utama untuk mendapatkan shipping_id
-//     final doData = await Supabase.instance.client
-//         .from('delivery_order')
-//         .select('''
-//           *,
-//           shipping_request (
-//             stuffing_date,
-//             rdd,
-//             warehouse (warehouse_name)
-//           )
-//         ''')
-//         .eq('do_number', input)
-//         .maybeSingle();
-
-//     if (doData == null) {
-//       _showSnackBar("No DO tidak ditemukan!");
-//       setState(() => _isDataLoaded = false);
-//       return;
-//     }
-
-//     final int? shippingId = doData['shipping_id'];
-
-//     // 2. Ambil data Shipping Assignment & Semua Customer di Shipping ID tersebut
-//     // Ini penting untuk mendukung Group DO (Multi-Customer)
-//     final assignmentData = await Supabase.instance.client
-//         .from('shipping_assignments')
-//         .select('''
-//           *,
-//           checker (checker_name),
-//           shipping_request!inner (
-//             delivery_order (
-//               customer (customer_name)
-//             )
-//           )
-//         ''')
-//         .eq('shipping_id', shippingId as Object)
-//         .maybeSingle();
-
-//     // 3. Ekstrak daftar customer (Group DO support)
-//     List<String> customerNames = [];
-//     if (assignmentData != null) {
-//       final List dos = assignmentData['shipping_request']['delivery_order'] as List;
-//       customerNames = dos
-//           .map((d) => d['customer']['customer_name'].toString())
-//           .toSet() // Hilangkan duplikat jika ada
-//           .toList();
-//     }
-
-//     setState(() {
-//       _isDataLoaded = true;
-//       _selectedMaterial = null;
-
-//       // Mapping Header dari data Assignment & Request
-//       _headerData = {
-//         "no_polisi": assignmentData?['no_polisi'] ?? "-",
-//         "tahun": assignmentData?['tahun_kendaraan'] ?? "-",
-//         "supir": assignmentData?['nama_supir'] ?? "-",
-//         "hp_supir": assignmentData?['no_hp_supir'] ?? "-",
-//         "stuffing": doData['shipping_request']['stuffing_date'] ?? "-",
-//         "rdd": doData['shipping_request']['rdd'] ?? "-",
-//         "customer": customerNames.join(", "), // PT AA, PT BB
-//         "jam_in": assignmentData?['checkIn_at'] != null 
-//             ? DateFormat('HH:mm').format(DateTime.parse(assignmentData?['checkIn_at'])) 
-//             : "-",
-//         "jam_out": assignmentData?['keluar_at'] != null 
-//             ? DateFormat('HH:mm').format(DateTime.parse(assignmentData?['keluar_at'])) 
-//             : "-",
-//         "gudang": doData['shipping_request']['warehouse']?['warehouse_name'] ?? "-",
-//         "checker": assignmentData?['checker']?['checker_name'] ?? "-",
-//       };
-
-//       // Query Material (Tetap dari DO Details)
-//       _fetchMaterials(doData['do_id']);
-//     });
-//   } catch (e) {
-//     print(e);
-//     _showSnackBar("Terjadi kesalahan: ${e.toString()}");
-//   } finally {
-//     setState(() => _isLoading = false);
-//   }
-// }
-
-// Future<void> _searchDO() async {
-//   String input = _doController.text.trim();
-//   if (input.isEmpty) return;
-
-//   setState(() => _isLoading = true);
-
-//   try {
-//     // 1. Ambil DO utama
-//     final doData = await Supabase.instance.client
-//         .from('delivery_order')
-//         .select('*, shipping_request(stuffing_date, rdd, warehouse(warehouse_name))')
-//         .eq('do_number', input)
-//         .maybeSingle();
-
-//     if (doData == null) {
-//       _showSnackBar("No DO tidak ditemukan!");
-//       setState(() => _isDataLoaded = false);
-//       return;
-//     }
-
-//     final int? shippingId = doData['shipping_id'];
-
-//     // 2. Ambil Assignment dengan status 'keluar' atau 'completed'
-//     // Menggunakan filter .in_() untuk mencakup kedua status tersebut
-//     final assignmentData = await Supabase.instance.client
-//         .from('shipping_assignments')
-//         .select('''
-//           *,
-//           checker (checker_name),
-//           master_vendor (nik, vendor_name),
-//           shipping_request!inner (
-//             delivery_order (
-//               customer (customer_name)
-//             )
-//           )
-//         ''')
-//         .eq('shipping_id', shippingId as Object)
-//         .inFilter('status_assignment', ['keluar', 'completed']) // Filter status di sini
-//         .order('assigned_at', ascending: false)
-//         .limit(1)
-//         .maybeSingle();
-
-//     // 3. VALIDASI: Jika data assignment tidak ditemukan dengan status tersebut
-//     if (assignmentData == null) {
-//       _showSnackBar(
-//         "Komplain untuk DO ini belum bisa dibuat karena proses pengiriman belum selesai (Status belum 'keluar' atau 'completed').",
-//         isError: true
-//       );
-//       setState(() => _isDataLoaded = false);
-//       return;
-//     }
-
-//     // 4. Ekstrak daftar customer untuk Group DO
-//     List<String> customerNames = [];
-//     final List dos = assignmentData['shipping_request']['delivery_order'] as List;
-//     customerNames = dos
-//         .map((d) => d['customer']['customer_name'].toString())
-//         .toSet()
-//         .toList();
-
-//     setState(() {
-//       _isDataLoaded = true;
-//       _selectedMaterial = null;
-
-//       _headerData = {
-//         "no_polisi": assignmentData['no_polisi'] ?? "-",
-//         "tahun": assignmentData['tahun_kendaraan'] ?? "-",
-//         "supir": assignmentData['nama_supir'] ?? "-",
-//         "hp_supir": assignmentData['no_hp_supir'] ?? "-",
-//         "vendor": assignmentData['master_vendor'] != null 
-//             ? "${assignmentData['master_vendor']['nik']} - ${assignmentData['master_vendor']['vendor_name']}"
-//             : "-",
-//         "stuffing": doData['shipping_request']?['stuffing_date'] ?? "-",
-//         "rdd": doData['shipping_request']?['rdd'] ?? "-",
-//         "customer": customerNames.isNotEmpty ? customerNames.join(", ") : "-",
-//         "jam_in": assignmentData['checkIn_at'] != null 
-//             ? DateFormat('HH:mm').format(DateTime.parse(assignmentData['checkIn_at'])) 
-//             : "-",
-//         "jam_out": assignmentData['keluar_at'] != null 
-//             ? DateFormat('HH:mm').format(DateTime.parse(assignmentData['keluar_at'])) 
-//             : "-",
-//         "gudang": doData['shipping_request']?['warehouse']?['warehouse_name'] ?? "-",
-//         "checker": assignmentData['checker']?['checker_name'] ?? "-",
-//       };
-
-//       _fetchMaterials(doData['do_id']);
-//     });
-//   } catch (e) {
-//     debugPrint("Search Error: $e");
-//     _showSnackBar("Terjadi kesalahan saat memvalidasi status pengiriman.");
-//   } finally {
-//     setState(() => _isLoading = false);
-//   }
-// }
 Future<void> _searchDO() async {
   String input = _doController.text.trim();
   if (input.isEmpty) return;
@@ -292,14 +30,12 @@ Future<void> _searchDO() async {
   setState(() => _isLoading = true);
 
   try {
-    // 1. Cari DO inputan untuk dapat shipping_id-nya
-    // Menggunakan list agar tidak error jika DO ditemukan lebih dari satu
     final response = await Supabase.instance.client
         .from('delivery_order')
         .select('shipping_id')
         .eq('do_number', input);
 
-    if (response == null || (response as List).isEmpty) {
+    if ((response as List).isEmpty) {
       _showSnackBar("No DO tidak ditemukan!");
       setState(() => _isDataLoaded = false);
       return;
@@ -307,7 +43,6 @@ Future<void> _searchDO() async {
 
     final int shippingId = (response as List)[0]['shipping_id'];
 
-    // 2. Ambil SEMUA DO dalam shipping_id yang sama
     final allDos = await Supabase.instance.client
         .from('delivery_order')
         .select('''
@@ -321,13 +56,10 @@ Future<void> _searchDO() async {
         ''')
         .eq('shipping_id', shippingId);
 
-    // 3. Ambil data Assignment untuk Header
-    // GANTI 'created_at' dengan 'id' atau kolom penanggalan yang benar-benar ada di tabel Anda
     final assignmentData = await Supabase.instance.client
         .from('shipping_assignments')
         .select('*, checker(checker_name), master_vendor(nik, vendor_name)')
         .eq('shipping_id', shippingId)
-        //.order('id', ascending: false) // Jika kolom 'id' ada, atau ganti dengan primary key lain
         .limit(1);
 
     final assignment = (assignmentData as List).isNotEmpty ? (assignmentData as List)[0] : null;
@@ -337,7 +69,6 @@ Future<void> _searchDO() async {
       return;
     }
 
-    // 4. Proses data
     List<Map<String, dynamic>> allMaterials = [];
     List<String> customerList = [];
 
@@ -389,31 +120,29 @@ Future<void> _searchDO() async {
   }
 }
 
-// Fungsi tambahan untuk ambil material agar kode lebih bersih
-Future<void> _fetchMaterials(int doId) async {
-  final data = await Supabase.instance.client
-      .from('do_details')
-      .select('*, material(*)')
-      .eq('do_id', doId);
+// Future<void> _fetchMaterials(int doId) async {
+//   final data = await Supabase.instance.client
+//       .from('do_details')
+//       .select('*, material(*)')
+//       .eq('do_id', doId);
   
-  setState(() {
-    _materials = (data as List).asMap().entries.map((entry) {
-      var item = entry.value;
-      var mat = item['material'];
-      return {
-        "no": entry.key + 1,
-        "details_id": item['details_id'],
-        "no_mat": mat['material_id'],
-        "nama": mat['material_name'],
-        "qty": item['qty'],
-        "tipe": mat['material_type'],
-        "divisi": mat['division_description']
-      };
-    }).toList();
-  });
-}
+//   setState(() {
+//     _materials = (data as List).asMap().entries.map((entry) {
+//       var item = entry.value;
+//       var mat = item['material'];
+//       return {
+//         "no": entry.key + 1,
+//         "details_id": item['details_id'],
+//         "no_mat": mat['material_id'],
+//         "nama": mat['material_name'],
+//         "qty": item['qty'],
+//         "tipe": mat['material_type'],
+//         "divisi": mat['division_description']
+//       };
+//     }).toList();
+//   });
+// }
 
-  // --- FUNGSI KIRIM KOMPLAIN ---
   Future<void> _sendComplaint() async {
     if (_selectedMaterial == null || _selectedJenisKomplain == null || _qtyController.text.isEmpty) {
       _showSnackBar("Mohon lengkapi semua data!");
@@ -434,15 +163,8 @@ Future<void> _fetchMaterials(int doId) async {
 
       _showSnackBar("Berhasil mengirim laporan komplain!", isError: false);
       
-      // _qtyController.clear();
-      // _catatanController.clear();
-      // setState(() {
-      //   _selectedMaterial = null;
-      //   _selectedJenisKomplain = null;
-      // });
       if (_materials.length > 1) {
-        // Jika material lebih dari 1, hanya bersihkan form input, 
-        // tetap tampilkan data DO/Shipping agar user bisa lanjut pilih material lain
+       
         _qtyController.clear();
         _catatanController.clear();
         setState(() {
@@ -450,7 +172,6 @@ Future<void> _fetchMaterials(int doId) async {
           _selectedJenisKomplain = null;
         });
       } else {
-        // Jika hanya 1 material, reset total kembali ke awal
         _resetForm();
       }
 
@@ -462,14 +183,14 @@ Future<void> _fetchMaterials(int doId) async {
   }
 void _resetForm() {
   setState(() {
-    _doController.clear();      // Membersihkan input pencarian
-    _qtyController.clear();     // Membersihkan qty
-    _catatanController.clear(); // Membersihkan catatan
-    _selectedMaterial = null;   // Menghapus pilihan material
-    _selectedJenisKomplain = null; // Menghapus jenis komplain
-    _isDataLoaded = false;      // Menghilangkan card detail & tabel (kembali ke state awal)
-    _headerData = {};           // Mengosongkan data header
-    _materials = [];            // Mengosongkan list material
+    _doController.clear();      
+    _qtyController.clear();     
+    _catatanController.clear(); 
+    _selectedMaterial = null;  
+    _selectedJenisKomplain = null;
+    _isDataLoaded = false;    
+    _headerData = {};          
+    _materials = [];          
   });
 }
   void _showSnackBar(String msg, {bool isError = true}) {
@@ -485,12 +206,7 @@ void _resetForm() {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      // appBar: AppBar(
-      //   title: const Text("Detail & Komplain DO", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      //   elevation: 0,
-      // ),
+    
       body: _isLoading 
       ? const Center(child: CircularProgressIndicator())
       : SingleChildScrollView(
@@ -560,13 +276,6 @@ void _resetForm() {
             Table(
               columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(0.2), 2: FlexColumnWidth(2)},
               children: [
-                // _buildTableRow("No. Kendaraan", _headerData['no_kendaraan']),
-                // _buildTableRow("Jam In / Out", "${_headerData['jam_in']} - ${_headerData['jam_out']}"),
-                // _buildTableRow("Customer", _headerData['customer']),
-                // _buildTableRow("RSBY / EMKL", "${_headerData['rsby']} / ${_headerData['emkl']}"),
-                // _buildTableRow("Gudang", _headerData['gudang']),
-                // _buildTableRow("Checker", _headerData['checker']),
-                // _buildTableRow("Divisi / Type", "${_headerData['divisi']} / ${_headerData['type']}"),
                 _buildTableRow("Driver / HP", "${_headerData['supir']} (${_headerData['hp_supir']})"),
               _buildTableRow("No. Polisi / Thn", "${_headerData['no_polisi']} / ${_headerData['tahun']}"),
               _buildTableRow("Vendor / Transporter", _headerData['vendor']),
@@ -637,7 +346,7 @@ void _resetForm() {
                   });
                 },
                 child: Container(
-                  color: isSelected ? Colors.red.withOpacity(0.1) : Colors.transparent,
+                  color: isSelected ? Colors.red.withValues(alpha: 0.1) : Colors.transparent,
                   padding: const EdgeInsets.all(10),
                   child: Row(
                     children: [
@@ -717,7 +426,7 @@ void _resetForm() {
             const SizedBox(height: 15),
             _buildFieldLabel("Jenis Masalah"),
             DropdownButtonFormField<String>(
-              value: _selectedJenisKomplain,
+            initialValue: _selectedJenisKomplain,
               items: ["Penolakan", "Kekurangan", "Kelebihan"].map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 14)))).toList(),
               onChanged: (v) => setState(() => _selectedJenisKomplain = v),
               decoration: _inputDecoration("Pilih Jenis"),

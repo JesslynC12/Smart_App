@@ -100,7 +100,6 @@ RealtimeChannel? _realtimeChannel;
       setState(() {
         marshoDataList = marsho;
         cookingOilDataList = cookingOil;
-        //bufferDataList = buffer;
         _calculateGrandTotal();
       });
     } catch (e) {
@@ -185,7 +184,8 @@ RealtimeChannel? _realtimeChannel;
           .eq('ppic_forms.tanggal', dateStr);
       
       for (var row in (res as List)) {
-        double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
+        // double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
+        final int bpp = row['material']['box_per_pallet'] ?? 1;
         totalPallet += (row['qty'] ?? 0) / (bpp == 0 ? 1 : bpp);
       }
     } else {
@@ -204,7 +204,6 @@ RealtimeChannel? _realtimeChannel;
   }
 
 Future<void> _exportToExcel() async {
-    // Cegah eksekusi ganda jika tombol diklik berulang kali
     if (isLoading) return;
 
     if (marshoDataList.isEmpty && cookingOilDataList.isEmpty) {
@@ -219,21 +218,17 @@ Future<void> _exportToExcel() async {
     try {
       var excel = Excel.createExcel();
       Sheet sheetObject = excel['Daily_Review_Report'];
-      excel.delete('Sheet1'); // Hapus sheet bawaan kosong
+      excel.delete('Sheet1');
 
-      // 1. Definisikan Style
       CellStyle headerStyle = CellStyle(
         bold: true,
         horizontalAlign: HorizontalAlign.Center,
-        // backgroundColorHex: '#ECEFF1', // Warna BlueGrey[50]
       );
 
       CellStyle grandTotalStyle = CellStyle(
         bold: true,
-        // backgroundColorHex: '#E0E0E0', // Warna Grey[300]
       );
 
-      // 2. Buat Header Kolom
       List<String> columns = [
         'Location', 'Kapasitas', 'Max Utilize', 'H Pagi (PP)', 'H Pagi (%)',
         'Deliv Plan (H-1)', 'Prod Plan (H-1)', 'Predict Occ', 'Prod Plan (H+1)',
@@ -248,7 +243,6 @@ Future<void> _exportToExcel() async {
 
       int currentRow = 1;
 
-      // Fungsi pembantu untuk mengisi baris data ke sheet excel
       void appendDataRows(List<MasterReviewDailyItem> items, {bool isTotal = false}) {
         for (var item in items) {
           sheetObject.appendRow([
@@ -275,13 +269,10 @@ Future<void> _exportToExcel() async {
         }
       }
 
-      // 3. Masukkan Data MARSHO
       appendDataRows(marshoDataList);
 
-      // 4. Masukkan Data COOKING OIL
       appendDataRows(cookingOilDataList);
 
-      // 5. Masukkan Data GRAND TOTAL
       appendDataRows(totalDataList, isTotal: true);
 
       // 4. Proses Encoding & Download menggunakan FileSaver (Aman untuk Web & Mobile)
@@ -340,7 +331,6 @@ Future<void> _exportToExcel() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-     // appBar: AppBar(title: const Text("Master Review Daily")),
       body: Column(
         children: [
           _buildHeader(),
@@ -361,14 +351,8 @@ Widget _buildUnifiedTable() {
 
   allRows.addAll(marshoDataList.map((item) => _buildRow(item, false)));
 
-  // 2. Spasi antar tabel (Opsional)
-  //allRows.add(const DataRow(cells: [DataCell(SizedBox(height: 10)), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox()), DataCell(SizedBox())]));
-
-  // 3. Bagian COOKING OIL
-  //allRows.add(_buildHeaderRow("COOKING OIL")); // Baris Judul
   allRows.addAll(cookingOilDataList.map((item) => _buildRow(item, false)));
 
-  // 4. Bagian GRAND TOTAL
   allRows.addAll(totalDataList.map((item) => _buildRow(item, true)));
 
   return SingleChildScrollView(
@@ -384,15 +368,6 @@ Widget _buildUnifiedTable() {
   );
 }
 
-// DataRow _buildHeaderRow(String title) {
-//   return DataRow(
-//     color: MaterialStateProperty.all(Colors.grey[100]),
-//     cells: [
-//       DataCell(Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black))),
-//       ...List.generate(11, (index) => const DataCell(SizedBox())), // Isi sel sisa dengan kosong
-//     ],
-//   );
-// }
   Widget _buildHeader() {
     final now = DateTime.now();
     return Padding(
@@ -414,11 +389,10 @@ Widget _buildUnifiedTable() {
                 loadAllData();
               }
             },
-            //child: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
              icon: const Icon(Icons.calendar_today),
             label: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
           ),
-         const Spacer(), // Dorong tombol ke sisi paling kanan row
+         const Spacer(), 
          _buildActionButton(
           icon: Icons.file_download,
           color: Colors.green,
@@ -439,7 +413,6 @@ Widget _buildActionButton({
   return Container(
     height: 55,
     decoration: BoxDecoration(
-      // 🔥 Menggunakan .withValues() sesuai standar Flutter terbaru agar bebas warning
       color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(10),
       border: Border.all(color: color.withValues(alpha: 0.3)),
@@ -451,26 +424,6 @@ Widget _buildActionButton({
     ),
   );
 }
-  // Widget _buildSectionTitle(String title) {
-  //   return Padding(
-  //     padding: const EdgeInsets.symmetric(vertical: 8.0),
-  //     child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-  //   );
-  // }
-
-  // Widget _buildDataTable(List<MasterReviewDailyItem> data, {bool hideHeader = false, bool isTotal = false}) {
-  //   return SingleChildScrollView(
-  //     scrollDirection: Axis.horizontal,
-  //     child: DataTable(
-  //       headingRowHeight: hideHeader ? 0 : 56,
-  //       columnSpacing: 20,
-  //       headingRowColor: MaterialStateProperty.all(Colors.blueGrey[50]),
-  //       dataRowHeight: 45,
-  //       columns: _buildColumns(),
-  //       rows: data.map((item) => _buildRow(item, isTotal)).toList(),
-  //     ),
-  //   );
-  // }
 
   List<DataColumn> _buildColumns() {
     return [
@@ -489,70 +442,15 @@ Widget _buildActionButton({
     ];
   }
 
-  // DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
-  //   final fmt = NumberFormat('#,###');
-  //   final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
-
-  //   return DataRow(
-  //     color: isTotal ? MaterialStateProperty.all(Colors.grey[200]) : null,
-  //     cells: [
-  //       DataCell(Text(item.location, style: style)),
-  //       DataCell(Text(fmt.format(item.kapasitas), style: style)),
-  //       DataCell(Text(fmt.format(item.maxUtilize), style: style)),
-  //       DataCell(Text(fmt.format(item.hPagi), style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
-  //       DataCell(Text("${item.hPagiPersen.toStringAsFixed(2)}%", style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
-  //       DataCell(Text(fmt.format(item.actOutbound), style: style)),
-  //       DataCell(Text(fmt.format(item.productionPlanHmin1), style: style)),
-  //       DataCell( Text(fmt.format(item.predictOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-  //       DataCell(Text(fmt.format(item.productionPlanHplus1), style: style)),
-  //       DataCell(Text(fmt.format(item.deliveryPlanHplus1), style: style)),
-  //       DataCell(Text(fmt.format(item.finalOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-  //       DataCell(Text(fmt.format(item.sisaKapasitas), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-  //     ],
-  //   );
-  // }
-
 DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
   final fmt = NumberFormat('#,###');
   final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
-  //DataCell _cCell(String text, Color color, {TextStyle? tStyle}) {
-    //return DataCell(
-  //     Container(
-  //       color: color,
-  //       alignment: Alignment.center,
-  //       width: double.infinity,
-  //       height: double.infinity,
-  //       child: Text(text, style: tStyle ?? style),
-  //     ),
-  //   );
-  // }
+
 
   return DataRow(
     color: isTotal ? WidgetStateProperty.all(Colors.grey[300]) : null,
     cells: [
-    //   DataCell(Text(item.location, style: style)),
-    //   DataCell(Text(fmt.format(item.kapasitas), style: style)),
-    //   DataCell(Text(fmt.format(item.maxUtilize), style: style)),
-      
-    //   // HPagi & % (Tosca)
-    //   _cCell(fmt.format(item.hPagi), colorTosca, tStyle: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-    //   _cCell("${item.hPagiPersen.toStringAsFixed(2)}%", colorTosca),
-      
-    //   // Deliv & Prod H-1 (Biru)
-    //   _cCell(fmt.format(item.actOutbound), colorBlue),
-    //   _cCell(fmt.format(item.productionPlanHmin1), colorBlue),
-      
-    //   // Predict (Orange)
-    //   _cCell(fmt.format(item.predictOccupancy), colorOrange, tStyle: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-      
-    //   // Prod & Deliv H+1 (Ungu)
-    //   _cCell(fmt.format(item.productionPlanHplus1), colorPurple),
-    //   _cCell(fmt.format(item.deliveryPlanHplus1), colorPurple),
-      
-    //   // Final & Sisa (Orange)
-    //   _cCell(fmt.format(item.finalOccupancy), colorOrange, tStyle: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-    //   _cCell(fmt.format(item.sisaKapasitas), colorOrange),
-    // ],
+    
      DataCell(Text(item.location, style: style)),
         DataCell(Text(fmt.format(item.kapasitas), style: style)),
         DataCell(Text(fmt.format(item.maxUtilize), style: style)),
@@ -568,25 +466,5 @@ DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
       ],
   );
 }
-  // Widget _buildBufferTable() {
-  //   return Column(
-  //     crossAxisAlignment: CrossAxisAlignment.start,
-  //     children: [
-  //       _buildSectionTitle("BUFFER REPORT"),
-  //       DataTable(
-  //         headingRowColor: MaterialStateProperty.all(Colors.green[50]),
-  //         columns: const [
-  //           DataColumn(label: Text('Asal Produk')),
-  //           DataColumn(label: Text('Total Produk (Pallet)')),
-  //           DataColumn(label: Text('Total Ritase')),
-  //         ],
-  //         rows: bufferDataList.map((item) => DataRow(cells: [
-  //           DataCell(Text(item.asalProduk)),
-  //           DataCell(Text(item.totalProduk.toString())),
-  //           DataCell(Text(item.totalRitase.toString())),
-  //         ])).toList(),
-  //       ),
-  //     ],
-  //   );
-  // }
+ 
 }

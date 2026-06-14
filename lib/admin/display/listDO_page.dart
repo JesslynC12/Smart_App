@@ -49,88 +49,6 @@ void _setupRealtime() {
         });
   }
 
-// Future<void> _importMassalTigaTabel() async {
-//     try {
-//       FilePickerResult? result = await FilePicker.platform.pickFiles(
-//         type: FileType.custom,
-//         allowedExtensions: ['xlsx'],
-//         withData: true,
-//       );
-
-//       if (result == null || result.files.isEmpty) return;
-
-//       setState(() => _isLoading = true);
-//       final bytes = result.files.first.bytes;
-//       var excel = Excel.decodeBytes(bytes!);
-//       var sheet = excel.tables.values.first;
-
-//       Map<String, List<Map<String, dynamic>>> groupedByDO = {};
-      
-//       for (int i = 1; i < sheet.maxRows; i++) {
-//         var row = sheet.rows[i];
-//         if (row.length < 14 || row[2]?.value == null) continue; 
-
-//         String doNum = row[2]!.value.toString().trim();
-//         if (!groupedByDO.containsKey(doNum)) groupedByDO[doNum] = [];
-
-//         groupedByDO[doNum]!.add({
-//           "so": row[3]?.value.toString() ?? "",
-//           "cust_id": int.tryParse(row[4]?.value.toString() ?? ""),
-//           "mat_id": int.tryParse(row[6]?.value.toString() ?? ""),
-//           "qty": int.tryParse(row[9]?.value.toString() ?? "0"),
-//           "rdd": row[12]?.value.toString(),
-//           "stuffing": row[13]?.value.toString(),
-//         });
-//       }
-
-//       for (var entry in groupedByDO.entries) {
-//         String doNumber = entry.key;
-//         var items = entry.value;
-//         var firstItem = items.first;
-
-//         String rddRaw = firstItem['rdd']?.toString() ?? '';
-//         String stuffingRaw = firstItem['stuffing']?.toString() ?? '';
-
-//         if (rddRaw.contains(" ")) rddRaw = rddRaw.split(" ")[0];
-//         if (stuffingRaw.contains(" ")) stuffingRaw = stuffingRaw.split(" ")[0];
-
-//         final shipRes = await supabase.from('shipping_request').insert({
-//           'so': firstItem['so'],
-//           'status': 'waiting approval',
-//           'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
-//           'stuffing_date': DateTime.tryParse(stuffingRaw)?.toIso8601String(),
-//           'created_by': userDisplayName?? 'System Import',
-//         }).select().single();
-
-//         final int newShipId = shipRes['shipping_id'];
-
-//         final doRes = await supabase.from('delivery_order').insert({
-//           'shipping_id': newShipId,
-//           'do_number': doNumber,
-//           'customer_id': firstItem['cust_id'],
-//         }).select().single();
-
-//         final int newDoId = doRes['do_id'];
-
-//         List<Map<String, dynamic>> detailsToInsert = items.map((item) => {
-//           'do_id': newDoId,
-//           'material_id': item['mat_id'],
-//           'qty': item['qty'],
-//         }).toList();
-
-//         await supabase.from('do_details').insert(detailsToInsert);
-//       }
-
-//       _showSnackBar("Berhasil import massal 3 tabel sekaligus!", Colors.green);
-//       _fetchShippingRequests();
-
-//     } catch (e) {
-//       _showSnackBar("Gagal Import Massal: $e", Colors.red);
-//     } finally {
-//       setState(() => _isLoading = false);
-//     }
-//   }
-
 @override
   void dispose() {
     _horizontalController.dispose();
@@ -190,7 +108,7 @@ Future<void> _importMassalTigaTabel() async {
       .maybeSingle();
 
   if (existingDO != null) {
-    //print("No DO $doNumber sudah ada, melewati baris ini.");
+   
     duplicateDOs.add(doNumber);
     continue;
   }
@@ -218,13 +136,11 @@ Future<void> _importMassalTigaTabel() async {
       }
 
       if (!allMaterialsValid) {
-        //print("No DO $doNumber dilewati karena material id $invalidMaterialIds tidak ditemukan.");
         materialNotFoundDOs.add("$doNumber (Mat: $invalidMaterialIds)");
         continue; 
       }
   
       String rddRaw = firstItem['rdd']?.toString() ?? '';
-      //String? stuffingFinal = formatTanggal(firstItem['stuffing']);
       String stuffing = firstItem['stuffing']?.toString() ?? '';
       if (rddRaw.contains(" ")) rddRaw = rddRaw.split(" ")[0];
 
@@ -232,7 +148,7 @@ Future<void> _importMassalTigaTabel() async {
         'so': firstItem['so'],
         'status': 'waiting approval',
         'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
-        'stuffing_date': stuffing, // Sudah format ISO
+        'stuffing_date': stuffing,
         'createdDO_by': userDisplayName ?? 'System Import',
       }).select().single();
 
@@ -257,25 +173,7 @@ Future<void> _importMassalTigaTabel() async {
     }
 
     _fetchShippingRequests();
-    // if (duplicateDOs.isNotEmpty) {
-    //   // Jika ada yang sukses DAN ada yang duplikat
-    //   if (successCount > 0) {
-    //     _showSnackBar(
-    //       "Berhasil import $successCount data. Namun, No DO berikut dilewati karena sudah ada: ${duplicateDOs.join(', ')}",
-    //       Colors.orange
-    //     );
-    //   } else {
-    //     // Jika semuanya gagal karena duplikat
-    //     _showSnackBar(
-    //       "Gagal Import! Semua No DO berikut sudah terdaftar: ${duplicateDOs.join(', ')}",
-    //       Colors.red
-    //     );
-    //   }
-    // } else {
-    //   // Jika semua data sukses tanpa ada duplikat
-    //   _showSnackBar("Berhasil import massal semua data!", Colors.green);
-    // }
-
+   
     if (duplicateDOs.isNotEmpty || materialNotFoundDOs.isNotEmpty) {
       String feedbackMessage = "Berhasil import $successCount data. \n";
       
@@ -300,7 +198,7 @@ Future<void> _importMassalTigaTabel() async {
 
 Future<void> _fetchShippingRequests() async {
   try {
-    //setState(() => _isLoading = true);
+   
     if (_allRequests.isEmpty) {
       setState(() => _isLoading = true);
     }
@@ -360,7 +258,7 @@ void _editShippingRequest(Map<String, dynamic> req) async {
 
 Map<int, TextEditingController> soController = {};
   Map<int, TextEditingController> qtyControllers = {};
-// Inisialisasi Data
+
   if (isGroup) {
    
     for (int sId in idsToUpdate) {
@@ -406,18 +304,7 @@ Map<int, TextEditingController> soController = {};
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    // if (!isGroup) ...[
-                    //   const SizedBox(height: 10),
-                    //   TextField(
-                    //     controller: soController, 
-                    //     decoration: const InputDecoration(
-                    //       labelText: "Nomor SO",
-                    //       isDense: true,
-                    //       border: OutlineInputBorder(),
-                    //       prefixIcon: Icon(Icons.assignment),
-                    //     ),
-                    //   ),
-                    // ],
+                   
                     const Align(alignment: Alignment.centerLeft, child: Text("Nomor SO:", style: TextStyle(fontWeight: FontWeight.bold))),
                     const SizedBox(height: 8),
                     ...soController.entries.map((entry) {
@@ -505,7 +392,6 @@ Map<int, TextEditingController> soController = {};
                 ),
                 onPressed: () async {
                   try {
-                    //setState(() => _isLoading = true);
                     
                     for (var entry in soController.entries) {
                       await supabase
@@ -594,9 +480,8 @@ Future<void> _createAndAssignGroup() async {
   }
   
   try {
-    //setState(() => _isLoading = true);
 final currentUser = supabase.auth.currentUser;
-    String creatorName = "System"; // Default fallback
+    String creatorName = "System"; 
 
     if (currentUser != null) {
       final profile = await supabase
@@ -606,7 +491,6 @@ final currentUser = supabase.auth.currentUser;
           .single();
       creatorName = profile['name'] ?? "No Name";
     }
-    // 1. Insert ke tabel shipping_groups
     final groupResponse = await supabase
         .from('shipping_groups')
         .insert({
@@ -619,7 +503,6 @@ final currentUser = supabase.auth.currentUser;
 
     final int newGroupId = groupResponse['id'];
 
-    // 2. Update shipping_request yang dipilih dengan group_id baru
     await supabase
         .from('shipping_request')
         .update({'group_id': newGroupId})
@@ -649,14 +532,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
         groupedMap[gId] = Map<String, dynamic>.from(req);
         groupedMap[gId]!['grouped_ids'] = [req['shipping_id']];
         groupedMap[gId]!['all_rdds'] = [req['rdd']];
-      
-        // List historyWithId = [];
-        // if (req['shipping_pending_history'] != null) {
-        //   for (var h in req['shipping_pending_history']) {
-        //     historyWithId.add({...h, 'origin_ship_id': req['shipping_id']});
-        //   }
-        // }
-        // groupedMap[gId]!['collective_history'] = historyWithId;
+     
   List historyRaw = req['shipping_pending_history'] ?? [];
   List historyWithId = historyRaw.map((h) => {
     ...h, 
@@ -667,15 +543,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
       } else {
         groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
         
-        // if (req['shipping_pending_history'] != null) {
-        //   List currentHistory = groupedMap[gId]!['collective_history'];
-        //   for (var h in req['shipping_pending_history']) {
-        //     currentHistory.add({...h, 'origin_ship_id': req['shipping_id']});
-        //   }
-        //   groupedMap[gId]!['collective_history'] = currentHistory;
-        // }
-
-        // Gabungkan history dari anggota grup berikutnya
+      
   List currentHistory = List.from(groupedMap[gId]!['collective_history'] ?? []);
   List newHistoryRaw = req['shipping_pending_history'] ?? [];
   
@@ -692,10 +560,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
           rdds.add(req['rdd']);
         }
         groupedMap[gId]!['all_rdds'] = rdds;
-        // Ambil list DO yang sudah ada
         List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
-        
-        // Ambil DO dari request baru
         List newDos = req['delivery_order'] ?? [];
         
         for (var ndo in newDos) {
@@ -713,33 +578,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
   return finalResult;
 }
 
-// Future<void> _prosesKePermintaan() async {
-//   if (_selectedIds.isEmpty) return;
-//   try {
-//     setState(() => _isLoading = true);
-
-//     // Cukup insert shipping_id saja, tidak perlu looping DO lagi
-//     List<Map<String, dynamic>> dataToInsert = _selectedIds.map((id) => {
-//       'shipping_id': id,
-//       'storage_location': null,
-//       'is_dedicated': null,
-//     }).toList();
-
-//     await supabase.from('shipping_request_details').insert(dataToInsert);
-
-//     await supabase
-//         .from('shipping_request')
-//         .update({'status': 'waiting GBJ'})
-//         .inFilter('shipping_id', _selectedIds.toList());
-
-//     _showSnackBar("Berhasil memproses ${_selectedIds.length} Shipping ID", Colors.green);
-//     setState(() => _selectedIds.clear());
-//     await _fetchShippingRequests();
-//   } catch (e) {
-//     setState(() => _isLoading = false);
-//     _showSnackBar("Gagal: $e", Colors.red);
-//   }
-// }
 
 Future<void> _editStuffingMassal() async {
   if (_selectedIds.isEmpty) return;
@@ -748,7 +586,6 @@ final now = DateTime.now();
     context: context,
     initialDate: DateTime.now(),
     firstDate: DateTime(2025),
-    // lastDate: DateTime(2100),
     lastDate: DateTime(now.year + 100),
     helpText: 'Pilih Tanggal Stuffing untuk Semuanya',
   );
@@ -757,9 +594,7 @@ final now = DateTime.now();
     String formattedDate = picked.toIso8601String().split('T')[0];
 
     try {
-      //setState(() => _isLoading = true);
-
-      // Update semua shipping_id yang terpilih sekaligus
+     
       await supabase
           .from('shipping_request')
           .update({'stuffing_date': formattedDate})
@@ -767,12 +602,12 @@ final now = DateTime.now();
 
       _showSnackBar("Berhasil update stuffing ${_selectedIds.length} data", Colors.green);
       
-      // Refresh data agar tampilan terbaru muncul
+     
       await _fetchShippingRequests();
     } catch (e) {
       _showSnackBar("Gagal update massal: $e", Colors.red);
     } finally {
-      // setState(() => _isLoading = false);
+      
     }
   }
 }
@@ -781,14 +616,13 @@ Future<void> _prosesKePermintaan() async {
   if (_selectedIds.isEmpty) return;
   
   try {
-   // setState(() => _isLoading = true);
+  
 List<String> errorMessages = [];
 for (var id in _selectedIds) {
-      // Cari data lengkap dari _allRequests berdasarkan ID yang dipilih
       final req = _allRequests.firstWhere((element) => element['shipping_id'] == id, orElse: () => {});
       
       if (req.isNotEmpty) {
-        // 1. Cek Data Header (SO, RDD, Stuffing Date)
+        
         String so = req['so']?.toString().trim() ?? "";
         String rdd = req['rdd']?.toString().trim() ?? "";
         String stuffing = req['stuffing_date']?.toString().trim() ?? "";
@@ -873,20 +707,7 @@ for (var id in _selectedIds) {
 
       bool matchDate = true;
       if (_selectedDateRange != null) {
-        
-      //   if (rddDate != null) {
-      //     // Normalisasi tanggal agar hanya membandingkan YYYY-MM-DD
-      //     final startDate = DateTime(_selectedDateRange!.start.year, _selectedDateRange!.start.month, _selectedDateRange!.start.day);
-      //     final endDate = DateTime(_selectedDateRange!.end.year, _selectedDateRange!.end.month, _selectedDateRange!.end.day);
-      //     final checkDate = DateTime(rddDate.year, rddDate.month, rddDate.day);
-
-      //     matchDate = checkDate.isAtSameMomentAs(startDate) || 
-      //                 checkDate.isAtSameMomentAs(endDate) ||
-      //                 (checkDate.isAfter(startDate) && checkDate.isBefore(endDate));
-      //   } else {
-      //     matchDate = false; // Jika tidak ada tanggal RDD, anggap tidak cocok dengan filter tanggal
-      //   }
-      // }
+     
 String dateColumn = _dateFilterType == "RDD" ? 'rdd' : 'stuffing_date';
   
   DateTime? targetDate = req[dateColumn] != null 
@@ -913,11 +734,7 @@ String dateColumn = _dateFilterType == "RDD" ? 'rdd' : 'stuffing_date';
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //  // title: const Text("List DO (Per DO)", style: TextStyle(fontWeight: FontWeight.bold)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
+     
       body: Column(
         children: [
           _buildSearchBar(),
@@ -929,17 +746,13 @@ String dateColumn = _dateFilterType == "RDD" ? 'rdd' : 'stuffing_date';
         ],
       ),
       bottomNavigationBar: _selectedIds.isNotEmpty ? _buildActionBottomBar() : null,
-    //bottomNavigationBar: (_selectedKeys != null && _selectedKeys.isNotEmpty) 
-    // ? _buildActionBottomBar() 
-    // : null,
+   
     );
   }
 
 String formatSmart(dynamic value) {
   if (value == null) return "0";
-  // Parsing ke double dulu untuk memastikan itu angka
   double n = double.tryParse(value.toString()) ?? 0.0;
-  
   num rounded = num.parse(n.toStringAsFixed(3));
  return rounded.toString();
 }
@@ -964,8 +777,6 @@ String formatSmart(dynamic value) {
       ),
         ),
         const SizedBox(width: 8),
-        // Tombol Set Tanggal Massal (Pindah ke sini)
-        // Hanya aktif jika ada data yang dipilih
         if (_selectedIds.isNotEmpty)
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -982,64 +793,6 @@ String formatSmart(dynamic value) {
           ),
           const SizedBox(width: 8),
 
-        // Container(
-        //   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
-        //   decoration: BoxDecoration(
-        //     border: Border.all(color: Colors.grey.shade400),
-        //     borderRadius: BorderRadius.circular(8),
-        //   ),
-        //   child: DropdownButtonHideUnderline(
-        //     child: DropdownButton<String>(
-        //       value: _dateFilterType,
-        //       isDense: true,
-        //       style: const TextStyle(fontSize: 12, color: Colors.black87),
-        //       items: ["RDD", "Stuffing"].map((String value) {
-        //         return DropdownMenuItem<String>(
-        //           value: value,
-        //           child: Text(value),
-        //         );
-        //       }).toList(),
-        //       onChanged: (val) {
-        //         setState(() {
-        //           _dateFilterType = val!;
-        //           _runFilter(_searchController.text);
-        //         });
-        //       },
-        //     ),
-        //   ),
-        // ),
-        // const SizedBox(width: 6),
-
-        // ElevatedButton.icon(
-        //   onPressed: _pickDateRange,
-        //   style: ElevatedButton.styleFrom(
-        //     backgroundColor: _selectedDateRange != null ? Colors.red.shade700 : Colors.grey.shade200,
-        //     foregroundColor: _selectedDateRange != null ? Colors.white : Colors.black87,
-        //     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
-        //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        //   ),
-        //   icon: const Icon(Icons.date_range, size: 18),
-        //   label: Text(
-        //     _selectedDateRange == null 
-        //         ? " Filter Tanggal" 
-        //         : "${DateFormat('dd/MM').format(_selectedDateRange!.start)} - ${DateFormat('dd/MM').format(_selectedDateRange!.end)}",
-        //     style: const TextStyle(fontSize: 12),
-        //   ),
-        // ),
-
-        // if (_selectedDateRange != null || _searchController.text.isNotEmpty)
-        //   IconButton(
-        //     icon: const Icon(Icons.refresh, color: Colors.red),
-        //     onPressed: () {
-        //       setState(() {
-        //         _searchController.clear();
-        //         _selectedDateRange = null;
-        //         _dateFilterType = "RDD";
-        //       });
-        //       _runFilter("");
-        //     },
-        //   ),
-        // Masukkan ke dalam Row di dalam _buildSearchBar
 Container(
   decoration: BoxDecoration(
     color: _selectedDateRange != null ? Colors.red.shade700 : Colors.grey.shade200,
@@ -1150,27 +903,6 @@ IconButton(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ),
  ),
-// const SizedBox(width: 6),
-
-//         IconButton(
-//           tooltip: "Refresh Data & Reset Filter",
-//           style: IconButton.styleFrom(
-//             backgroundColor: Colors.red.shade50,
-//             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-//           ),
-//           constraints: const BoxConstraints(),
-//           padding: const EdgeInsets.only(left: 4),
-//           onPressed: () { 
-//             setState(() { 
-//               _searchController.clear(); // Bersihkan teks pencarian
-//               _selectedDateRange = null; // Reset filter tanggal
-//               _dateFilterType = "RDD";   // Reset tipe tanggal ke default
-//               _searchQuery = "";         // Kosongkan variabel query
-//             }); 
-//             _fetchShippingRequests();    // Ambil data ulang dari database
-//           }, 
-//           icon: const Icon(Icons.refresh, color: Colors.red, size: 20),
-//         ),
       
       ],
       
@@ -1179,43 +911,12 @@ IconButton(
   );
 }
   
-
-//   Future<void> _pickDateRange() async {
-//   DateTimeRange? picked = await showDateRangePicker(
-//     context: context,
-//     firstDate: DateTime(2023),
-//     lastDate: DateTime(2100),
-//     initialDateRange: _selectedDateRange,
-//     locale: const Locale('id', 'ID'), 
-//     builder: (context, child) {
-//       return Theme(
-//         data: Theme.of(context).copyWith(
-//           colorScheme: ColorScheme.light(
-//             primary: Colors.red.shade700,
-//             onPrimary: Colors.white,
-//             onSurface: Colors.black,
-//           ),
-//           // Ini memastikan teks input mengikuti format lokal
-//           textButtonTheme: TextButtonThemeData(
-//             style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
-//           ),
-//         ),
-//         child: child!,
-//       );
-//     },
-
-//   );
-//   if (picked != null) {
-//     setState(() => _selectedDateRange = picked);
-//     _runFilter(_searchController.text);
-//   }
-// }
-
 Future<void> _pickDateRange() async {
+  final now = DateTime.now();
   DateTimeRange? picked = await showDateRangePicker(
     context: context,
-    firstDate: DateTime(2023),
-    lastDate: DateTime(2100),
+    firstDate: DateTime(2025),
+    lastDate: DateTime(now.year + 100),
     initialDateRange: _selectedDateRange,
     locale: const Locale('id', 'ID'),
     builder: (context, child) {
@@ -1233,8 +934,8 @@ Future<void> _pickDateRange() async {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(
-              maxWidth: 400,  // Batasi lebar maksimal
-              maxHeight: 550, // Batasi tinggi maksimal
+              maxWidth: 400,  
+              maxHeight: 550,
             ),
             child: child!,
           ),
@@ -1252,7 +953,6 @@ Future<void> _pickDateRange() async {
 double get _totalSelectedTNW {
   double total = 0;
   for (var id in _selectedIds) {
-    // Cari data asli berdasarkan shipping_id
     final req = _allRequests.firstWhere((element) => element['shipping_id'] == id, orElse: () => {});
     if (req.isNotEmpty) {
       final List dos = req['delivery_order'] ?? [];
@@ -1265,77 +965,9 @@ double get _totalSelectedTNW {
       }
     }
   }
-  return total / 1000; // Kembalikan dalam satuan Kg
+  return total / 1000;
 }
-
-// Widget _buildTableArea() {
-//   if (_filteredRequests.isEmpty) {
-//     return const Center(child: Text("Tidak ada data ditemukan"));
-//   }
-// //const double totalTableWidth = 1400.0;
-//   return LayoutBuilder(
-//     builder: (context, constraints) {
-//       // KUNCI: Scroll horizontal membungkus seluruh Column (Header + Body)
-//       return Scrollbar(
-//       controller: _horizontalController,
-//         thumbVisibility: true,
-//         trackVisibility: true,
-//         child: SingleChildScrollView(
-//           controller: _horizontalController,
-//           scrollDirection: Axis.horizontal,
-//         child: ConstrainedBox(
-//             constraints: BoxConstraints(minWidth: constraints.maxWidth),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // --- HEADER (Tetap di Atas) ---
-//               DataTable(
-//                 headingRowColor: WidgetStateProperty.all(Colors.red.shade700),
-//                 headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-//                 columnSpacing: 10,
-//                 horizontalMargin: 13,
-//                 columns: _buildColumns(),
-//                 rows: const [], // Hanya header
-//               ),
-              
-//               // --- BODY (Bisa Scroll Vertikal) ---
-//               Expanded(
-//                 child: SingleChildScrollView(
-//                   scrollDirection: Axis.vertical,
-//                   child: Theme(
-//                       // Trik: Memaksa warna header DataTable kedua menjadi transparan 
-//                       // agar checkbox bawaan yang 'keselip' tidak memantulkan background/border putih
-//                       data: Theme.of(context).copyWith(
-//                         dividerColor: Colors.transparent,
-//                       ),
-//                       child: ClipRect( // Memotong
-//                   child: DataTable(
-//                     headingRowHeight: 0, // Hilangkan header di body
-//                     dataRowMaxHeight: double.infinity,
-//                     dataRowMinHeight: 70,
-//                     columnSpacing: 10,
-//                     horizontalMargin: 9,
-//                     //columns: _buildColumns(), // Harus sama persis
-//                     columns: List.generate(
-//                             _buildColumns().length, 
-//                             (index) => const DataColumn(label: SizedBox.shrink())
-//                           ),
-//                     rows: _getGroupedDisplayData(_filteredRequests).map((req) {
-//                       return _buildDataRow(req);
-//                     }).toList(),
-//                  ),
-//                       ),
-//                     ),
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ),
-//       );
-//     },
-//   );
-// }
+ 
 Widget _buildTableArea() {
   if (_filteredRequests.isEmpty) {
     return const Center(child: Text("Tidak ada data ditemukan"));
@@ -1402,8 +1034,6 @@ Widget _buildTableArea() {
     },
   );
 }
-
-// Fungsi Helper untuk membangun isi baris (DataRow)
 DataRow _buildDataRow(Map<String, dynamic> req) {
   final isGroupRow = req['group_id'] != null;
   final List<int> idsInRow = isGroupRow
@@ -1443,26 +1073,27 @@ DataRow _buildDataRow(Map<String, dynamic> req) {
       // matTypeW.add(_buildTextItem(det['material']?['material_type'] ?? "-", width: 42));
       // qtyW.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true, width: 30));
       // nwW.add(_buildTextItem(formatSmart(rowNw), width: 52));
-      soW.add(_buildTextItem(currentSo, width: 90)); // Sesuai SO Number
-doNumW.add(_buildTextItem(d['do_number'] ?? "-", isBold: true, width: 80)); // Sesuai No DO
-custIdW.add(_buildTextItem(custId, width: 70)); // Sesuai No Cust
-custW.add(_buildTextItem(d['customer']?['customer_name'] ?? "-", width: 180)); // Sesuai Customer Tujuan
-matIdW.add(_buildTextItem(det['material']?['material_id']?.toString() ?? "-", width: 65)); // Sesuai No Mat
-matW.add(_buildTextItem(det['material']?['material_name'] ?? "-", width: 220)); // Sesuai Nama Material
-matTypeW.add(_buildTextItem(det['material']?['material_type'] ?? "-", width: 45)); // Sesuai Type
-qtyW.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true, width: 45)); // Sesuai Qty
-nwW.add(_buildTextItem(formatSmart(rowNw), width: 55)); // Sesuai NW
+      soW.add(_buildTextItem(currentSo, width: 90)); 
+doNumW.add(_buildTextItem(d['do_number'] ?? "-", isBold: true, width: 80));
+custIdW.add(_buildTextItem(custId, width: 70)); 
+custW.add(_buildTextItem(d['customer']?['customer_name'] ?? "-", width: 180));
+matIdW.add(_buildTextItem(det['material']?['material_id']?.toString() ?? "-", width: 65)); 
+matW.add(_buildTextItem(det['material']?['material_name'] ?? "-", width: 220)); 
+matTypeW.add(_buildTextItem(det['material']?['material_type'] ?? "-", width: 45));
+qtyW.add(_buildTextItem(det['qty']?.toString() ?? "0", isBold: true, width: 45)); 
+nwW.add(_buildTextItem(formatSmart(rowNw), width: 55));
     }
   }
 
   return DataRow(
     selected: isSelected,
     color: WidgetStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(WidgetState.selected))
-        return Colors.grey.shade400.withOpacity(0.5);
+      if (states.contains(WidgetState.selected)) {
+          return Colors.grey.shade400.withValues(alpha: 0.5);
+        }
       final String currentStatus = (req['status'] ?? "").toString().toLowerCase();
       if (currentStatus == 'pending') return Colors.red.shade100;
-      if (req['group_id'] != null) return Colors.blue.shade100.withOpacity(0.5);
+      if (req['group_id'] != null) return Colors.blue.shade100.withValues(alpha: 0.5);
       return null;
     }),
     cells: [
@@ -1482,10 +1113,7 @@ nwW.add(_buildTextItem(formatSmart(rowNw), width: 55)); // Sesuai NW
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Text(isGroupRow ? idsInRow.join(", ") : shippingId.toString(),
-          //     style: TextStyle(
-          //         fontWeight: isGroupRow ? FontWeight.bold : FontWeight.normal,
-          //         fontSize: 11)),
+         
 if (isGroupRow)
   Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1527,9 +1155,7 @@ else
       DataCell(Column(children: nwW)),
       DataCell(Text(formatSmart(totalNetWeight / 1000),
           style: const TextStyle(fontWeight: FontWeight.bold))),
-      //DataCell(Text(_formatDate(req['rdd']))),
-      //DataCell(Text(_formatDate(req['stuffing_date']))),
-      // KOLOM RDD INTERAKTIF
+    
       DataCell(
         InkWell(
           onTap: () => _selectDate(context, req, 'rdd'),
@@ -1587,91 +1213,6 @@ else
   );
 }
 
-// List<DataColumn> _buildColumns() {
-//   return const [
-//     DataColumn(label: Text('Pilih')),
-//     DataColumn(label: Text('Ship ID')),
-//     DataColumn(label: Text('No DO')),
-//     DataColumn(label: Text('SO Number')),
-//     DataColumn(label: Text('No Cust')),
-//     DataColumn(label: Text('Customer Tujuan')),
-//     DataColumn(label: Text('No Mat')),
-//     DataColumn(label: Text('Nama Material')),
-//     DataColumn(label: Text('Type')),
-//     DataColumn(label: Text('Qty')),
-//     DataColumn(label: Text('NW')),
-//     DataColumn(label: Text('TNW')),
-//     DataColumn(label: Text('RDD')),
-//     DataColumn(label: Text('Stuffing')),
-//     DataColumn(label: Text('Aksi')),
-//   ];
-// }
-
-// Tambahkan lebar tetap pada kolom yang berisi teks panjang agar tidak menciut
-// List<DataColumn> _buildColumns() {
-//   final visibleRows = _getGroupedDisplayData(_filteredRequests);
-  
-//   // Ambil semua shipping_id dari baris yang sedang tampil
-//   final List<int> visibleIds = [];
-//   for (var row in visibleRows) {
-//     if (row['group_id'] != null) {
-//       visibleIds.addAll(List<int>.from(row['grouped_ids']));
-//     } else {
-//       visibleIds.add(row['shipping_id'] as int);
-//     }
-//   }
-
-//   // Cek apakah semua ID yang tampil sudah masuk ke dalam _selectedIds
-//   final bool isAllSelected = visibleIds.isNotEmpty && 
-//       visibleIds.every((id) => _selectedIds.contains(id));
-
-//   return [
-//     DataColumn(
-//       label: SizedBox(
-//         width: 35, 
-//         child: Theme(
-//           // Menyamakan warna border checkbox di header menjadi putih agar kontras dengan background merah
-//           data: Theme.of(context).copyWith(
-//             unselectedWidgetColor: Colors.white,
-//           ),
-//           child: Checkbox(
-//             value: isAllSelected,
-//             activeColor: Colors.white,
-//             checkColor: Colors.red.shade700,
-//             side: const BorderSide(color: Colors.white, width: 2),
-//             onChanged: (bool? checked) {
-//               setState(() {
-//                 if (checked == true) {
-//                   // Tambahkan semua ID yang sedang tampil ke dalam list terpilih
-//                   _selectedIds.addAll(visibleIds);
-//                 } else {
-//                   // Hapus semua ID yang sedang tampil dari list terpilih
-//                   _selectedIds.removeAll(visibleIds);
-//                 }
-//               });
-//             },
-//           ),
-//         ),
-//       ),
-//     ),
-//   //return const [
-//    // DataColumn(label: SizedBox(width: 35, child: Text('Pilih'))),
-//     DataColumn(label: SizedBox(width: 74, child: Text('Ship ID'))),
-//     DataColumn(label: SizedBox(width: 68, child: Text('No DO'))),
-//     DataColumn(label: SizedBox(width: 80, child: Text('SO Number'))),
-//     DataColumn(label: SizedBox(width: 85, child: Text('No Cust'))),
-//     DataColumn(label: SizedBox(width: 198, child: Text('Customer Tujuan'))),
-//     DataColumn(label: SizedBox(width: 55, child: Text('No Mat'))),
-//     DataColumn(label: SizedBox(width: 230, child: Text('Nama Material'))),
-//     DataColumn(label: SizedBox(width: 42, child: Text('Type'))),
-//     DataColumn(label: SizedBox(width: 40, child: Text('Qty'))),
-//     DataColumn(label: SizedBox(width: 53, child: Text('NW'))),
-//     DataColumn(label: SizedBox(width: 50, child: Text('TNW'))),
-//     DataColumn(label: SizedBox(width: 70, child: Text('RDD'))),
-//     DataColumn(label: SizedBox(width: 70, child: Text('Stuffing'))),
-//     DataColumn(label: SizedBox(width: 50, child: Text('Aksi'))),
-//   ];
-// }
 List<DataColumn> _buildColumns() {
   final visibleRows = _getGroupedDisplayData(_filteredRequests);
   final List<int> visibleIds = [];
@@ -1766,51 +1307,6 @@ Future<void> _selectDate(BuildContext context, Map<String, dynamic> req, String 
   }
 }
 
-// Future<void> _setPending(int shippingId, String reason) async {
-//   try {
-//     await supabase.from('shipping_pending_history').insert({
-//       'shipping_id': shippingId,
-//       'reason': reason,
-//       'pending_by': userDisplayName ?? 'System', 
-//     });
-
-//     await supabase.from('shipping_request').update({
-//       'status': 'pending',
-//     }).eq('shipping_id', shippingId);
-
-//     _showSnackBar("Data berhasil dipending", Colors.orange);
-    
-//     _fetchShippingRequests();
-    
-//   } catch (e) {
-//     debugPrint("Error Pending: $e");
-//     _showSnackBar("Gagal simpan pending: $e", Colors.red);
-//   }
-// }
-
-// Future<void> _setPendingGroup(List<int> shippingIds, String reason) async {
-//   try {
-//     // Siapkan list riwayat untuk bulk insert
-//     final List<Map<String, dynamic>> historyData = shippingIds.map((id) => {
-//       'shipping_id': id,
-//       'reason': reason,
-//       'pending_by': userDisplayName ?? 'System',
-//     }).toList();
-
-//     // 1. Insert ke riwayat secara massal
-//     await supabase.from('shipping_pending_history').insert(historyData);
-
-//     // 2. Update status semua ID tersebut
-//     await supabase.from('shipping_request')
-//         .update({'status': 'pending'})
-//         .inFilter('shipping_id', shippingIds);
-
-//     _showSnackBar("Grup berhasil dipending", Colors.orange);
-//     _fetchShippingRequests();
-//   } catch (e) {
-//     _showSnackBar("Gagal pending grup: $e", Colors.red);
-//   }
-// }
 
 Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
   final int shippingId = req['shipping_id'];
@@ -1842,13 +1338,12 @@ Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
       setState(() => _isLoading = true);
 
       if (isGroup) {
-        // 1. Hapus semua shipping_request yang memiliki group_id yang sama
+       
         await supabase
             .from('shipping_request')
             .delete()
             .eq('group_id', groupId);
 
-        // 2. Hapus entry di shipping_groups (Opsional jika DB Anda set ON DELETE CASCADE)
         await supabase
             .from('shipping_groups')
             .delete()
@@ -1862,7 +1357,7 @@ Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
       }
 
       _showSnackBar("Data berhasil dihapus", Colors.green);
-      _fetchShippingRequests(); // Refresh data
+      _fetchShippingRequests(); 
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnackBar("Gagal menghapus: $e", Colors.red);
@@ -1883,7 +1378,6 @@ Future<void> _deleteShippingRequest(Map<String, dynamic> req) async {
   }
 
 void _showReasonDialog(List history) {
-  // Urutkan dari yang terbaru ke terlama
   final sortedHistory = List.from(history);
   //sortedHistory.sort((a, b) => b['pending_at'].compareTo(a['pending_at']));
   sortedHistory.sort((a, b) {
@@ -1910,27 +1404,13 @@ void _showReasonDialog(List history) {
           separatorBuilder: (_, __) => const Divider(),
           itemBuilder: (context, index) {
             final item = sortedHistory[index];
-          //   DateTime date = DateTime.parse(item['pending_at']);
-
-          //  String originId = item['origin_ship_id']?? item['shipping_id'] ?? item['id'] ?? "-";
+         
 
 DateTime date = DateTime.tryParse(item['pending_at']?.toString() ?? "") ?? DateTime.now();
             String originId = (item['origin_ship_id'] ?? item['shipping_id'] ?? item['id'] ?? "-").toString();
             
             return ListTile(
-      //         leading: CircleAvatar(
-      //           backgroundColor: Colors.red.shade50,
-      //           child: Text("${sortedHistory.length - index}", style: TextStyle(fontSize: 12, color: Colors.red.shade900)),
-      //         ),
-      //         title: Text(item['reason'] ?? "-", style: const TextStyle(fontSize: 14)),
-      //         subtitle: Text(
-      //           DateFormat('dd MMM yyyy, HH:mm').format(date.toLocal()),
-      //           style: const TextStyle(fontSize: 11),
-      //         ),
-      //       );
-      //     },
-      //   ),
-      // ),
+      
       contentPadding: EdgeInsets.zero,
               title: Text(item['reason'] ?? "-", style: const TextStyle(fontSize: 14)),
               subtitle: Column(
@@ -1974,7 +1454,7 @@ List history = List.from(historyData);
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color, width: 0.8),
       ),
@@ -2128,9 +1608,7 @@ Future<void> _splitGroup() async {
   }
 
   try {
-    //setState(() => _isLoading = true);
-
-    // 1. Cari group_id apa saja yang terlibat dari ID yang dipilih
+    
     final selectedGroups = _allRequests
         .where((req) => _selectedIds.contains(req['shipping_id']) && req['group_id'] != null)
         .map((req) => req['group_id'] as int)
@@ -2143,14 +1621,12 @@ Future<void> _splitGroup() async {
       return;
     }
 
-    // 2. Set group_id menjadi NULL untuk semua shipping_id yang ada di dalam grup tersebut
-    // Kita split SEMUA yang ada di grup itu agar grupnya benar-benar bubar
+    
     await supabase
         .from('shipping_request')
         .update({'group_id': null})
         .inFilter('group_id', selectedGroups);
 
-    // 3. Hapus data grupnya di tabel shipping_groups agar tidak nyampah
     await supabase
         .from('shipping_groups')
         .delete()
@@ -2176,9 +1652,6 @@ Future<void> _splitGroup() async {
     }
   }
 
-  // void _showSnackBar(String msg, Color color) {
-  //   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
-  // }
   void _showSnackBar(String msg, Color color, {Duration duration = const Duration(seconds: 4)}) {
   ScaffoldMessenger.of(context).hideCurrentSnackBar(); 
   
@@ -2207,7 +1680,6 @@ Future<void> _exportToExcel() async {
 
   try {
     _globalExportLock = true;
-   // setState(() => _isLoading = true);
 
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Data_Shipping_Detail'];
@@ -2234,7 +1706,6 @@ Future<void> _exportToExcel() async {
       final List dos = req['delivery_order'] ?? [];
       final String status = (req['status'] ?? "-").toString().toUpperCase();
       
-      //final List history = req['shipping_pending_history'] ?? [];
       final List history = List.from(req['shipping_pending_history'] ?? []);
       String latestReason = "-";
       
@@ -2250,7 +1721,7 @@ Future<void> _exportToExcel() async {
         for (var det in details) {
           double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
           double nwUnit = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-          // Hitung TNW dalam Kg (Qty * NW / 1000)
+        
           double totalNwRow = (qty * nwUnit) / 1000;
 
           sheetObject.appendRow([
@@ -2300,9 +1771,6 @@ Future<void> _exportToExcel() async {
   } finally {
     await Future.delayed(const Duration(seconds: 3));
     _globalExportLock = false;
-    // // if (mounted) {
-    // //   setState(() => _isLoading = false);
-    // }
   }
 }
 

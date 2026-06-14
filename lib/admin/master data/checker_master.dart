@@ -28,12 +28,10 @@ class _CheckerPaginatedPageState extends State<CheckerPaginatedPage> {
 void initState() {
   super.initState();
   _fetchData();
-  // Tambahkan ini agar widget merefresh saat user mengetik
   _searchController.addListener(() {
     setState(() {});
   });
 }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -51,8 +49,6 @@ Future<void> _exportCheckerToExcel() async {
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Master_Checker'];
     excel.delete('Sheet1');
-
-    // --- 1. HEADER ---
     List<CellValue> headers = [
       TextCellValue('ID'),
       TextCellValue('Nama Checker'),
@@ -62,7 +58,6 @@ Future<void> _exportCheckerToExcel() async {
     ];
     sheetObject.appendRow(headers);
 
-    // --- 2. ISI DATA ---
     for (var checker in _checkers) {
       sheetObject.appendRow([
         TextCellValue(checker['checker_id']?.toString() ?? ""),
@@ -73,14 +68,11 @@ Future<void> _exportCheckerToExcel() async {
       ]);
     }
 
-    // --- 3. SAVE / DOWNLOAD ---
-    
     String fileName = "Master_Checker_${DateTime.now().millisecondsSinceEpoch}.xlsx";
 var fileBytes = excel.save(fileName: fileName);
     if (kIsWeb) {
       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       final url = html.Url.createObjectUrlFromBlob(content);
-      //html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
       html.Url.revokeObjectUrl(url);
       _showMsg("Download dimulai...", Colors.green);
     } else {
@@ -116,17 +108,14 @@ Future<void> _importCheckerFromExcel() async {
 
     for (int i = 1; i < sheet.maxRows; i++) {
       var row = sheet.rows[i];
-      // Minimal ada Nama (kolom 1) dan Shift (kolom 2)
       if (row.isEmpty || row[1] == null || row[2] == null) continue;
 
       final Map<String, dynamic> data = {
         'checker_name': row[1]?.value?.toString(),
         'shift': row[2]?.value?.toString().toUpperCase().trim(),
         'lokasi': row[3]?.value?.toString() ?? "Rungkut",
-        'status': row[4]?.value?.toString()?.toLowerCase().trim() ?? "active",
+        'status': row[4]?.value?.toString().toLowerCase().trim() ?? "active",
       };
-
-      // Jika ada ID di kolom 0, masukkan ke data untuk proses Update (Upsert)
       final idValue = int.tryParse(row[0]?.value.toString() ?? "");
       if (idValue != null) {
         data['checker_id'] = idValue;
@@ -153,9 +142,9 @@ Widget _buildActionButton({required IconData icon, required Color color, require
   return Container(
     height: 55, // Sejajar dengan tinggi standar TextField
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: IconButton(
       onPressed: onPressed,
@@ -175,10 +164,8 @@ Widget _buildActionButton({required IconData icon, required Color color, require
       if (_searchQuery.isNotEmpty) {
         final isNumber = int.tryParse(_searchQuery) != null;
         if (isNumber) {
-          // Cari berdasarkan ID atau Nama jika input angka
           query = query.or('checker_id.eq.$_searchQuery, checker_name.ilike.%$_searchQuery%');
         } else {
-          // Cari berdasarkan Nama jika input teks
           query = query.ilike('checker_name', '%$_searchQuery%');
         }
       }
@@ -211,7 +198,6 @@ Widget _buildActionButton({required IconData icon, required Color color, require
 
   Future<void> _processSave(bool isEdit, int? id, String name, String shift, String lokasi, String status) async {
   try {
-    // Pastikan Map didefinisikan sebagai <String, dynamic> agar bisa menerima String dan int
     final Map<String, dynamic> payload = {
       'checker_name': name,
       'shift': shift,
@@ -219,12 +205,9 @@ Widget _buildActionButton({required IconData icon, required Color color, require
       'status': status,
     };
 
-    // Jika sedang edit, masukkan ID ke dalam payload
     if (isEdit && id != null) {
       payload['checker_id'] = id; 
     }
-
-    // Gunakan upsert
     await supabase.from('checker').upsert(payload);
 
     if (mounted) {
@@ -256,16 +239,14 @@ Widget _buildActionButton({required IconData icon, required Color color, require
       builder: (context, setDialogState) {
         return AlertDialog(
           title: Text(isEdit ? 'Edit Checker' : 'Tambah Checker'),
-          content: SizedBox( // <--- Tambahkan ini
-          width: 400,      // <--- Set lebar ke 400
+          content: SizedBox( 
+          width: 400,    
           child: SingleChildScrollView(
             child: Column(
               
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildTextField(nameController, 'Nama Checker *'),
-                
-                // INPUT TEXT BIASA UNTUK SHIFT
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: TextField(
@@ -276,7 +257,6 @@ Widget _buildActionButton({required IconData icon, required Color color, require
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       helperText: "Ketik kode shift secara manual",
                     ),
-                    // Membatasi hanya 1 karakter sesuai dengan skema DB character varying(1)
                     inputFormatters: [LengthLimitingTextInputFormatter(1)],
                     textCapitalization: TextCapitalization.characters, // Otomatis huruf kapital
                   ),
@@ -316,7 +296,7 @@ Widget _buildActionButton({required IconData icon, required Color color, require
                   isEdit, 
                   checker?['checker_id'], 
                   nameController.text, 
-                  shiftController.text, // Mengambil nilai dari text field
+                  shiftController.text, 
                   selectedLokasi, 
                   selectedStatus
                 );
@@ -352,7 +332,7 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: value,
+        initialValue: value,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         items: items.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
         onChanged: onChanged,
@@ -368,45 +348,14 @@ Widget _buildActionButton({required IconData icon, required Color color, require
     );
 
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Master Checker'),
-      //   backgroundColor: Colors.red.shade700, // Warna dibedakan dengan Warehouse
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
-//                   TextField(
-//                     controller: _searchController,
-//                     decoration: InputDecoration(
-//                       labelText: "Cari ID atau Nama Checker...",
-//                       prefixIcon: const Icon(Icons.search),
-                      
-//                      suffixIcon: _searchController.text.isNotEmpty
-//         ? IconButton(
-//             icon: const Icon(Icons.clear),
-//             onPressed: () {
-//               _searchController.clear();
-//               _searchQuery = "";
-//               _fetchData();
-//               setState(() {}); // Refresh untuk menyembunyikan icon kembali
-//             },
-//           )
-//         : null,
-//     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-//   ),
-//   onSubmitted: (val) {
-//     _searchQuery = val;
-//     _fetchData();
-//   },
-// ),
-// Di dalam Widget build -> Column
 Row(
   children: [
-    // KOLOM PENCARIAN
     Expanded(
       child: TextField(
         controller: _searchController,
@@ -434,8 +383,6 @@ Row(
     ),
 
     const SizedBox(width: 10),
-
-    // TOMBOL IMPORT (ORANGE)
     _buildActionButton(
       icon: Icons.file_upload,
       color: Colors.orange,

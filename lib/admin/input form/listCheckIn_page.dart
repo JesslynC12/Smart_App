@@ -18,61 +18,32 @@ class _VehicleControlFormState extends State<VehicleControlFormState> {
   List<dynamic> _planningList = [];
   List<dynamic> _filteredPlanningList = [];
   String? _currentUser;
-  // String? _currentUserName;
-
-// Variabel Filter Baru
   DateTime _selectedDate = DateTime.now();
-  String _dateFilterType = 'stuffing_date'; // Default: Shipping Date
+  //String _dateFilterType = 'stuffing_date'; // Default: Shipping Date
   final TextEditingController _searchController = TextEditingController();
   // final ScrollController _verticalScrollController = ScrollController();
-RealtimeChannel? _channel;
 RealtimeChannel? _assignmentsChannel;
   RealtimeChannel? _requestsChannel;
 
   @override
   void initState() {
     super.initState();
-  
-  //   _fetchPlanningData();
-
-  // _channel = supabase
-  //     .channel('shipping_assignments_changes')
-  //     .onPostgresChanges(
-  //       event: PostgresChangeEvent.all,
-  //       schema: 'public',
-  //       table: 'shipping_assignments',
-  //       callback: (payload) async {
-  //         await _fetchPlanningData();
-  //       },
-  //     )
-  //     .subscribe();
   _getUserData();
-// Memuat data awal dengan loading spinner
     _fetchPlanningData(showGlobalLoading: true);
-    // Aktifkan pendengar realtime
     _initRealtimeStreams();
-    // Jalankan filter pencarian setiap kali ada teks baru diketik
     _searchController.addListener(_filterDataBySearch);
   }
 
 @override
 void dispose() {
-  // _channel?.unsubscribe();
-  // Hapus channel realtime saat pindah halaman
-  // if (_channel != null) {
-  //   supabase.removeChannel(_channel!);
-  // }
-  // Tutup semua koneksi stream agar tidak memory leak
   _searchController.dispose();
     _assignmentsChannel?.unsubscribe();
     _requestsChannel?.unsubscribe();
-    // Hapus juga dari client supabase secara eksplisit
     if (_assignmentsChannel != null) supabase.removeChannel(_assignmentsChannel!);
     if (_requestsChannel != null) supabase.removeChannel(_requestsChannel!);
     super.dispose();
 }
 void _initRealtimeStreams() {
-    // 1. Monitor tabel penugasan (shipping_assignments)
     _assignmentsChannel = supabase
         .channel('vehicle_assignments_realtime')
         .onPostgresChanges(
@@ -81,13 +52,11 @@ void _initRealtimeStreams() {
           table: 'shipping_assignments',
           callback: (payload) async {
             debugPrint("Realtime: Perubahan di Penugasan Terdeteksi");
-            // Refresh data diam-diam tanpa memunculkan loading di tengah layar
             await _fetchPlanningData(showGlobalLoading: false); 
           },
         )
         .subscribe();
 
-    // 2. Monitor tabel permintaan (shipping_request)
     _requestsChannel = supabase
         .channel('vehicle_requests_realtime')
         .onPostgresChanges(
@@ -113,31 +82,23 @@ void _initRealtimeStreams() {
 
     setState(() {
       _filteredPlanningList = _planningList.where((item) {
-        // Ambil data Vendor
         final vendor = item['master_vendor'] ?? {};
         final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
         final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
 
-        // Ambil list DO dari request
         final request = item['request'] ?? {};
         final List dos = request['delivery_order'] as List? ?? [];
-        
-        // Cek apakah ada salah satu nomor DO yang cocok
         bool matchDO = dos.any((doItem) {
           final String doNumber = (doItem['do_number'] ?? '').toString().toLowerCase();
           return doNumber.contains(query);
         });
 
-        // Return true jika salah satu kondisi terpenuhi
         return matchDO || vendorName.contains(query) || nikVendor.contains(query);
       }).toList();
     });
   }
-  
-  // Langkah 1: Fungsi otomatis ketika pertama kali klik "CHECK-IN KEDATANGAN"
   Future<void> _registerCheckInTimestamp(Map<String, dynamic> item,{String? lateReason}) async {
     try {
-      //setState(() => _isLoading = true);
 
       final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
       final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
@@ -145,7 +106,6 @@ void _initRealtimeStreams() {
       final String nowIso = DateTime.now().toIso8601String();
       final String operatorName = _currentUser ?? 'admin';
 
-      // Update kolom checkIn_at dan checkIn_by di Postgres
       await supabase.from('shipping_assignments').update({
         'checkIn_at': nowIso,
         'checkIn_by': operatorName,
@@ -159,53 +119,44 @@ void _initRealtimeStreams() {
 
       _showSnackBar("Kedatangan berhasil dicatat!", Colors.green);
       
-      // Refresh data agar UI mendeteksi perubahan status tombol
       await _fetchPlanningData(showGlobalLoading: false);
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnackBar("Gagal mencatat kedatangan: $e", Colors.red);
     }
   }
-// Fungsi untuk memproses Check-in
 Future<void> _handleCheckIn(Map<String, dynamic> item) async {
-  final request = item['request'] ?? {};
+  //final request = item['request'] ?? {};
   final String jamBookingStr = item['jam_booking'] ?? "00:00 - 00:00";
   
-  // 1. Ambil Jam Mulai (misal '11:00' dari '11:00 - 13:00')
   String startTimeStr = jamBookingStr.split(" - ")[0];
   
-  // 2. Buat objek DateTime untuk jam booking hari ini
   DateTime now = DateTime.now();
   DateTime bookingTime = DateTime(
     now.year, now.month, now.day,
     int.parse(startTimeStr.split(":")[0]),
     int.parse(startTimeStr.split(":")[1]),
   );
-// 💡 PERUBAHAN DI SINI: Kurangi waktu booking dengan 15 menit
   DateTime bookingLimitTime = bookingTime.subtract(const Duration(minutes: 15));
-  // 3. Cek apakah tanggal stuffing adalah hari ini
-  String stuffingDateStr = request['stuffing_date'] ?? "";
-  bool isToday = DateFormat('yyyy-MM-dd').format(now) == stuffingDateStr;
+  //String stuffingDateStr = request['stuffing_date'] ?? "";
+  //bool isToday = DateFormat('yyyy-MM-dd').format(now) == stuffingDateStr;
 
   // if (!isToday) {
   //   _showSnackBar("Check-in hanya bisa dilakukan pada tanggal Stuffing!", Colors.orange);
   //   return;
   // }
 
-  // 4. Deteksi Terlambat (Jika waktu sekarang > jam booking)
   if (now.isAfter(bookingLimitTime)) {
     _showLateCheckInDialog(item);
   } else {
     // _openCheckInTab(item);
     _registerCheckInTimestamp(item);
-    // PINDAH KE HALAMAN FORM (Normal)
     //Navigator.push(context, MaterialPageRoute(builder: (c) => CheckInFormPage(item: item, onBack: () {  },)));
   //_navigateToForm(item);
    
   }
 }
 
-// Fungsi untuk membuka Tab Form
   void _openCheckInTab(Map<String, dynamic> item, {String? reason}) {
     final groupId = item['request']['group_id'];
     final shipId = item['request']['shipping_id'];
@@ -219,20 +170,9 @@ Future<void> _handleCheckIn(Map<String, dynamic> item) async {
       CheckInFormPage(
         item: item,
         lateReason: reason,
-        // Jika CheckInFormPage butuh callback onBack, tambahkan di sini
       ),
     );
   }
-
-// void _getUserData() {
-//     final user = supabase.auth.currentUser;
-//     if (user != null) {
-//       setState(() {
-//         _currentUser = user.email;
-//       });
-      
-//     }
-//   }
 
 Future<void> _getUserData() async {
     final user = supabase.auth.currentUser;
@@ -246,11 +186,11 @@ Future<void> _getUserData() async {
 
         if (profileData != null && profileData['name'] != null) {
           setState(() {
-            _currentUser = profileData['name']; // Menggunakan field 'name'
+            _currentUser = profileData['name']; 
           });
         } else {
           setState(() {
-            _currentUser = user.email; // Fallback ke email jika name kosong
+            _currentUser = user.email;
           });
         }
       } catch (e) {
@@ -261,21 +201,7 @@ Future<void> _getUserData() async {
       }
     }
   }  
-//   void _navigateToForm(Map<String, dynamic> item, {String? lateReason}) {
-//   setState(() {
-//     _currentActiveContent = CheckInFormPage(
-//       item: item,
-//       lateReason: lateReason,
-//       // Tambahkan callback onBack agar bisa kembali ke list antrian
-//       onBack: () {
-//         setState(() {
-//           _currentActiveContent = null;
-//         });
-//       },
-//     );
-//   });
-// }
-// Dialog Pop-up Alasan Terlambat
+
 void _showLateCheckInDialog(Map<String, dynamic> item) {
   final TextEditingController reasonController = TextEditingController();
   showDialog(
@@ -322,7 +248,6 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
   // final groupId = item['group_id'];
   // final shipId = item['shipping_id'];
   
-  // // 2. Tentukan Judul Tab secara dinamis
   // String tabTitle;
   // if (groupId != null) {
   //   tabTitle = "Assign Vendor Grup #$groupId";
@@ -330,14 +255,12 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
   //   tabTitle = "Assign Vendor Shipping #$shipId";
   // }
 
-  // 3. Panggil DynamicTab untuk membuka halaman di dalam bingkai
   // DynamicTabPage.of(context)?.openTab(
   //   tabTitle, 
   //   CheckInFormPage(item: item, lateReason: reasonController.text), // ID yang dikirim tetap shippingId utama
   // );
 
             //Navigator.pop(context);
-           // PINDAH KE HALAMAN FORM (Membawa alasan terlambat)
             // Navigator.push(context, MaterialPageRoute(builder: (c) => 
             //    CheckInFormPage(item: item, lateReason: reasonController.text)));
             //_navigateToForm(item, lateReason: reasonController.text);
@@ -417,160 +340,6 @@ void _showLateCheckInDialog(Map<String, dynamic> item) {
 void _showSnackBar(String msg, Color color) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
 }
-  // Future<void> _fetchPlanningData() async {
-  //   try {
-  //     setState(() => _isLoading = true);
-  //     final response = await supabase
-  //         .from('shipping_assignments')
-  //         .select('*, request:shipping_id(*, delivery_order(*, customer(*)))')
-  //         .eq('status_assignment', 'accepted')
-  //         .not('jam_booking', 'is', null)
-  //         .order('jam_booking', ascending: true);
-
-  //     setState(() {
-  //       _planningList = response;
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() => _isLoading = false);
-  //     debugPrint("Error: $e");
-  //   }
-  // }
-
-//   Future<void> _fetchPlanningData() async {
-//   try {
-//     setState(() => _isLoading = true);
-
-//     // Format tanggal ke string YYYY-MM-DD untuk filter database
-//     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
-//     String columnPath = "request.$_dateFilterType";
-//     // Query dengan join lengkap ke vendor, customer, dan material
-//    final response = await supabase
-//         .from('shipping_assignments')
-//         .select('''
-//           *,
-//           master_vendor:nik (vendor_name), 
-//           request:shipping_id (
-//             shipping_id,
-//             so,
-//             rdd,
-//             stuffing_date,
-//             group_id,
-//             storage_location,
-//             is_dedicated,
-//             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
-//             delivery_order (
-//               do_number,
-//               customer (customer_id, customer_name),
-//               do_details (
-//                 qty,
-//                 material:material_id (material_id, material_name)
-//               )
-//             )
-//           )
-//         ''')
-//         .eq('status_assignment', 'accepted')
-//         .not('jam_booking', 'is', null)
-//         // Filter tepat pada tanggal yang dipilih
-//        .eq('request.$_dateFilterType', formattedDate)
-//        .order('jam_booking', ascending: true);
-    
-//     // --- PROSES SUNTIK RDD KE TIAP DO ---
-//     final List<dynamic> processedData = List.from(response);
-//     for (var item in processedData) {
-//       final req = item['request'];
-//       if (req != null && req['delivery_order'] != null) {
-//         for (var doItem in req['delivery_order']) {
-//           // Suntikkan RDD dari request ke level DO
-//           doItem['rdd_origin'] = req['rdd'];
-//         }
-//       }
-//     }
-
-//     setState(() {
-//       _planningList = response;
-//       _isLoading = false;
-//     });
-//   } catch (e) {
-//     setState(() => _isLoading = false);
-//     debugPrint("Error Fetch Planning: $e");
-//   }
-// }
-
-// Future<void> _fetchPlanningData() async {
-//   try {
-//     setState(() => _isLoading = true);
-
-//     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
-    
-//     final response = await supabase
-//         .from('shipping_assignments')
-//         .select('''
-//           *,
-//           master_vendor:nik (vendor_name), 
-//           request:shipping_id (
-//             shipping_id, so, rdd, stuffing_date, group_id, storage_location, is_dedicated,
-//             warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
-//             delivery_order (
-//               do_number,
-//               customer (customer_id, customer_name),
-//               do_details (
-//                 qty,
-//                 material:material_id (material_id, material_name)
-//               )
-//             )
-//           )
-//         ''')
-//         .eq('status_assignment', 'accepted')
-//         .not('jam_booking', 'is', null)
-//         .eq('request.$_dateFilterType', formattedDate)
-//         .neq('request.status', 'check in')
-//         .order('jam_booking', ascending: true);
-
-//     // --- PROSES GROUPING MANUAL AGAR TIDAK DUPLIKAT ---
-//     Map<String, dynamic> groupedData = {};
-
-//     for (var item in response) {
-//       final req = item['request'];
-//       if (req == null) continue;
-
-//       // Tentukan Unique Key (Jika ada group_id pakai itu, jika tidak pakai shipping_id)
-//       String key = req['group_id'] != null 
-//           ? "GROUP_${req['group_id']}" 
-//           : "SINGLE_${req['shipping_id']}";
-
-//       if (!groupedData.containsKey(key)) {
-//         // Jika key belum ada, masukkan data pertama
-//         groupedData[key] = Map<String, dynamic>.from(item);
-        
-//         // Inisialisasi rdd_origin untuk setiap DO di item pertama ini
-//         if (groupedData[key]['request']['delivery_order'] != null) {
-//           for (var d in groupedData[key]['request']['delivery_order']) {
-//             d['rdd_origin'] = req['rdd'];
-//           }
-//         }
-//       } else {
-//         // Jika key sudah ada (berarti ini anggota grup yang lain), gabungkan DO-nya
-//         List currentDOs = List.from(groupedData[key]['request']['delivery_order'] ?? []);
-//         List newDOs = List.from(req['delivery_order'] ?? []);
-
-//         for (var ndo in newDOs) {
-//           ndo['rdd_origin'] = req['rdd']; // Tetap simpan RDD aslinya
-//           currentDOs.add(ndo);
-//         }
-//         groupedData[key]['request']['delivery_order'] = currentDOs;
-//       }
-//     }
-
-//     setState(() {
-//       _planningList = groupedData.values.toList();
-//       _isLoading = false;
-//     });
-//   } catch (e) {
-//     setState(() => _isLoading = false);
-//     debugPrint("Error Fetch Planning: $e");
-//   }
-// }
 
 Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
   try {
@@ -621,38 +390,6 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
           ? "GROUP_${req['group_id']}" 
           : "SINGLE_${req['shipping_id']}";
 
-      // if (!groupedData.containsKey(key)) {
-      //   groupedData[key] = Map<String, dynamic>.from(item);
-      //   groupedData[key]['grouped_assignment_ids'] = [item['id_assignment']];
-      //   groupedData[key]['grouped_shipping_ids'] = [req['shipping_id']];
-        
-      //   // Inisialisasi rdd_origin
-      //   if (groupedData[key]['request']['delivery_order'] != null) {
-      //     for (var d in groupedData[key]['request']['delivery_order']) {
-      //       d['rdd_origin'] = req['rdd'];
-      //     }
-      //   }
-      // } else {
-      //   // Jika sudah ada (Grup), tambahkan ID untuk keperluan update nanti
-      //   groupedData[key]['grouped_assignment_ids'].add(item['id_assignment']);
-      //   groupedData[key]['grouped_shipping_ids'].add(req['shipping_id']);
-
-      //   // --- CEK DUPLIKASI DO SEBELUM MENGGABUNGKAN ---
-      //   List currentDOs = groupedData[key]['request']['delivery_order'] ?? [];
-      //   List newDOs = req['delivery_order'] ?? [];
-
-      //   for (var ndo in newDOs) {
-      //     // Hanya tambahkan jika do_number belum ada di list saat ini
-      //     bool isDuplicate = currentDOs.any((existing) => 
-      //       existing['do_number'] == ndo['do_number']);
-          
-      //     if (!isDuplicate) {
-      //       ndo['rdd_origin'] = req['rdd'];
-      //       currentDOs.add(ndo);
-      //     }
-      //   }
-      //   groupedData[key]['request']['delivery_order'] = currentDOs;
-      // }
       if (!groupedData.containsKey(key)) {
   groupedData[key] = Map<String, dynamic>.from(item);
 
@@ -664,11 +401,9 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
     req['shipping_id']
   ];
 
-  // Pastikan delivery_order tidak null
   List currentDOs =
       List.from(groupedData[key]['request']['delivery_order'] ?? []);
 
-  // Tambahkan informasi asal shipment
   for (var d in currentDOs) {
     d['rdd_origin'] = req['rdd'];
     d['parent_so'] = req['so'];
@@ -677,35 +412,28 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
 
   groupedData[key]['request']['delivery_order'] = currentDOs;
 } else {
-  // Tambahkan semua assignment & shipping ID grup
   groupedData[key]['grouped_assignment_ids']
       .add(item['id_assignment']);
 
   groupedData[key]['grouped_shipping_ids']
       .add(req['shipping_id']);
 
-  // Existing DO dalam card grup
   List currentDOs =
       groupedData[key]['request']['delivery_order'] ?? [];
 
-  // DO baru dari shipment lain
   List newDOs = req['delivery_order'] ?? [];
 
   for (var ndo in newDOs) {
-    // Tambahkan metadata asal shipment
     ndo['rdd_origin'] = req['rdd'];
     ndo['parent_so'] = req['so'];
     ndo['parent_shipping_id'] = req['shipping_id'];
 
-    // CEK DUPLIKAT BERDASARKAN
-    // DO NUMBER + SHIPPING ID
     bool isDuplicate = currentDOs.any(
       (existing) =>
           existing['do_number'] == ndo['do_number'] &&
           existing['parent_shipping_id'] == req['shipping_id'],
     );
 
-    // Tambahkan jika belum ada
     if (!isDuplicate) {
       currentDOs.add(ndo);
     }
@@ -726,28 +454,6 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
   }
 }
 
-  // @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     // appBar: AppBar(
-  //     //   title: const Text("ANTRIAN PLANNING BOOKING", 
-  //     //     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-  //     //   backgroundColor: Colors.red.shade800,
-  //     // ),
-  //     body: _isLoading
-  //         ? const Center(child: CircularProgressIndicator())
-  //         : RefreshIndicator(
-  //             onRefresh: _fetchPlanningData,
-  //             child: _planningList.isEmpty
-  //                 ? _buildEmptyState()
-  //                 : ListView.builder(
-  //                     padding: const EdgeInsets.all(12),
-  //                     itemCount: _planningList.length,
-  //                     itemBuilder: (context, index) => _buildPlanningCard(_planningList[index]),
-  //                   ),
-  //           ),
-  //   );
-  // }
   @override
   Widget build(BuildContext context) {
     if (_currentActiveContent != null) {
@@ -756,19 +462,12 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
     return Scaffold(
       body: Column(
         children: [
-          _buildTopFilterBar(), // Tambahkan baris filter
+          _buildTopFilterBar(),
           Expanded(
             child:  _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  // onRefresh: _fetchPlanningData,
-                  // child:_filteredPlanningList.isEmpty
-                  //     ? _buildEmptyState()
-                  //     : ListView.builder(
-                  //         padding: const EdgeInsets.all(12),
-                  //         itemCount: _filteredPlanningList.length,
-                  //         itemBuilder: (context, index) =>
-                  //             _buildPlanningCard(_filteredPlanningList[index]),
+                 
                   onRefresh: () => _fetchPlanningData(showGlobalLoading: false),
                     child: _filteredPlanningList.isEmpty
                         ? _buildEmptyState()
@@ -784,203 +483,6 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
     ),
   );
 }
-  
-// Widget _buildTopFilterBar() {
-//   // Mengecek apakah tanggal yang dipilih adalah hari ini untuk menentukan warna
-//   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
-//                  DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-//   return Container(
-//     padding: const EdgeInsets.all(12),
-//     color: Colors.white,
-//     child: Row(
-//       children: [
-//         Expanded(
-//           child: Container(
-//             decoration: BoxDecoration(
-//               // Beri warna merah jika bukan hari ini (menandakan filter aktif)
-//               color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
-//               borderRadius: BorderRadius.circular(10),
-//             ),
-//             child: Row(
-//               children: [
-//                 // 1. Dropdown Tipe Tanggal
-//                 Container(
-//                   padding: const EdgeInsets.only(left: 12, right: 8),
-//                   decoration: BoxDecoration(
-//                     border: Border(
-//                       right: BorderSide(
-//                         color: !isToday ? Colors.white30 : Colors.grey.shade400,
-//                         width: 1,
-//                       ),
-//                     ),
-//                   ),
-//                   child: DropdownButtonHideUnderline(
-//                     child: DropdownButton<String>(
-//                       value: _dateFilterType == 'stuffing_date' ? "Stuffing" : "RDD",
-//                       isDense: true,
-//                       dropdownColor: !isToday ? Colors.orange[300] : Colors.white,
-//                       iconEnabledColor: !isToday ? Colors.white : Colors.black87,
-//                       style: TextStyle(
-//                         fontSize: 12,
-//                         fontWeight: FontWeight.bold,
-//                         color: !isToday ? Colors.white : Colors.black87,
-//                       ),
-//                       items: ["RDD", "Stuffing"].map((String value) {
-//                         return DropdownMenuItem<String>(
-//                           value: value,
-//                           child: Text(value),
-//                         );
-//                       }).toList(),
-//                       onChanged: (val) {
-//                         setState(() {
-//                           _dateFilterType = val == "RDD" ? "rdd" : "stuffing_date";
-//                         });
-//                         _fetchPlanningData();
-//                       },
-//                     ),
-//                   ),
-//                 ),
-//                 // 2. Tombol Pilih Tanggal Tunggal
-//                 Expanded(
-//                   child: InkWell(
-//                     onTap: _selectSingleDate,
-//                     child: Padding(
-//                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-//                       child: Row(
-//                         children: [
-//                           Icon(
-//                             Icons.calendar_today,
-//                             size: 16,
-//                             color: !isToday ? Colors.white : Colors.black87,
-//                           ),
-//                           const SizedBox(width: 10),
-//                           Text(
-//                             DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate),
-//                             style: TextStyle(
-//                               fontSize: 12,
-//                               fontWeight: FontWeight.bold,
-//                               color: !isToday ? Colors.white : Colors.black87,
-//                             ),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ),
-//         // Tombol Reset ke Hari Ini
-//         if (!isToday)
-//           IconButton(
-//             icon: const Icon(Icons.refresh, color: Colors.red),
-//             onPressed: () {
-//               setState(() {
-//                 _selectedDate = DateTime.now();
-//                 _dateFilterType = "stuffing_date";
-//               });
-//               _fetchPlanningData();
-//             },
-//           ),
-//       ],
-//     ),
-//   );
-// }
-
-// Widget _buildTopFilterBar() {
-//   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
-//                  DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-//   return Container(
-//     padding: const EdgeInsets.all(12),
-//     color: Colors.white,
-//     child: Row(
-//       children: [
-//         Expanded(
-//           flex: 4,
-//           child: Container(
-//             decoration: BoxDecoration(
-//               color: !isToday ? Colors.red.shade700 : Colors.grey.shade200,
-//               borderRadius: BorderRadius.circular(10),
-//             ),
-//             child: InkWell(
-//               onTap: _selectSingleDate,
-//               child: Padding(
-//                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-//                 child: Row(
-//                   children: [
-//                     Icon(
-//                       Icons.calendar_today,
-//                       size: 16,
-//                       color: !isToday ? Colors.white : Colors.black87,
-//                     ),
-//                     const SizedBox(width: 12),
-//                     Text(
-//                       "STUFFING: ${DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate)}",
-//                       overflow: TextOverflow.ellipsis,
-//                       style: TextStyle(
-//                         fontSize: 12,
-//                         fontWeight: FontWeight.bold,
-//                         color: !isToday ? Colors.white : Colors.black87,
-//                       ),
-//                     ),
-//                     const Spacer(),
-//                     Icon(
-//                       Icons.arrow_drop_down,
-//                       color: !isToday ? Colors.white : Colors.black87,
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ),
-//         const SizedBox(width: 10),
-
-//           // 2. Input Search Box (DO / Vendor Name / NIK) - Di Sebelah Filter Tanggal
-//           Expanded(
-//             flex: 5, // Proporsi lebar widget search
-//             child: Container(
-//               height: 44,
-//               decoration: BoxDecoration(
-//                 color: Colors.grey.shade100,
-//                 borderRadius: BorderRadius.circular(10),
-//                 border: Border.all(color: Colors.grey.shade300, width: 1),
-//               ),
-//               child: TextField(
-//                 controller: _searchController,
-//                 style: const TextStyle(fontSize: 12),
-//                 decoration: InputDecoration(
-//                   hintText: "Cari DO, Vendor, NIK...",
-//                   prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
-//                   suffixIcon: _searchController.text.isNotEmpty
-//                       ? InkWell(
-//                           onTap: () => _searchController.clear(),
-//                           child: const Icon(Icons.clear, size: 16, color: Colors.grey),
-//                         )
-//                       : null,
-//                   border: InputBorder.none,
-//                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
-//                 ),
-//               ),
-//             ),
-//           ),
-//         if (!isToday)
-//           IconButton(
-//             icon: const Icon(Icons.refresh, color: Colors.red),
-//             onPressed: () {
-//               setState(() {
-//                 _selectedDate = DateTime.now();
-//               });
-//               _fetchPlanningData();
-//             },
-//           ),
-//       ],
-//     ),
-//   );
-// }
 
 Widget _buildTopFilterBar() {
   bool isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == 
@@ -991,7 +493,7 @@ Widget _buildTopFilterBar() {
     color: Colors.white,
     child: LayoutBuilder(
       builder: (context, constraints) {
-        // Jika layar kecil (HP), gunakan susunan Vertikal (Column)
+      
         if (constraints.maxWidth < 600) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1025,7 +527,7 @@ Widget _buildTopFilterBar() {
                   ),
                 ),
               ),
-              const SizedBox(height: 10), // Jarak antar filter di HP
+              const SizedBox(height: 10),
               Container(
                 height: 44,
                 width: double.infinity,
@@ -1055,7 +557,6 @@ Widget _buildTopFilterBar() {
           );
         }
 
-        // Jika layar lebar (Laptop/Tablet), tetap gunakan Row (Horizontal)
         return Row(
           children: [
             Expanded(
@@ -1167,14 +668,12 @@ String _getCheckInTime(String? timeSlot) {
   }
 
   try {
-    // 2. Pecah string (misal: "19:00 - 21:00")
     List<String> parts = timeSlot.split(" - ");
     if (parts.length < 2) return "00:00 - 00:00";
 
-    String startTimeStr = parts[0]; // "19:00"
-    String endTimeStr = parts[1];   // "21:00"
+    String startTimeStr = parts[0];
+    String endTimeStr = parts[1];  
 
-    // 3. Ambil jam (handle jika split ":" gagal)
     List<String> startSplit = startTimeStr.split(":");
     List<String> endSplit = endTimeStr.split(":");
     
@@ -1183,18 +682,14 @@ String _getCheckInTime(String? timeSlot) {
     int startHour = int.parse(startSplit[0]);
     int endHour = int.parse(endSplit[0]);
 
-    // 4. Kurangi 2 jam (dengan logika putaran 24 jam agar tidak negatif)
-    // Misal: jam 1 pagi dikurang 2 jam menjadi jam 23 malam
     int newStart = (startHour - 2) < 0 ? (24 + (startHour - 2)) : (startHour - 2);
     int newEnd = (endHour - 2) < 0 ? (24 + (endHour - 2)) : (endHour - 2);
 
-    // 5. Kembalikan format HH:00
     String checkInStart = "${newStart.toString().padLeft(2, '0')}:00";
     String checkInEnd = "${newEnd.toString().padLeft(2, '0')}:00";
 
     return "$checkInStart - $checkInEnd";
   } catch (e) {
-    // Jika ada eror parsing di tengah jalan, tampilkan default alih-alih crash
     debugPrint("Error kalkulasi jam check-in: $e");
     return "00:00 - 00:00";
   }
@@ -1213,7 +708,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
       ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
       : "-";
 
-// Validasi penentuan tombol dinamis berdasarkan ketersediaan timestamp 'checkIn_at'
     final bool hasCheckedIn = item['checkIn_at'] != null;
 
   return Card(
@@ -1222,7 +716,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
     elevation: 3,
     child: Column(
       children: [
-        // Header (Jam & Label)
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1231,21 +724,12 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
          child: Wrap(
-    spacing: 12, // Jarak horizontal antar elemen jika sejajar
-    runSpacing: 8, // Jarak vertikal otomatis jika teks melipat ke bawah
+    spacing: 12, 
+    runSpacing: 8,
     alignment: WrapAlignment.spaceBetween,
     crossAxisAlignment: WrapCrossAlignment.center,
     children: [
-              // Row(
-              //   children: [
-              //     const Icon(Icons.access_time_filled, color: Colors.white, size: 18),
-              //     const SizedBox(width: 8),
-              //     Text(
-              //       item['jam_booking'] ?? "-",
-              //       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              //     ),
-              //   ],
-              // ),
+             
               Row(
                 mainAxisSize: MainAxisSize.min,
           children: [
@@ -1258,7 +742,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                 style: const TextStyle(
                   color: Colors.white, 
                   fontWeight: FontWeight.bold, 
-                  fontSize: 14, // Ukuran sedikit diperkecil agar pas
+                  fontSize: 14,
                 ),
               ),
             ),
@@ -1269,7 +753,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white, width: 1),
                 ),
@@ -1287,7 +771,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Info Log
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1299,7 +782,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
               ),
               const SizedBox(height: 8),
               
-              // Baris Info Umum
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1310,7 +792,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
               ),
               const Divider(height: 24),
 
-              // Info Vendor
              Row(
                 children: [
                   const Icon(Icons.store, size: 18, color: Colors.red),
@@ -1323,11 +804,10 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                       "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
-                              // --- TAMBAHKAN DETAIL VENDOR TRANSPORTASI DI SINI ---
           if (item['vendor_transportasi'] != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Wrap( // Gunakan Wrap agar rapi saat dibuka di HP
+              child: Wrap( 
                 spacing: 8,
                 runSpacing: 2,
                 children: [
@@ -1337,8 +817,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                   _miniVendorDetail("Unit: ${item['vendor_transportasi']['type_unit'] ?? '-'}"),
                 ],
               ),
-            ),
-                           
+            ),                  
         ],
                    ),
               ),
@@ -1346,8 +825,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                 ],
               ),
               const SizedBox(height: 16),
-
-              // --- LOOPING DETAIL DO (Sudah Gabung) ---
               ...dos.map((doItem) {
                 final List details = doItem['do_details'] ?? [];
                 final String rddSpesifik = _formatDate(doItem['rdd_origin']);
@@ -1409,35 +886,13 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
                     ),
                   ],
                 );
-              }).toList(),
-//               SizedBox(
-//   width: double.infinity,
-//   child: ElevatedButton.icon(
-//     onPressed: () => _handleCheckIn(item),
-//     icon: const Icon(Icons.location_on, color: Colors.white),
-//     label: const Text("CHECK-IN KEDATANGAN", 
-//         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-//     style: ElevatedButton.styleFrom(
-//       backgroundColor: Colors.green.shade700,
-//       padding: const EdgeInsets.symmetric(vertical: 12),
-//       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-//     ),
-//   ),
-// ),
-//             ],
-//           ),
-//         ),
-//       ],
-//     ),
-//   );
-// }
-// KONDISI TOMBOL DINAMIS: Langkah 1 (Mencatat Kedatangan) vs Langkah 2 (Mengisi Kelayakan)
+              }),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: hasCheckedIn 
-                        ? () => _openCheckInTab(item) // Jika sudah check-in kedatangan, arahkan ke validasi & form kelayakan
-                        : () => _handleCheckIn(item), // Jika belum, rekam waktu kedatangan terlebih dahulu
+                        ? () => _openCheckInTab(item)
+                        : () => _handleCheckIn(item),
                     icon: Icon(hasCheckedIn ? Icons.verified_user : Icons.location_on, color: Colors.white),
                     label: Text(
                       hasCheckedIn ? "CEK KELAYAKAN UNIT" : "CHECK-IN KEDATANGAN", 
@@ -1458,7 +913,6 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
     );
   }
 
-// Fungsi helper untuk teks detail vendor yang kecil di bawah nama
 Widget _miniVendorDetail(String text) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1491,12 +945,6 @@ Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign
     ),
   );
 }
-// Helper untuk format tanggal dan jam (Assigned & Responded)
-// String _formatDateTime(String? dateStr) {
-//   if (dateStr == null) return "-";
-//   DateTime dt = DateTime.parse(dateStr).toLocal();
-//   return DateFormat('dd/MM/yy HH:mm').format(dt);
-// }
 String _formatDateTime(String? dateStr) {
   if (dateStr == null || dateStr.isEmpty) return "-";
 
@@ -1519,16 +967,6 @@ Widget _infoBox(String label, String value) {
     ],
   );
 } 
-
-  Widget _infoColumn(String label, String value, {Color? color}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color ?? Colors.black87)),
-      ],
-    );
-  }
 
 
   String _formatDate(String? dateStr) {

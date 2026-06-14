@@ -1,5 +1,4 @@
 import 'dart:io' as io;
-
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
-
 import 'package:universal_html/html.dart' as html;
 
 class LogisticDashboardPage extends StatefulWidget {
@@ -25,14 +23,12 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
   List<Map<String, dynamic>> _filteredRequests = [];
   
   DateTimeRange? _selectedDateRange;
-  //DateTime _selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
  @override
   void initState() {
     super.initState();
-    // Inisialisasi range tanggal default (misal: hari ini)
     _selectedDateRange = DateTimeRange(
       start: DateTime.now(),
       end: DateTime.now(),
@@ -46,7 +42,6 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
         setState(() => _isLoading = true);
       }
 
-      // Query multi-relation sesuai DDL Table terbaru Anda
       final response = await supabase
           .from('shipping_request')
           .select('''
@@ -88,7 +83,7 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
 )
             )
           ''')
-          //.filter('shipping_assignments.status_assignment', 'not.in', '(rejected,"rejected unit","no response","cancel booking")')
+          
           .not('shipping_assignments.status_assignment', 'in', '("rejected","rejected unit","no response","cancel booking")',)
           .eq('shipping_assignments.loading.verifikasi_rekomendasi_logistic', 'OKE',)
          .order('shipping_id', ascending: false);
@@ -114,7 +109,7 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     
     setState(() {
       _filteredRequests = _allRequests.where((req) {
-       // 1. Filter Date Range (Stuffing Date)
+       // 1. Filter Stuffing Date
         bool matchDate = true;
         if (_selectedDateRange != null) {
           DateTime? stuffingDate = req['stuffing_date'] != null 
@@ -131,7 +126,7 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
           }
         }
 
-        // 2. Filter Search (No DO, SO, Customer, Material)
+       
         bool matchSearch = false;
         if (query.isEmpty) {
           matchSearch = true;
@@ -162,7 +157,6 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     });
   }
 
-  // --- LOGIKA GROUPING DO & SINGLE DO SUPORT ---
   List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
     Map<int, Map<String, dynamic>> groupedMap = {};
     List<Map<String, dynamic>> finalResult = [];
@@ -180,10 +174,9 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
           groupedMap[gId]!['grouped_ids'].add(req['shipping_id']);
           
           List<String?> rdds = List<String?>.from(groupedMap[gId]!['all_rdds']);
-          // if (!rdds.contains(req['rdd'])) {
+
           if (!rdds.contains(req['rdd'])) rdds.add(req['rdd']);
-          //   rdds.add(req['rdd']);
-          // }
+         
           groupedMap[gId]!['all_rdds'] = rdds;
           
           List currentDos = List.from(groupedMap[gId]!['delivery_order'] ?? []);
@@ -203,27 +196,6 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     return finalResult;
   }
 
-  // @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     // appBar: AppBar(
-  //     //   title: const Text("Logistic Dashboard", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-  //     //   backgroundColor: Colors.blue.shade900,
-  //     //   foregroundColor: Colors.white,
-  //     // ),
-  //     body: Column(
-  //       children: [
-  //         _buildFilterBar(),
-  //         Expanded(
-  //           child: _isLoading
-  //               ? const Center(child: CircularProgressIndicator())
-  //               : _buildTableArea(),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-
 @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -240,71 +212,13 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
       ),
     );
   }
-  // Widget _buildFilterBar() {
-  //   return Padding(
-  //     padding: const EdgeInsets.all(12.0),
-  //     child: Row(
-  //       children: [
-  //         // Filter Stuffing Date (Now Default)
-  //         InkWell(
-  //           onTap: () async {
-  //             DateTime? picked = await showDatePicker(
-  //               context: context,
-  //               initialDate: _selectedDateR,
-  //               firstDate: DateTime(2024),
-  //               lastDate: DateTime(2030),
-  //             );
-  //             if (picked != null) {
-  //               setState(() => _selectedDate = picked);
-  //               _runFilter();
-  //             }
-  //           },
-  //           child: Container(
-  //             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-  //             decoration: BoxDecoration(
-  //               color: Colors.blue.shade50,
-  //               borderRadius: BorderRadius.circular(8),
-  //               border: Border.all(color: Colors.blue.shade200)
-  //             ),
-  //             child: Row(
-  //               children: [
-  //                 Icon(Icons.calendar_month, size: 16, color: Colors.blue.shade900),
-  //                 const SizedBox(width: 8),
-  //                 Text(
-  //                   DateFormat('dd/MM/yyyy').format(_selectedDate),
-  //                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900),
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //         ),
-  //         const SizedBox(width: 12),
-  //         // Search Field
-  //         Expanded(
-  //           child: TextField(
-  //             controller: _searchController,
-  //             onChanged: (_) => _runFilter(),
-  //             decoration: InputDecoration(
-  //               hintText: "Cari No DO, SO, Customer, Material...",
-  //               prefixIcon: const Icon(Icons.search, size: 20),
-  //               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-  //               isDense: true,
-  //               contentPadding: const EdgeInsets.symmetric(vertical: 10),
-  //             ),
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-// --- UI Filter & Export Bar ---
+  
   Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Row(
         children: [
         
-          // Search Field
           Expanded(
             child: TextField(
               controller: _searchController,
@@ -391,26 +305,16 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     );
 
    if (picked != null) {
-      // 1. Set tanggal baru dan aktifkan loading secara instan 
-      //    (Pop-up otomatis tertutup karena showDateRangePicker selesai beroperasi)
+    
       setState(() {
         _selectedDateRange = picked;
         _isLoading = true; 
       });
 
-      // 2. Berikan sedikit delay/jeda (misal 500ms) agar pop-up benar-benar menutup sempurna
-      //    dan user bisa melihat animasi CircularProgressIndicator terlebih dahulu.
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // 3. Jalankan filter atau ambil data baru dari database
-      // Jika Anda ingin mengambil data BARU dari Supabase berdasarkan range tanggal, 
-      // gunakan panggilan ini:
-      // await _fetchDashboardData(); 
       
-      // Namun, jika Anda hanya ingin memfilter data lokal yang SUDAH ADA di HP:
+      await Future.delayed(const Duration(milliseconds: 500));
       _runFilter();
 
-      // 4. Matikan loading setelah data selesai diproses
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -423,7 +327,6 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     if (displayData.isEmpty) {
       return const Center(child: Text("Tidak ada data logistik hari ini"));
     }
-//const double totalTableWidth = 2400.0;
     return LayoutBuilder(
       builder: (context, constraints) {
         return Scrollbar(
@@ -488,7 +391,6 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
       DataColumn(label: SizedBox(width: 50, child: Text('Qty'))),
       DataColumn(label: SizedBox(width: 60, child: Text('NW'))),
       DataColumn(label: SizedBox(width: 30, child: Text('TNW'))),
-      //DataColumn(label: SizedBox(width: 100, child: Text('Division'))),
       DataColumn(label: SizedBox(width: 155, child: Text('Lokasi Loading'))),
       DataColumn(label: SizedBox(width: 125, child: Text('Vendor Transportasi'))),
       DataColumn(label: SizedBox(width: 80, child: Text('Type Unit'))),
@@ -510,17 +412,13 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     final List<int> idsInRow = isGroupRow ? List<int>.from(req['grouped_ids']) : [req['shipping_id'] as int];
     final List dos = req['delivery_order'] ?? [];
 
-    // Extract Data Assignment (Ambil assignment pertama dari list assignment jika ada)
     final List assignmentsList = req['shipping_assignments'] ?? [];
     Map<String, dynamic>? assignment = assignmentsList.isNotEmpty ? assignmentsList.first : null;
 
-    // Extract Vendor Transportasi & Warehouse
     String warehouseName = req['warehouse']?['warehouse_name'] ?? "-";
     String vendorName = assignment?['vendor_transportasi']?['vendor_name'] ?? "-";
     String typeUnit = assignment?['vendor_transportasi']?['type_unit'] ?? "-";
     String winnerRank = (assignment?['vendor_transportasi']?['winner_rank'] ?? "-").toString();
-
-    // Timings & Unit Info
     String jamBooking = assignment?['jam_booking'] ?? "-";
     String checkInAt = _formatDateTime(assignment?['checkIn_at']);
     String keluarAt = _formatDateTime(assignment?['keluar_at']);
@@ -529,7 +427,6 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
     String sjKembali = _formatDateOnly(assignment?['sj_kembali']);
     String noSegelPelayaran = assignment?['no_segel_pelayaran'] ?? "-";
 
-    // Extract Loading -> Checker & Shift
     final List loadingList = assignment?['loading'] ?? [];
     Map<String, dynamic>? loadingInfo = loadingList.isNotEmpty ? loadingList.first : null;
     String checkerName = loadingInfo?['checker']?['checker_name'] ?? "-";
@@ -545,7 +442,6 @@ double totalNetWeight = 0;
       String city = d['customer']?['city']?.toString() ?? "-";
       String area = d['customer']?['area']?.toString() ?? "-";
 
-      // for (var det in d['do_details']) {
       final List details = d['do_details'] ?? [];
       for (int i = 0; i < details.length; i++) {
         var det = details[i];
@@ -553,7 +449,9 @@ double totalNetWeight = 0;
         double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
         double nwValue = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
         //double calculatedTnw = (qty * nwValue) / 1000; // Ton
-totalNetWeight += (qty * nwValue);
+// totalNetWeight += (qty * nwValue);
+double calculatedRowNw = qty * nwValue;
+        totalNetWeight += calculatedRowNw;
         soW.add(_buildCellText(currentSo, width: 90));
         doNumW.add(_buildCellText(d['do_number'] ?? "-", isBold: true, width: 80));
         if (i == 0) {
@@ -576,22 +474,14 @@ totalNetWeight += (qty * nwValue);
         matTypeW.add(_buildCellText(det['material']?['material_type'] ?? "-", width: 80));
         divDescW.add(_buildCellText(det['material']?['division_description'] ?? "-", width: 130));
         qtyW.add(_buildCellText(_formatSmart(qty), isBold: true, width: 50));
-        nwW.add(_buildCellText(_formatSmart(nwValue), width: 60));
-        //tnwW.add(_buildCellText(calculatedTnw.toStringAsFixed(2), isBold: true, width: 60));
+        nwW.add(_buildCellText(_formatSmart(calculatedRowNw), width: 60));
       }
     }
 double totalTnwTon = totalNetWeight / 1000;
     return DataRow(
-      color: WidgetStateProperty.resolveWith((states) => isGroupRow ? Colors.blue.shade50.withOpacity(0.3) : null),
+      color: WidgetStateProperty.resolveWith((states) => isGroupRow ? Colors.blue.shade50.withValues(alpha: 0.3) : null),
       cells: [
-        // Ship ID
-        // DataCell(Column(
-        //   mainAxisAlignment: MainAxisAlignment.center,
-        //   crossAxisAlignment: CrossAxisAlignment.start,
-        //   children: [
-        //     // Text(isGroupRow ? "GROUP ID: ${req['group_id']}\n(${idsInRow.join(',')})" : req['shipping_id'].toString(),
-        //     //     style: TextStyle(fontWeight: isGroupRow ? FontWeight.bold : FontWeight.normal, fontSize: 11)),
-        //     Text(idsInRow.join(", "), style: const TextStyle(fontSize: 11)),
+        
         DataCell(Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
           child: Column(
@@ -619,9 +509,9 @@ double totalTnwTon = totalNetWeight / 1000;
           ],
     ),
         )),
-        // 2. STUFFING DATE
+  
         DataCell(Text(_formatDateOnly(req['stuffing_date']), style: const TextStyle(fontSize: 11))),
-        // 3. RDD (Multi-tanggal jika Group)
+      
         DataCell(Builder(builder: (context) {
           if (isGroupRow && req['all_rdds'] != null) {
             List<String?> rdds = List<String?>.from(req['all_rdds']);
@@ -654,22 +544,8 @@ double totalTnwTon = totalNetWeight / 1000;
           ),
         )
       ),
-        // RDD Handling for Groups
-        // DataCell(Builder(builder: (context) {
-        //   if (req['all_rdds'] != null) {
-        //     List<String?> rdds = List<String?>.from(req['all_rdds']);
-        //     return Column(
-        //       mainAxisAlignment: MainAxisAlignment.center,
-        //       crossAxisAlignment: CrossAxisAlignment.start,
-        //       children: rdds.map((r) => Text(_formatDateOnly(r), style: const TextStyle(fontSize: 11))).toList(),
-        //     );
-        //   }
-        //   return Text(_formatDateOnly(req['rdd']));
-        // })),
-        //DataCell(Text(req['material']?[0]?['division_description'] ?? "-", style: const TextStyle(fontSize: 11))),
+       
         DataCell(Text(warehouseName)),
-        // DataCell(Text(vendorName,)),
-        // Contoh geser ke KIRI (Alignment.centerLeft)
 DataCell(
   Padding(
     padding: const EdgeInsets.only(left: 30.0), // Geser sedikit ke kanan sebesar 10 pixel
@@ -690,14 +566,12 @@ DataCell(
       ],
     );
   }
-// --- EXCEL EXPORT LOGIC ---
   Future<void> _exportToExcel() async {
     try {
       var excel = Excel.createExcel();
       Sheet sheet = excel['Dashboard_Logistik'];
       excel.delete('Sheet1');
 
-      // Header
       sheet.appendRow([
         TextCellValue('Ship ID'), 
         TextCellValue('No DO'), 
@@ -746,7 +620,6 @@ DataCell(
     );
   }
 
-  // --- PARSING & UTILITY FUNCTIONS ---
   String _formatSmart(dynamic value) {
     if (value == null) return "0";
     double n = double.tryParse(value.toString()) ?? 0.0;
@@ -772,17 +645,17 @@ DataCell(
     }
   }
 
-  String _calculateLeadTime(dynamic checkInStr, dynamic keluarStr) {
-    if (checkInStr == null || keluarStr == null) return "-";
-    try {
-      DateTime checkIn = DateTime.parse(checkInStr.toString());
-      DateTime keluar = DateTime.parse(keluarStr.toString());
-      Duration diff = keluar.difference(checkIn);
+  // String _calculateLeadTime(dynamic checkInStr, dynamic keluarStr) {
+  //   if (checkInStr == null || keluarStr == null) return "-";
+  //   try {
+  //     DateTime checkIn = DateTime.parse(checkInStr.toString());
+  //     DateTime keluar = DateTime.parse(keluarStr.toString());
+  //     Duration diff = keluar.difference(checkIn);
       
-      // Mengembalikan selisih dalam format total jam bulat (hour) sesuai permintaan
-      return "${diff.inHours} Jam";
-    } catch (_) {
-      return "-";
-    }
-  }
+  //     // Mengembalikan selisih dalam format total jam bulat (hour) sesuai permintaan
+  //     return "${diff.inHours} Jam";
+  //   } catch (_) {
+  //     return "-";
+  //   }
+  // }
 }

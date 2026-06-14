@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 class LoadingFormPage extends StatefulWidget {
   final Map<String, dynamic> item;
   final String? lateReason;
-//final VoidCallback onBack;
   const LoadingFormPage({super.key, required this.item, this.lateReason});
 
   @override
@@ -21,30 +20,25 @@ class _LoadingFormPageState extends State<LoadingFormPage> {
   Map<String, dynamic>? _shippingData;
 
 String _currentUserName = 'admin';
-// --- STATE UNTUK FORM LOADING ---
-  String? _rekomendasiLogistic; // OKE, Tidak Sempurna, Belum Dilakukan
-  String? _lokasiStuffing;
+  String? _rekomendasiLogistic; 
+  //String? _lokasiStuffing;
   String? _ganjalBan;
-  String? _selectedChecker; // Untuk Dropdown
-  List<Map<String, dynamic>> _checkerList = []; // Data dari DB
+  String? _selectedChecker; 
+  List<Map<String, dynamic>> _checkerList = []; 
   final TextEditingController _noSegelController = TextEditingController();
-  //final TextEditingController _checkerController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    //_shippingData = widget.item;
     _loadData();
     _getProfileName();
     _fetchCheckers();
   }
 
-// Cari di dalam class _CheckInFormPageState
 Future<void> _loadData() async {
   try {
     final assignmentId = widget.item['id_assignment'];
     
-    // Kita ambil data ulang dari view/table penugasan lengkap dengan vendornya
     final response = await supabase
         .from('shipping_assignments')
         .select('''
@@ -101,13 +95,12 @@ Future<void> _getProfileName() async {
   @override
   void dispose() {
    _noSegelController.dispose();
-    //_checkerController.dispose();
     super.dispose();
   }
 
-  List<String> _mapToList(Map<String, bool> map) {
-    return map.entries.where((e) => e.value).map((e) => e.key).toList();
-  }
+  // List<String> _mapToList(Map<String, bool> map) {
+  //   return map.entries.where((e) => e.value).map((e) => e.key).toList();
+  // }
 
 Future<void> _fetchCheckers() async {
     try {
@@ -127,38 +120,10 @@ Future<void> _fetchCheckers() async {
     }
   }
 
-// Future<void> _submitCheckIn() async {
-//     if (_rekomendasiLogistic == null) {
-//       _showSnackBar("Harap isi Verifikasi Rekomendasi Logistic!", Colors.orange);
-//       return;
-//     }
-    
-//     setState(() => _isSubmitting = true);
-//     try {
-//       // Logic update database Anda di sini (Update status ke 'loading' dsb)
-//       _showSnackBar("Data Loading Berhasil Disimpan!", Colors.green);
-//       Navigator.pop(context);
-//     } catch (e) {
-//       _showSnackBar("Gagal Simpan: $e", Colors.red);
-//     } finally {
-//       if (mounted) setState(() => _isSubmitting = false);
-//     }
-//   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // appBar: AppBar(
-      //   title: const Text("Form Check-In Unit", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      //   elevation: 0,
-      //   // leading: IconButton(
-      //   //   icon: const Icon(Icons.arrow_back),
-      //   //   onPressed: widget.onBack,
-      //   // ),
-      // ),
       body: Column(
         children: [
           Expanded(
@@ -179,22 +144,7 @@ Future<void> _fetchCheckers() async {
                     const SizedBox(height: 12),
                  _buildRekomendasiLogistic(),
 
-          //         // --- BAGIAN 2: MUNCUL HANYA JIKA REKOMENDASI SUDAH DIPILIH ---
-          //         if (_rekomendasiLogistic != null) ...[
-          //           const Divider(),
-          //           _buildLoadingChecklist(),
-          //         ] else ...[
-          //           _buildLockedInfo(),
-          //         ],
-          //        const SizedBox(height: 30),
-          //       ],
-          //     ),
-          //   ),
-          // ),
-          // ),
-          // _buildBottomAction(),
           const Divider(),
-
                     if (_rekomendasiLogistic == 'OKE') ...[
                       _buildSectionTitle("DATA TEKNIS LOADING"),
                       _buildLoadingChecklist(), 
@@ -202,8 +152,6 @@ Future<void> _fetchCheckers() async {
                       _buildLockedInfo(),
                         
                     ],
-                    // ------------------------------------------
-                    
                     const SizedBox(height: 30),
                   ],
                 ),
@@ -218,7 +166,6 @@ Future<void> _fetchCheckers() async {
 
 Widget _buildInspectionResultSummary() {
     final item = widget.item;
-    // Helper fungsi untuk merubah List menjadi String yang rapi
   String formatList(dynamic data) {
     if (data == null) return "-";
     if (data is List) {
@@ -245,7 +192,6 @@ Widget _buildInspectionResultSummary() {
           _resultRow("Sisi Atap", item['sisi_atap']),
           _resultRow("Sisi Lantai", item['sisi_lantai']),
           const Divider(),
-          // MENAMPILKAN KONDISI TIDAK LAYAK LAINNYA
           Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child:
@@ -263,7 +209,6 @@ Widget _buildInspectionResultSummary() {
           ),
         ),
           const SizedBox(height: 8),
-          //_resultRow("Kondisi Tidak Layak Lainnya",item['kondisi_tidak_standar_lainnya']?? "-"),
           const Divider(height: 1),
           const SizedBox(height: 8),
           Row(
@@ -325,9 +270,6 @@ Widget _buildRekomendasiLogistic() {
         children: [
           
           _buildLabelField("Verifikasi Rekomendasi Logistic"),
-         
-          // const Text("Verifikasi Rekomendasi Logistic :", 
-          //   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
            const SizedBox(height: 12),
           _buildModernRadioGroup(
             ['OKE', 'Tidak Sempurna', 'Belum Dilakukan'], 
@@ -335,7 +277,6 @@ Widget _buildRekomendasiLogistic() {
            (val) {
             setState(() {
               _rekomendasiLogistic = val;
-              // Reset field bawah jika status bukan OKE agar data lama tidak ikut terkirim
               if (val != 'OKE') {
                 _ganjalBan = null;
                 _selectedChecker = null;
@@ -349,114 +290,14 @@ Widget _buildRekomendasiLogistic() {
   );
 }
 
-// Future<void> _submitLoadingData() async {
-//   // 1. Validasi Pilihan Rekomendasi (Wajib diisi apapun hasilnya)
-//   if (_rekomendasiLogistic == null) {
-//     _showSnackBar("Harap pilih Verifikasi Rekomendasi Logistic!", Colors.orange);
-//     return;
-//   }
-//   // 2. Jika OKE, wajib isi data teknis (Ganjal & Checker)
-//   if (_rekomendasiLogistic == 'OKE') {
-//     if (!_formKey.currentState!.validate() || _ganjalBan == null) {
-//       _showSnackBar("Untuk status OKE, data Ganjal Ban & Checker wajib diisi!", Colors.orange);
-//       return;
-//     }
-//   }
-//   // // 1. Validasi Form
-//   // if (!_formKey.currentState!.validate()) {
-//   //   _showSnackBar("Harap lengkapi semua field yang wajib diisi!", Colors.orange);
-//   //   return;
-//   // }
-// // 2. Validasi manual untuk variabel state (PENTING)
-//   // Tambahkan pengecekan null sebelum melakukan int.parse
-//   // if (_selectedChecker == null) {
-//   //   _showSnackBar("Silakan pilih Checker terlebih dahulu!", Colors.orange);
-//   //   return;
-//   // }
-
-//   // 2. Validasi Checklist Manual
-//   // if (_rekomendasiLogistic == null || _ganjalBan == null) {
-//   //   _showSnackBar("Harap selesaikan semua verifikasi checklist!", Colors.orange);
-//   //   return;
-//   // }
-
-//   setState(() => _isSubmitting = true);
-
-//   try {
-//     final idAssignment = widget.item['id_assignment'];
-//     // Ambil ID Assignment (bisa tunggal atau list grup)
-//     final assignmentIds = List<int>.from(widget.item['grouped_assignment_ids'] ?? [widget.item['id_assignment']]);
-//     final shipIds = List<int>.from(widget.item['grouped_shipping_ids'] ?? [widget.item['shipping_id']]);
-
-//     // UPDATE Tabel shipping_assignments
-//     await supabase.from('loading').insert({
-//       'id_assignment': idAssignment,
-//       'loading_by': _currentUserName,
-//        'verifikasi_rekomendasi_logistic': _rekomendasiLogistic,
-//       // 'ganjal_ban': _ganjalBan,
-//       // 'checker_id': int.parse(_selectedChecker!), // Simpan ID sebagai FK
-//       // 'no_segel_smart': _noSegelController.text.trim(),
-//       // 'loading_at': DateTime.now().toIso8601String(),
-//       'checker_id': _rekomendasiLogistic == 'OKE' ? int.parse(_selectedChecker!) : null,
-//       'ganjal_ban': _rekomendasiLogistic == 'OKE' ? _ganjalBan : null,
-//       'no_segel_smart': (_rekomendasiLogistic == 'OKE' && _noSegelController.text.isNotEmpty) 
-//           ? _noSegelController.text.trim() 
-//           : null,
-//       'loading_at': DateTime.now().toIso8601String(),
-//     });
-//     // // UPDATE status di shipping_assignments (Opsional: agar status truk berubah)
-//     //   await supabase.from('shipping_assignments').update({
-//     //     'status_assignment': 'loading',
-//     //   }).eq('id_assignment', idAssignment);
-
-//     // // UPDATE Tabel shipping_request (Ubah status utama)
-//     // await supabase.from('shipping_request').update({
-//     //   'status': 'loading',
-//     // }).inFilter('shipping_id', shipIds);
-//     // B. HANYA UPDATE STATUS JIKA OKE
-//     if (_rekomendasiLogistic == 'OKE') {
-//       // Update status di shipping_assignments agar bisa lanjut ke Weighbridge
-//       await supabase.from('shipping_assignments').update({
-//         'status_assignment': 'loading', 
-//       }).inFilter('id_assignment', assignmentIds);
-
-//       // Update status di shipping_request agar sinkron di dashboard
-//       await supabase.from('shipping_request').update({
-//         'status': 'loading',
-//       }).inFilter('shipping_id', shipIds);
-//     }
-
-//      if (mounted) {
-//     //   _showSnackBar("Data Loading Berhasil Disimpan!", Colors.green);
-//     String msg = _rekomendasiLogistic == 'OKE' 
-//           ? "Data Berhasil Diverifikasi OKE!" 
-//           : "Riwayat penolakan berhasil dicatat. Status tetap antri loading.";
-//       _showSnackBar(msg, _rekomendasiLogistic == 'OKE' ? Colors.green : Colors.blue);
-//       // Gunakan penutup tab sesuai sistem Dynamic Tab Anda
-//       DynamicTabPage.of(context)?.closeCurrentTab();
-//     }
-//   } catch (e) {
-//     _showSnackBar("Gagal Simpan: $e", Colors.red);
-//   } finally {
-//     if (mounted) setState(() => _isSubmitting = false);
-//   }
-// }
 Future<void> _submitLoadingData() async {
-  // 1. Validasi Pilihan Rekomendasi
   if (_rekomendasiLogistic == null) {
     _showSnackBar("Harap pilih Verifikasi Rekomendasi Logistic!", Colors.orange);
     return;
   }
 
-  // 2. Jika OKE, wajib isi data teknis
   if (_rekomendasiLogistic == 'OKE') {
-  //   if (!_formKey.currentState!.validate() || _ganjalBan == null) {
-  //     _showSnackBar("Data Ganjal Ban & Checker wajib diisi!", Colors.orange);
-  //     return;
-  //   }
-  // }
   bool isFormValid = _formKey.currentState!.validate();
-    // Validasi manual untuk Radio Group Ganjal Ban
     bool isGanjalValid = _ganjalBan != null;
 
     if (!isFormValid || !isGanjalValid) {
@@ -464,18 +305,10 @@ Future<void> _submitLoadingData() async {
       return;
     }
   }
-
   setState(() => _isSubmitting = true);
-
   try {
-    // Ambil daftar ID Assignment dan Shipping ID dari data grup/single
     final List<int> assignmentIds = List<int>.from(widget.item['grouped_assignment_ids'] ?? [widget.item['id_assignment']]);
     final List<int> shipIds = List<int>.from(widget.item['grouped_shipping_ids'] ?? [widget.item['shipping_id']]);
-
-    // =========================================================
-    // A. PROSES INPUT KE TABEL LOADING (BULK INSERT)
-    // =========================================================
-    // Kita membuat list of Map untuk setiap assignment_id dalam grup
     final List<Map<String, dynamic>> loadingEntries = assignmentIds.map((id) {
       return {
         'id_assignment': id,
@@ -490,19 +323,13 @@ Future<void> _submitLoadingData() async {
       };
     }).toList();
 
-    // Jalankan insert masal ke tabel loading
     await supabase.from('loading').insert(loadingEntries);
 
-    // =========================================================
-    // B. UPDATE STATUS HANYA JIKA REKOMENDASI OKE
-    // =========================================================
     if (_rekomendasiLogistic == 'OKE') {
-      // Update status di shipping_assignments (Bulk)
       await supabase.from('shipping_assignments').update({
         'status_assignment': 'loading', 
       }).inFilter('id_assignment', assignmentIds);
 
-      // Update status di shipping_request (Bulk)
       await supabase.from('shipping_request').update({
         'status': 'loading',
       }).inFilter('shipping_id', shipIds);
@@ -530,16 +357,6 @@ Future<void> _submitLoadingData() async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // // LOKASI STUFFING
-          // _buildLabelField("Lokasi Stuffing"),
-          // _buildModernRadioGroup(
-          //   ['GBJ Belakang', 'GBJ Depan', 'GBJ Kuncimas', 'GBJ Sewa', 'Other'], 
-          //   _lokasiStuffing, 
-          //   (val) => setState(() => _lokasiStuffing = val)
-          // ),
-          // const SizedBox(height: 20),
-          
-          // GANJAL BAN
           _buildLabelField("Ganjal Ban"),
           if (_ganjalBan == null && _rekomendasiLogistic == 'OKE')
               const Text(" *Wajib", style: TextStyle(color: Colors.red, fontSize: 10)),
@@ -550,13 +367,12 @@ Future<void> _submitLoadingData() async {
           ),
           const SizedBox(height: 25),
 
-          // CHECKER & SEGEL
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedChecker,
+                  initialValue: _selectedChecker,
                   style: const TextStyle(fontSize: 12, color: Colors.black),
                   decoration: _inputDecoration("Checker", Icons.person_pin_rounded),
                   items: _checkerList.map((c) => DropdownMenuItem(
@@ -589,8 +405,6 @@ Future<void> _submitLoadingData() async {
     );
   }
 
-  // --- Sub-Helper UI (Profesional Look) ---
-
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
@@ -606,58 +420,13 @@ Future<void> _submitLoadingData() async {
     );
   }
   
-  Widget _buildDecisionBadge(dynamic decision) {
-    String text = (decision ?? '-').toString().toUpperCase();
-    bool isLayak = text == 'LAYAK';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: isLayak ? Colors.green.shade600 : Colors.orange.shade700,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-    );
-  }
-
   Widget _buildLabelField(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
     );
   }
-Widget _resultRowGroup(String title, List<Widget> children) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red.shade900, letterSpacing: 1)),
-          const SizedBox(height: 8),
-          ...children,
-        ],
-      ),
-    );
-  }
 
-  Widget _rowItem(String label, dynamic data) {
-    List<String> list = data != null ? List<String>.from(data) : [];
-    bool isEmpty = list.isEmpty;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 80, child: Text("$label:", style: const TextStyle(fontSize: 11, color: Colors.blueGrey))),
-          Expanded(
-            child: Text(
-              isEmpty ? "OK" : list.join(", "),
-              style: TextStyle(fontSize: 11, fontWeight: isEmpty ? FontWeight.normal : FontWeight.bold, color: isEmpty ? Colors.green.shade700 : Colors.red.shade700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
   Widget _buildLockedInfo() {
     return Container(
       width: double.infinity,
@@ -715,51 +484,26 @@ Widget _resultRowGroup(String title, List<Widget> children) {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20),
-        border: const OutlineInputBorder(),
-        isDense: true,
-      ),
-    );
-  }
-
   Widget _buildDetailedSummary() {
-
     final data = _shippingData?? widget.item;
-
     final request = data['request'] ?? {};
-// Ambil RDD dan SO dari level request (shipping_request)
     final String rddGlobal = _formatDate(request['rdd']);
     final String soGlobal = request['so']?.toString() ?? "-";
     final bool isGroup = request['group_id'] != null;
-
     final List dos = request['delivery_order'] ?? [];
-
     final warehouse = request['warehouse'];
-
     String warehouseDisplay = warehouse != null 
-
         ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
-
         : "-";
-// AMBIL DATA DETAIL VENDOR DARI HASIL JOIN SHIPPING REQUEST / ASSIGNMENTS
-    // Menyesuaikan struktur data map penugasan aktif dari widget.item
     Map<String, dynamic>? vendorDetails;
-   // Cek di root data (untuk single)
     if (data['vendor_transportasi'] != null) {
       vendorDetails = data['vendor_transportasi'];
     } 
-    // Cek di dalam request -> assignments (untuk group)
     else if (request['shipping_assignments'] != null && (request['shipping_assignments'] as List).isNotEmpty) {
-      // Ambil dari assignment pertama dalam list
+    
       var firstAssign = request['shipping_assignments'][0];
       vendorDetails = firstAssign['vendor_transportasi'];
     }
-    // Cek jika vendor_transportasi malah ada di dalam request langsung
     else if (request['vendor_transportasi'] != null) {
       vendorDetails = request['vendor_transportasi'];
     }
@@ -769,55 +513,31 @@ Widget _resultRowGroup(String title, List<Widget> children) {
     final String vArea = vendorDetails?['area'] ?? '-';
     final String vUnit = vendorDetails?['type_unit'] ?? '-';
     final String vendorNikDisplay = data['nik'] ?? request['nik'] ?? vendorDetails?['nik'] ?? '-';
-
     return Container(
-
       decoration: BoxDecoration(
-
         color: Colors.white,
-
         border: Border(left: BorderSide(color: isGroup ? Colors.blue.shade700 : Colors.red.shade700, width: 6)),
-
       ),
-
       child: Column(
-
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
-
           Padding(
-
             padding: const EdgeInsets.all(16.0),
-
             child: Column(
-
               crossAxisAlignment: CrossAxisAlignment.start,
-
               children: [
-
                 Row(
-
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                   children: [
-
                     Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", 
-
                       style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
 _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                   ],
-
                 ),
-
                 const SizedBox(height: 8),
-
                 Text(isGroup ? "ID Grup: ${request['group_id']}" : "ID Shipping: ${request['shipping_id']}", 
-
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
- 
                 const SizedBox(height: 16),
-
  Text(
                  "$vendorNikDisplay - $vVendorName",
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
@@ -826,192 +546,95 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                   padding: EdgeInsets.symmetric(vertical: 8.0),
                   child: Divider(height: 1, color: Color(0xFFE0E0E0)),
                 ),
-
                 Row(
-
                   children: [
-
                     _infoBox("Stuffing Date", _formatDate(request['stuffing_date'])),
                      _infoBox("Type Unit", vUnit),
                     _infoBox("City", vCity),
                     _infoBox("Area", vArea),
-
-                   // const Spacer(),
-
-                   
-
                   ],
-
                 ),
-
               ],
-
             ),
-
           ),
-
           Container(
-
             width: double.infinity,
-
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-
             color: Colors.grey.shade100,
-
             child: const Text("DETAIL ITEM & CUSTOMER", 
-
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-
           ),
-
           ...dos.map((doItem) {
-
             final List doDetails = doItem['do_details'] ?? [];
-
-            // final String soNum = doItem['so']?.toString() ?? 
-            //                    doItem['parent_so']?.toString() ?? 
-            //                    "-";
-
-            // final String rddSpesifik = _formatDate(doItem['rdd_origin']);
-
-
-
             return Padding(
-
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-
               child: Column(
-
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
-
                   Row(
-
                     children: [
-
                       Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-
                       const SizedBox(width: 6),
-
                       Text("RDD: $rddGlobal",
-
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
-
                     ],
-
                   ),
-
                   const SizedBox(height: 8),
-
                   Row(
-
                     children: [
-
                       const Icon(Icons.description_outlined, size: 16, color: Colors.blue),
-
                       const SizedBox(width: 8),
-
                       Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-
                       const SizedBox(width: 20),
-
                       Text("SO: $soGlobal", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-
                     ],
-
                   ),
-
                   const SizedBox(height: 8),
-
                   Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
-
                     style: const TextStyle(fontSize: 12, color: Colors.black87)),
-
                   const SizedBox(height: 10),
-
                   Container(
-
                     decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade200)),
-
                     child: Table(
-
                       columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(3), 2: FlexColumnWidth(0.8), 3: FlexColumnWidth(1.3)},
-
                       children: [
-
                         TableRow(
-
                           decoration: BoxDecoration(color: Colors.grey.shade200),
-
                           children: [
-
                             _tableCell("ID Mat", isBold: true, isHeader: true),
-
                             _tableCell("Name", isBold: true, isHeader: true),
-
                             _tableCell("Qty", isBold: true, align: TextAlign.right, isHeader: true),
-
                            _tableCell("NW (Kg)", isBold: true, align: TextAlign.right, isHeader: true),
-
                           ],
-
                         ),
-
                         ...doDetails.map((det) {
-
                           double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-
                           final matData = det['material'] ?? {};
-
                           double unitWeight = double.tryParse(matData['net_weight']?.toString() ?? "0") ?? 0;
-
                           return TableRow(
-
                             children: [
-
                               _tableCell(matData['material_id']?.toString() ?? "-"),
-
                               _tableCell(matData['material_name']?.toString() ?? "-"),
-
                               _tableCell(qty.toInt().toString(), align: TextAlign.right, isBold: true),
-
                               _tableCell((qty * unitWeight).toStringAsFixed(2), align: TextAlign.right),
-
                             ],
-
                           );
-
-                        }).toList(),
-
+                        }),
                       ],
-
                     ),
-
                   ),
-
                   const SizedBox(height: 12),
-
                   const Divider(height: 1),
-
                 ],
-
               ),
-
             );
-
-          }).toList(),
-
+          }),
         ],
-
       ),
-
     );
-
   }
   
   Widget _buildBottomAction() {
-    // Tombol aktif jika user sudah memilih salah satu rekomendasi
   bool canSubmit = _rekomendasiLogistic != null;
   bool isOke = _rekomendasiLogistic == 'OKE';
     return Container(
@@ -1021,12 +644,8 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
-         //onPressed: (_rekomendasiLogistic == null || _isSubmitting) ? null : _submitLoadingData,
          onPressed: (_isSubmitting || !canSubmit) ? null : _submitLoadingData,
           style: ElevatedButton.styleFrom(
-          //   backgroundColor: Colors.green.shade700, 
-          //   disabledBackgroundColor: Colors.grey.shade300,
-          //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
           // ),
           backgroundColor: _rekomendasiLogistic == 'OKE' ? Colors.green.shade700 : Colors.blue.shade700,
           disabledBackgroundColor: Colors.grey.shade300,
@@ -1060,24 +679,10 @@ isOke ? "KONFIRMASI SELESAI (OKE)" : "CATAT RIWAYAT (BELUM OKE)",
   );
 }
 
-  Widget _buildLateWarning() {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red)),
-      child: Row(
-        children: [
-          const Icon(Icons.warning, color: Colors.red, size: 18),
-          const SizedBox(width: 10),
-          Expanded(child: Text("Terlambat: ${widget.lateReason}", style: const TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold))),
-        ],
-      ),
-    );
-  }
-
  Widget _infoBox(String label, String value) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))]));
  
   Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.all(8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 10, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)));
-  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color)), child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)));
+  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color)), child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)));
   
    void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
   String _formatDate(String? s) => s == null || s.isEmpty ? "-" : DateFormat('dd/MM/yy').format(DateTime.parse(s));

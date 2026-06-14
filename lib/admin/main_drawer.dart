@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:project_app/admin/display/daily_occupancy.dart';
 import 'package:project_app/admin/display/dashboard_logistik.dart';
+import 'package:project_app/admin/display/external_dashboard.dart';
+import 'package:project_app/admin/display/historycomplain_page.dart';
 import 'package:project_app/admin/display/indashboard.dart';
 import 'package:project_app/admin/display/listppic_page.dart';
 import 'package:project_app/admin/display/listPlanningBookAntrian_page.dart';
@@ -29,7 +31,6 @@ import 'package:project_app/admin/input form/formDO_page.dart';
 import 'package:project_app/admin/input%20form/listCheckIn_page.dart';
 import 'package:project_app/admin/master data/checker_master.dart';
 import 'package:project_app/admin/master data/customer_master.dart';
-import 'package:project_app/admin/master data/manage_user_vendor.dart';
 import 'package:project_app/admin/master data/material_master.dart';
 import 'package:project_app/admin/master data/vendor_transportasi_master.dart';
 import 'package:project_app/admin/master data/warehouse_master.dart';
@@ -64,12 +65,9 @@ class MainDrawer extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                // ================= MENU ADMIN =================
                 if (currentUser?.role != 'vendor') ...[
                   _buildAdminMenu(context),
                 ],
-
-                // ================= MENU VENDOR =================
                 if (currentUser?.role == 'vendor') ...[
                   _buildVendorMenu(context),
                 ],
@@ -95,8 +93,6 @@ class MainDrawer extends StatelessWidget {
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
           ),
         ),
-
-        // --- SECTION 1: ENTRY & OPERASIONAL ---
         ExpansionTile(
           leading: const Icon(Icons.dvr_rounded),
           title: const Text("Entry & Operasional", style: TextStyle(fontWeight: FontWeight.w600)),
@@ -109,7 +105,7 @@ class MainDrawer extends StatelessWidget {
                if (_hasAccess('KelayakanUnit'))
               _menuItem(context, Icons.commute_rounded, "Check in & Kelayakan Unit", Colors.teal, onTap: () {
                 Navigator.pop(context);
-                DynamicTabPage.of(context)?.openTab("Check in & Kelayakan Unit", VehicleControlFormState()); // Pass empty vehicleData for now
+                DynamicTabPage.of(context)?.openTab("Check in & Kelayakan Unit", VehicleControlFormState());
               }),
           
             // if (_hasAccess('Loading'))
@@ -164,7 +160,6 @@ class MainDrawer extends StatelessWidget {
           ],
         ),
 
-        // --- SECTION 2: DISPLAY & MONITORING ---
         ExpansionTile(
           leading: const Icon(Icons.analytics_rounded),
           title: const Text("Display", style: TextStyle(fontWeight: FontWeight.w600)),
@@ -184,9 +179,7 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Permintaan Pengiriman ", const VendorRequestPage());
               }),
-           // _menuItem(context, Icons.list_alt_rounded, "List Planning", Colors.indigo),
-           // _menuItem(context, Icons.confirmation_number_rounded, "List Planning Booking Antrian", Colors.amber.shade800),
-             if (_hasAccess('planningAntrian'))
+              if (_hasAccess('planningAntrian'))
                _menuItem(context, Icons.confirmation_number_rounded, "List Planning Booking Antrian", Colors.amber.shade800, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("List Planning Booking Antrian", BookingPlanningListPage());
@@ -221,21 +214,25 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("In Dashboard", DashboardCombinedPage());
               }),
+              if (_hasAccess('ExDashboard'))
+               _menuItem(context, Icons.dashboard_customize_rounded, "Ex Dashboard", Colors.green, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("Ex Dashboard", OutboundDashboardPage());
+              }),
                if (_hasAccess('DashboardLogistik'))
                _menuItem(context, Icons.dashboard, "Dashboard Logistik", Colors.blue, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Dashboard Logistik", LogisticDashboardPage());
               }),
 
-            // if (_hasAccess('ListComplain'))
-            //   _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
-            //     Navigator.pop(context);
-            //     DynamicTabPage.of(context)?.openTab("List Complain", const ComplainPage());
-            //   }),
+            if (_hasAccess('ListComplain'))
+              _menuItem(context, Icons.feedback_rounded, "List Complain", Colors.redAccent, onTap: () {
+                Navigator.pop(context);
+                DynamicTabPage.of(context)?.openTab("List Complain", const ComplainConfirmPage(),);
+              }),
           ],
         ),
 
-        // --- SECTION 3: MASTER DATA ---
         if (_hasAccess('Master'))
 
         ExpansionTile(
@@ -247,10 +244,7 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen User", const UserManagementPage());
               }),
-              // _menuItem(context, Icons.people_alt_rounded, "Manajemen Vendor Transport", Colors.indigo, onTap: () {
-              //   Navigator.pop(context);
-              //   DynamicTabPage.of(context)?.openTab("Manajemen Vendor Transport", const VendorManagementPage());
-              // }),
+             
               _menuItem(context, Icons.storefront_rounded, "Manajemen Customer", Colors.blue, onTap: () {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen Customer", const CustomerPaginatedPage());
@@ -275,10 +269,6 @@ class MainDrawer extends StatelessWidget {
                 Navigator.pop(context);
                 DynamicTabPage.of(context)?.openTab("Manajemen Vendor Details", const VendorPaginatedPage());
               }),
-              // _menuItem(context, Icons.vibration_rounded, "Enrollment Akun Vendor", Colors.blueAccent, onTap: () {
-              //   Navigator.pop(context);
-              //   DynamicTabPage.of(context)?.openTab("Enrollment Akun Vendor", const VendorEnrollmentPage());
-              // }),
             ]
           ],
         ),
@@ -286,24 +276,8 @@ class MainDrawer extends StatelessWidget {
     );
   }
 
-  // Widget _buildVendorMenu(BuildContext context) {
-  //   return ExpansionTile(
-  //     title: const Text("Fitur Vendor"),
-  //     leading: const Icon(Icons.store),
-  //     children: [
-  //       _menuItem(context, Icons.list_alt_rounded, "List Order Saya", Colors.redAccent, onTap: () {
-  //         Navigator.pop(context);
-  //         DynamicTabPage.of(context)?.openTab("List Order Saya", const ListDOPage());
-  //       }),
-  //       _menuItem(context, Icons.list_alt_rounded, "Riwayat Order", Colors.redAccent, onTap: () {
-  //         Navigator.pop(context);
-  //         DynamicTabPage.of(context)?.openTab("Riwayat Order", const ListDOPage());
-  //       }),
-  //     ],
-  //   );
-  // }
   Widget _buildVendorMenu(BuildContext context) {
-    final String registCode = currentUser?.nik ?? '';
+    //final String registCode = currentUser?.nik ?? '';
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -319,19 +293,6 @@ class MainDrawer extends StatelessWidget {
         ),
       ),
 
-      // _menuItem(
-      //   context,
-      //   Icons.list_alt_rounded,
-      //   "List Order Saya",
-      //   Colors.redAccent,
-      //   onTap: () {
-      //     Navigator.pop(context);
-      //     DynamicTabPage.of(context)?.openTab(
-      //       "List Order Saya",
-      //       VendorOrderListPage(vendorNik :currentUser?.nikVendor ?? ''),
-      //     );
-      //   },
-      // ),
        _menuItem(
         context,
         Icons.list_alt_rounded,

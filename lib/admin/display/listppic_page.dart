@@ -3,14 +3,12 @@ import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-//import 'package:path_provider/path_provider.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file_plus/open_file_plus.dart';
 import 'package:dropdown_search/dropdown_search.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:io' as io; // Gunakan prefix io untuk Mobile
+import 'dart:io' as io; 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' hide Border;
 
@@ -41,14 +39,12 @@ bool _globalExportLock = false;
 
   @override
   void dispose() {
-    // _ppicSubscription?.unsubscribe();
     if (_ppicSubscription != null) {
     supabase.removeChannel(_ppicSubscription!);
   }
     super.dispose();
   }
 
-  // Ambil Master Data (Material & Mesin) satu kali saja
   Future<void> _fetchInitialData() async {
     try {
       final mats = await supabase.from('material').select('material_id, material_name, box_per_pallet');
@@ -63,23 +59,7 @@ bool _globalExportLock = false;
     }
   }
 
-  // void _listenToRealtime() {
-  //   _ppicSubscription = supabase
-  //       .channel('public:ppic_form_details')
-  //       .onPostgresChanges(
-  //         event: PostgresChangeEvent.all,
-  //         schema: 'public',
-  //         table: 'ppic_form_details',
-  //         callback: (payload) {
-  //           debugPrint("Data Changed: ${payload.eventType}");
-  //           _fetchData();
-  //         },
-  //       )
-  //       .subscribe();
-  // }
-  // 2. Optimasi fungsi listen agar lebih peka terhadap perubahan status/form
 void _listenToRealtime() {
-  // Batalkan subscription lama jika ada
   _ppicSubscription?.unsubscribe();
 
   _ppicSubscription = supabase
@@ -90,10 +70,10 @@ void _listenToRealtime() {
         table: 'ppic_form_details',
         callback: (payload) {
           debugPrint("Realtime Update on Details: ${payload.eventType}");
-          _fetchData(isSilent: true); // Refresh diam-diam
+          _fetchData(isSilent: true); 
         },
       )
-      .onPostgresChanges( // Tambahan: Dengarkan juga tabel utama PPIC Forms
+      .onPostgresChanges( 
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'ppic_forms',
@@ -104,75 +84,6 @@ void _listenToRealtime() {
       )
       .subscribe();
 }
-
-  // Future<void> _fetchData() async {
-  //   if (!mounted) return;
-  //   setState(() => _isLoading = true);
-  //   try {
-  //     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-
-  //     final List<dynamic> rawData = await supabase
-  //         .from('ppic_form_details')
-  //         .select('''
-  //           detail_id, shift, qty, mesin_id, material_id,
-  //           ppic_forms!inner(ppic_id, tanggal, production_type),
-  //           material(material_id, material_name, box_per_pallet),
-  //           mesin(nama_mesin)
-  //         ''')
-  //         .eq('ppic_forms.tanggal', dateStr);
-
-  //     final Map<String, Map<String, dynamic>> grouped = {};
-
-  //     for (var row in rawData) {
-  //       final form = row['ppic_forms'];
-  //       final mat = row['material'];
-  //       final mes = row['mesin'];
-        
-  //       String key = "${mat['material_id']}_${form['production_type']}";
-
-  //       if (!grouped.containsKey(key)) {
-  //         grouped[key] = {
-  //           'ppic_id': form['ppic_id'],
-  //           'production_type': form['production_type'],
-  //           'material_id': mat['material_id'],
-  //           'material_name': mat['material_name'],
-  //           'mesin_id': row['mesin_id'],
-  //           'nama_mesin': mes != null ? mes['nama_mesin'] : '-',
-  //           'qty_shift_1': 0,
-  //           'qty_shift_2': 0,
-  //           'qty_shift_3': 0,
-  //           'total_box': 0,
-  //           'box_per_pallet': int.tryParse(mat['box_per_pallet'].toString()) ?? 1,
-  //         };
-  //       }
-
-  //       int qty = int.tryParse(row['qty'].toString()) ?? 0;
-  //       String shift = row['shift'].toString();
-
-  //       if (shift == 'I') grouped[key]!['qty_shift_1'] += qty;
-  //       else if (shift == 'II') grouped[key]!['qty_shift_2'] += qty;
-  //       else if (shift == 'III') grouped[key]!['qty_shift_3'] += qty;
-
-  //       grouped[key]!['total_box'] += qty;
-  //     }
-
-  //     final List<Map<String, dynamic>> processed = grouped.values.map((item) {
-  //       double bpp = (item['box_per_pallet'] as int).toDouble();
-  //       item['total_pallet'] = (item['total_box'] / bpp).ceil();
-  //       return item;
-  //     }).toList();
-
-  //     setState(() {
-  //       _displayData = processed;
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     if (mounted) {
-  //       setState(() => _isLoading = false);
-  //       _showSnackBar("Gagal memuat data: $e", Colors.red);
-  //     }
-  //   }
-  // }
 
  Future<void> _fetchData({bool isSilent = false}) async {
   if (!mounted) return;
@@ -197,8 +108,6 @@ void _listenToRealtime() {
       final mat = row['material'];
       final mes = row['mesin'];
       
-      // PERBAIKAN: Key sekarang menyertakan mesin_id
-      // Format: materialId_mesinId_prodType
       String key = "${mat['material_id']}_${row['mesin_id']}_${form['production_type']}";
 
       if (!grouped.containsKey(key)) {
@@ -213,7 +122,8 @@ void _listenToRealtime() {
           'qty_shift_2': 0,
           'qty_shift_3': 0,
           'total_box': 0,
-          'box_per_pallet': int.tryParse(mat['box_per_pallet'].toString()) ?? 1,
+          // 'box_per_pallet': int.tryParse(mat['box_per_pallet'].toString()) ?? 1,
+          'box_per_pallet': mat['box_per_pallet'] ?? 1,
         };
       }
 
@@ -228,7 +138,8 @@ void _listenToRealtime() {
     }
 
     final List<Map<String, dynamic>> processed = grouped.values.map((item) {
-      double bpp = (item['box_per_pallet'] as int).toDouble();
+      //double bpp = (item['box_per_pallet'] as int).toDouble();
+      int bpp = item['box_per_pallet'] is int ? item['box_per_pallet'] : 1;
       item['total_pallet'] = (item['total_box'] / bpp).ceil();
       return item;
     }).toList();
@@ -242,103 +153,8 @@ void _listenToRealtime() {
   }
 }
 
-  // Future<void> _handleEdit(Map<String, dynamic> item) async {
-  //   // Ambil detail record asli dari DB
-  //   final List<dynamic> details = await supabase
-  //       .from('ppic_form_details')
-  //       .select()
-  //       .eq('ppic_id', item['ppic_id'])
-  //       .eq('material_id', item['material_id'])
-  //       .eq('mesin_id', item['mesin_id']);
-
-  //   if (!mounted) return;
-
-  //   showModalBottomSheet(
-  //     context: context,
-  //     isScrollControlled: true,
-  //     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-  //     builder: (context) {
-  //       return StatefulBuilder(
-  //         builder: (context, setModalState) {
-  //           return Padding(
-  //             padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-  //             child: Column(
-  //               mainAxisSize: MainAxisSize.min,
-  //               crossAxisAlignment: CrossAxisAlignment.start,
-  //               children: [
-  //                 const Text("Edit Produksi", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-  //                 const Divider(),
-  //                 const SizedBox(height: 10),
-  //                 // List per Shift
-  //                 ...details.map((d) {
-  //                   int? currentMatId = d['material_id'];
-  //                   int? currentMesId = d['mesin_id'];
-  //                   TextEditingController qCtrl = TextEditingController(text: d['qty'].toString());
-
-  //                   return Container(
-  //                     margin: const EdgeInsets.only(bottom: 15),
-  //                     padding: const EdgeInsets.all(10),
-  //                     decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(10)),
-  //                     child: Column(
-  //                       children: [
-  //                         Row(
-  //                           children: [
-  //                             CircleAvatar(radius: 12, backgroundColor: Colors.red[700], child: Text(d['shift'], style: const TextStyle(color: Colors.white, fontSize: 12))),
-  //                             const SizedBox(width: 10),
-  //                             const Text("Shift Detail", style: TextStyle(fontWeight: FontWeight.bold)),
-  //                           ],
-  //                         ),
-  //                         const SizedBox(height: 10),
-  //                         // Dropdown Material
-  //                         DropdownButtonFormField<int>(
-  //                           value: currentMatId,
-  //                           decoration: const InputDecoration(labelText: "Material", isDense: true),
-  //                           items: _materialList.map((m) => DropdownMenuItem(value: m['material_id'] as int, child: Text(m['material_name']))).toList(),
-  //                           onChanged: (val) => currentMatId = val,
-  //                         ),
-  //                         const SizedBox(height: 5),
-  //                         // Dropdown Mesin
-  //                         DropdownButtonFormField<int>(
-  //                           value: currentMesId,
-  //                           decoration: const InputDecoration(labelText: "Mesin", isDense: true),
-  //                           items: _mesinList.map((m) => DropdownMenuItem(value: m['mesin_id'] as int, child: Text(m['nama_mesin']))).toList(),
-  //                           onChanged: (val) => currentMesId = val,
-  //                         ),
-  //                         const SizedBox(height: 5),
-  //                         // Qty
-  //                         TextField(
-  //                           controller: qCtrl,
-  //                           keyboardType: TextInputType.number,
-  //                           decoration: const InputDecoration(labelText: "Qty Box"),
-  //                         ),
-  //                         const SizedBox(height: 10),
-  //                         ElevatedButton(
-  //                           style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 36)),
-  //                           onPressed: () async {
-  //                             await supabase.from('ppic_form_details').update({
-  //                               'material_id': currentMatId,
-  //                               'mesin_id': currentMesId,
-  //                               'qty': int.parse(qCtrl.text),
-  //                             }).eq('detail_id', d['detail_id']);
-  //                             _showSnackBar("Update Shift ${d['shift']} Berhasil", Colors.green);
-  //                           },
-  //                           child: const Text("Update Shift Ini"),
-  //                         )
-  //                       ],
-  //                     ),
-  //                   );
-  //                 }).toList(),
-  //                 const SizedBox(height: 20),
-  //               ],
-  //             ),
-  //           );
-  //         },
-  //       );
-  //     },
-  //   );
-  // }
 Future<void> _handleEdit(Map<String, dynamic> item) async {
-  // 1. Ambil data detail asli dari tabel (bukan view)
+ 
   final List<dynamic> details = await supabase
       .from('ppic_form_details')
       .select()
@@ -353,8 +169,7 @@ Future<void> _handleEdit(Map<String, dynamic> item) async {
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) {
-      // Menggunakan StatefulBuilder agar perubahan dropdown di dalam modal langsung terlihat
-      return StatefulBuilder(
+       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setModalState) {
           return Container(
             decoration: const BoxDecoration(
@@ -379,8 +194,6 @@ Future<void> _handleEdit(Map<String, dynamic> item) async {
                     itemCount: details.length,
                     itemBuilder: (context, index) {
                       final d = details[index];
-                      
-                      // Inisialisasi controller dan data
                       final qCtrl = TextEditingController(text: d['qty'].toString());
                       
                       return Card(
@@ -395,8 +208,7 @@ Future<void> _handleEdit(Map<String, dynamic> item) async {
                                 style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold)),
                               const SizedBox(height: 12),
 
-                              // DROPDOWN SEARCH MATERIAL (GAYA V6+)
-                              const Text("Material", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                               const Text("Material", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
                               DropdownSearch<Map<String, dynamic>>(
                                 items: (filter, loadProps) => _materialList,
@@ -427,7 +239,7 @@ Future<void> _handleEdit(Map<String, dynamic> item) async {
 
                               const SizedBox(height: 15),
 
-                              // DROPDOWN MESIN
+                             
                               const Text("Mesin", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<int>(
@@ -643,45 +455,7 @@ Future<void> _handleEdit(Map<String, dynamic> item) async {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c));
   }
 
-  // // LOGIC EXPORT
-  // Future<void> _exportToExcel() async {
-  //   try {
-  //     setState(() => _isLoading = true);
-  //     var excel = Excel.createExcel();
-  //     Sheet sheetObject = excel['Rekap Produksi'];
-  //     excel.delete('Sheet1');
-
-  //     sheetObject.appendRow([TextCellValue("TANGGAL"), TextCellValue("TYPE"), TextCellValue("ID MAT"), TextCellValue("DESCRIPTION"), TextCellValue("SHIFT I"), TextCellValue("SHIFT II"), TextCellValue("SHIFT III"), TextCellValue("TOTAL BOX"), TextCellValue("TOTAL PALLET")]);
-
-  //     for (var item in _displayData) {
-  //       sheetObject.appendRow([
-  //         TextCellValue(DateFormat('yyyy-MM-dd').format(_selectedDate)),
-  //         TextCellValue(item['production_type'].toString().toUpperCase()),
-  //         TextCellValue(item['material_id'].toString()),
-  //         TextCellValue(item['material_name']),
-  //         IntCellValue(item['qty_shift_1']),
-  //         IntCellValue(item['qty_shift_2']),
-  //         IntCellValue(item['qty_shift_3']),
-  //         IntCellValue(item['total_box']),
-  //         IntCellValue(item['total_pallet']),
-  //       ]);
-  //     }
-
-  //     final fileBytes = excel.save();
-  //     final directory = await getApplicationDocumentsDirectory();
-  //     String filePath = "${directory.path}/Rekap_PPIC_${DateFormat('yyyyMMdd').format(_selectedDate)}.xlsx";
-  //     final file = File(filePath);
-  //     await file.writeAsBytes(fileBytes!);
-  //     _showSnackBar("Export Berhasil!", Colors.green);
-  //     await OpenFile.open(filePath);
-  //   } catch (e) {
-  //     _showSnackBar("Gagal Export: $e", Colors.red);
-  //   } finally {
-  //     setState(() => _isLoading = false);
-  //   }
-  // }
 Future<void> _exportToExcel() async {
-  // Cegah export dobel atau jika data kosong
   if (_globalExportLock || _displayData.isEmpty) return;
 
   try {
@@ -692,7 +466,6 @@ Future<void> _exportToExcel() async {
     Sheet sheetObject = excel['Rekap_Produksi_PPIC'];
     excel.delete('Sheet1');
 
-    // --- 1. HEADER ---
     List<CellValue> headers = [
       TextCellValue('Tanggal'),
       TextCellValue('Tipe Produksi'),
@@ -707,7 +480,6 @@ Future<void> _exportToExcel() async {
     ];
     sheetObject.appendRow(headers);
 
-    // --- 2. ISI DATA ---
     for (var item in _displayData) {
       sheetObject.appendRow([
         TextCellValue(DateFormat('yyyy-MM-dd').format(_selectedDate)),
@@ -723,14 +495,12 @@ Future<void> _exportToExcel() async {
       ]);
     }
 
-    // --- 3. PROSES DOWNLOAD (Aman untuk Web & Mobile) ---
     final fileBytes = excel.encode();
     if (fileBytes == null) return;
 
     String fileName = "Rekap_PPIC_${DateFormat('yyyyMMdd').format(_selectedDate)}.xlsx";
 
     if (kIsWeb) {
-      // Logika Download untuk Browser
       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       final url = html.Url.createObjectUrlFromBlob(content);
       
@@ -778,7 +548,6 @@ Future<void> _import() async {
     var excel = Excel.decodeBytes(bytes!);
     var sheet = excel.tables.values.first;
 
-    // 1. PETAKAN HEADER (Mencari posisi kolom berdasarkan nama)
     if (sheet.maxRows < 1) return;
     var headerRow = sheet.rows[0];
     Map<String, int> colMap = {};
@@ -793,17 +562,13 @@ Future<void> _import() async {
       if (headerName.contains("qty")) colMap["qty"] = i;
     }
 
-    // Validasi apakah kolom minimal sudah ada
     if (!colMap.containsKey("tanggal") || !colMap.containsKey("material")) {
       throw "Kolom 'Tanggal' atau 'Material' tidak ditemukan!";
     }
 
-    // 2. PROSES DATA PER BARIS
     for (var i = 1; i < sheet.maxRows; i++) {
       var row = sheet.rows[i];
       if (row.isEmpty) continue;
-
-      // Ambil data berdasarkan mapping header
       String tgl = row[colMap["tanggal"]!]?.value.toString() ?? "";
       String type = row[colMap["type"]!]?.value.toString().toLowerCase() ?? "";
       String shift = row[colMap["shift"]!]?.value.toString() ?? "";
@@ -813,10 +578,8 @@ Future<void> _import() async {
 
       if (tgl.isEmpty || matId == 0) continue;
 
-      // 3. LOGIKA MESIN (Bisa ID atau Nama)
       int? finalMesinId = int.tryParse(mesinRaw);
       if (finalMesinId == null && mesinRaw.isNotEmpty) {
-        // Jika bukan angka, cari ID berdasarkan Nama Mesin di _mesinList
         try {
           finalMesinId = _mesinList.firstWhere(
             (m) => m['nama_mesin'].toString().toLowerCase() == mesinRaw.toLowerCase(),
@@ -826,7 +589,6 @@ Future<void> _import() async {
         }
       }
 
-      // 4. UPSERT HEADER & INSERT DETAIL
       final headerRes = await supabase.from('ppic_forms').upsert({
         'tanggal': tgl,
         'production_type': type,

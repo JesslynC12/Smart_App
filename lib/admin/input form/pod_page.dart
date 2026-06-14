@@ -20,49 +20,40 @@ class _PODReturnPageState extends State<PODReturnPage> {
   bool _isSaving = false;
   Map<String, dynamic>? _foundData;
 
-  // Variabel Form
   DateTime? _tanggalBongkar;
   DateTime? _tanggalSJKembali;
   DateTime? _tanggalTibaCustomer;
-  //DateTime? _tanggalPODAktual;
   int podAktual = 0;
 
-// Tempat menyimpan daftar hari libur hasil download dari internet
   List<DateTime> _daftarLiburNasional = [];
-  bool _isLoadingHolidays = true;
+  //bool _isLoadingHolidays = true;
 
   @override
   void initState() {
     super.initState();
-    // Ambil data libur tahun ini saat layar pertama kali dibuka
     _loadHolidaysData();
   }
 
   Future<void> _loadHolidaysData() async {
-    int tahunSekarang = DateTime.now().year; // contoh: 2026
+    int tahunSekarang = DateTime.now().year;
     
-    // Panggil fungsi fetching yang dibuat tadi
-    List<DateTime> dataLibur = await fetchIndonesianHolidays(tahunSekarang);
+    List<DateTime> dataLibur = await getHolidays(tahunSekarang);
 
-// JIKALAU API SEWAKTU-WAKTU GAGAL / BLOCKED
     if (dataLibur.isEmpty) {
-      print('Memuat Hari Libur Nasional Cadangan untuk Tahun $tahunSekarang');
+      //print('Memuat Hari Libur Nasional Cadangan untuk Tahun $tahunSekarang');
       dataLibur = [
-        DateTime(tahunSekarang, 1, 1),   // Tahun Baru Masehi
-        DateTime(tahunSekarang, 5, 1),   // Hari Buruh Internasional
-        DateTime(tahunSekarang, 6, 1),   // Hari Lahir Pancasila
-        DateTime(tahunSekarang, 8, 17),  // Hari Kemerdekaan RI
-        DateTime(tahunSekarang, 12, 25), // Hari Raya Natal
-        // Kamu bisa menambahkan tanggal libur tetap lainnya di sini jika diperlukan
+        DateTime(tahunSekarang, 1, 1),
+        DateTime(tahunSekarang, 5, 1),
+        DateTime(tahunSekarang, 6, 1),   
+        DateTime(tahunSekarang, 8, 17), 
+        DateTime(tahunSekarang, 12, 25), 
       ];
     }
     setState(() {
       _daftarLiburNasional = dataLibur;
-      _isLoadingHolidays = false; // Loading selesai
     });
   }
 
-  // Fungsi Helper Hitung Selisih Hari (Lead Time Aktual)
   int _calculateLeadTime() {
     if (_tanggalTibaCustomer == null || _foundData?['stuffing_date'] == null) return 0;
     try {
@@ -85,50 +76,32 @@ class _PODReturnPageState extends State<PODReturnPage> {
       DateTime currentDay = stuffingDate;
 
       while (currentDay.isBefore(arrivalDate) || currentDay.isAtSameMomentAs(arrivalDate)) {
-        // Cek hari Minggu
-        bool isSunday = currentDay.weekday == DateTime.sunday;
 
-        // Cek hari Libur Nasional hasil API
+        bool isSunday = currentDay.weekday == DateTime.sunday;
         String currentDayStr = "${currentDay.year}-${currentDay.month.toString().padLeft(2, '0')}-${currentDay.day.toString().padLeft(2, '0')}";
         bool isHoliday = formattedHolidays.contains(currentDayStr);
-
         if (!isSunday && !isHoliday) {
           totalHariKerja++;
         }
-
         currentDay = currentDay.add(const Duration(days: 1));
       }
 
       int hasilAkhir = totalHariKerja - 1;
       return hasilAkhir < 0 ? 0 : hasilAkhir;
-
     } catch (e) {
       return 0;
     }
   }
 
-// --- Fungsi Helper Hitung Selisih Hari Kerja (POD Aktual) ---
 int _calculatePODActual() {
-  // 1. Validasi awal: Jika tanggal bongkar atau tanggal SJ kembali belum diisi, kembalikan 0
   if (_tanggalBongkar == null || _tanggalSJKembali == null) return 0;
-  
-  // Pengecekan tambahan: Jika stuffing_date (BA26 di Excel) belum ada di data DO, kembalikan 0
   if (_foundData?['stuffing_date'] == null) return 0;
-
-  // 2. Pengecekan tipe layanan (M26="LOCO" atau M26="TAKE AWAY")
- // String? serviceType = _foundData?['service_type']?.toString().toUpperCase();
-  // if (serviceType == "LOCO" || serviceType == "TAKE AWAY") {
-  //   return 0;
-  // }
-
   try {
     DateTime startDate = _tanggalBongkar!;
     DateTime endDate = _tanggalSJKembali!;
 
-    // Antisipasi jika user salah input tanggal (Tanggal Bongkar melewati Tanggal SJ Kembali)
     if (startDate.isAfter(endDate)) return 0;
 
-    // 3. Ubah daftar libur nasional ke format string "YYYY-MM-DD" agar pencocokan akurat
     List<String> formattedHolidays = _daftarLiburNasional.map((date) =>
         "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}"
     ).toList();
@@ -136,70 +109,140 @@ int _calculatePODActual() {
     int totalHariKerja = 0;
     DateTime currentDay = startDate;
 
-    // 4. Mulai perhitungan NETWORKDAYS.INTL (Opsi 11: Hanya Minggu yang libur)
     while (currentDay.isBefore(endDate) || currentDay.isAtSameMomentAs(endDate)) {
-      // Cek apakah hari Minggu
       bool isSunday = currentDay.weekday == DateTime.sunday;
 
-      // Cek apakah hari Libur Nasional
       String currentDayStr = "${currentDay.year}-${currentDay.month.toString().padLeft(2, '0')}-${currentDay.day.toString().padLeft(2, '0')}";
       bool isHoliday = formattedHolidays.contains(currentDayStr);
-
-      // Jika bukan hari Minggu DAN bukan hari libur nasional, hitung sebagai hari kerja
       if (!isSunday && !isHoliday) {
         totalHariKerja++;
       }
 
-      // Bergeser ke hari berikutnya
       currentDay = currentDay.add(const Duration(days: 1));
     }
-
-    // 5. Dikurangi 1 di akhir rumus seperti: (...)-1
     int hasilAkhir = totalHariKerja - 1;
-    
-    // Antisipasi nilai minus
     return hasilAkhir < 0 ? 0 : hasilAkhir;
 
   } catch (e) {
     return 0;
   }
 }
-/// Fungsi untuk mengambil data hari libur nasional berdasarkan tahun tertentu
-/// Fungsi untuk mengambil data hari libur nasional berdasarkan tahun tertentu
-  Future<List<DateTime>> fetchIndonesianHolidays(int year) async {
-    final String url = 'https://api-harilibur.vercel.app/api?year=$year';
+Future<List<DateTime>> getHolidays(int year) async {
+  final supabase = Supabase.instance.client;
 
-    try {
-      // Menambahkan Header User-Agent agar tidak diblokir oleh beberapa server API
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          "Accept": "application/json",
-          "Access-Control-Allow-Origin": "*", // Antisipasi CORS di Web
-        },
-      );
+  // Cache first
+  final cached = await supabase
+      .from('holidays')
+      .select('date')
+      .eq('year', year);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> responseData = json.decode(response.body);
-        List<DateTime> holidayList = [];
+  if (cached.isNotEmpty) {
+    return cached
+        .map<DateTime>(
+          (row) => DateTime.parse(row['date'] as String),
+        )
+        .toList()
+      ..sort();
+  }
 
-        for (var item in responseData) {
-          if (item['holiday_date'] != null) {
-            DateTime parsedDate = DateTime.parse(item['holiday_date']);
-            holidayList.add(parsedDate);
-          }
-        }
-        return holidayList;
-      } else {
-        print('Gagal memuat data API. Status: ${response.statusCode}');
-        return [];
-      }
-    } catch (e) {
-      // Menampilkan log error di konsol, tapi tidak akan membuat aplikasi crash
-      print('Sistem beralih ke data cadangan karena API gagal: $e');
-      return [];
+  List<DateTime> dates = [];
+
+  try {
+    final response = await http.get(
+      Uri.parse(
+        'https://libur.deno.dev/api?year=$year',
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final holidays =
+          jsonDecode(response.body) as List<dynamic>;
+
+      dates = holidays
+          .where(
+            (holiday) =>
+                holiday['is_national_holiday'] == true,
+          )
+          .map<DateTime>(
+            (holiday) =>
+                DateTime.parse(holiday['date'] as String),
+          )
+          .toSet()
+          .toList()
+        ..sort();
     }
-  }  // --- FUNGSI CARI DO & GRUP ---
+  } catch (_) {
+    // Fall through to default holidays
+  }
+
+  // Fallback if API/cache unavailable
+  if (dates.isEmpty) {
+    dates = _defaultIndonesiaHolidays(year);
+  }
+
+  // Cache
+  if (dates.isNotEmpty) {
+    await supabase.from('holidays').upsert(
+      dates
+          .map(
+            (date) => {
+              'year': year,
+              'date': date.toIso8601String().split('T').first,
+            },
+          )
+          .toList(),
+      onConflict: 'year,date',
+    );
+  }
+
+  return dates;
+}
+
+List<DateTime> _defaultIndonesiaHolidays(int year) {
+  return [
+    DateTime(year, 1, 1),   // Tahun Baru Masehi
+    DateTime(year, 5, 1),   // Hari Buruh
+    DateTime(year, 6, 1),   // Hari Lahir Pancasila
+    DateTime(year, 8, 17),  // Hari Kemerdekaan
+    DateTime(year, 12, 25), // Natal
+  ];
+}
+// Future<List<DateTime>> fetchIndonesianHolidays(int year) async {
+//   // Ubah sesuai dengan path endpoint API internal Anda
+//   final String url = 'https://api.co.id/holidays?year=$year'; 
+
+//   try {
+//     final response = await http.get(
+//       Uri.parse(url),
+//       headers: {
+//         "Accept": "application/json",
+//         // Jika API internal membutuhkan autentikasi (Token/API Key), tambahkan di sini:
+//         // "Authorization": "Bearer TOKEN_ANDA", 
+//       },
+//     );
+
+//     if (response.statusCode == 200) {
+//       final List<dynamic> responseData = json.decode(response.body);
+//       List<DateTime> holidayList = [];
+
+//       for (var item in responseData) {
+//         // PERHATIAN: Sesuaikan key 'holiday_date' jika API internal Anda menggunakan nama field berbeda
+//         // Contoh: jika di API Anda namanya 'tanggal', ubah menjadi item['tanggal']
+//         if (item['holiday_date'] != null) {
+//           DateTime parsedDate = DateTime.parse(item['holiday_date']);
+//           holidayList.add(parsedDate);
+//         }
+//       }
+//       return holidayList;
+//     } else {
+//       return [];
+//     }
+//   } catch (e) {
+//     debugPrint('Gagal memuat API internal: $e');
+//     return [];
+//   }
+// }
+
   Future<void> _searchDO() async {
     final search = _searchController.text.trim();
     if (search.isEmpty) return;
@@ -210,7 +253,6 @@ int _calculatePODActual() {
     });
 
     try {
-      // 1. Cari shipping_id berdasarkan nomor DO
       final doRes = await supabase
           .from('delivery_order')
           .select('shipping_id')
@@ -224,25 +266,19 @@ int _calculatePODActual() {
       }
 
       final int shipId = doRes['shipping_id'];
-// 2. Query ke tabel shipping_assignments untuk cek apakah sudah ada yang 'completed'
-      // Kita ambil semua baris yang terkait dengan shipping_id tersebut
       final assignmentCheck = await supabase
           .from('shipping_assignments')
           .select('status_assignment')
           .eq('shipping_id', shipId);
 
       final List assignmentsList = assignmentCheck as List;
-      
-      // Validasi: Jika ada salah satu baris penugasan yang statusnya 'completed'
       bool alreadyCompleted = assignmentsList.any((a) => 
         a['status_assignment']?.toString().toLowerCase() == 'completed'
       );
 
       if (alreadyCompleted) {
         setState(() => _isSearching = false);
-        _searchController.clear(); // Bersihkan input agar tidak membingungkan
-
-        // MUNCULKAN POP-UP DIALOG
+        _searchController.clear(); 
         if (mounted) {
           showDialog(
             context: context,
@@ -273,9 +309,8 @@ int _calculatePODActual() {
             ),
           );
         }
-        return; // Berhenti di sini, jangan lanjut ambil data form
+        return;
       }
-      // 2. Ambil group_id
       final shipRes = await supabase
           .from('shipping_request')
           .select('group_id')
@@ -283,14 +318,12 @@ int _calculatePODActual() {
           .single();
 
       final int? groupId = shipRes['group_id'];
-
-      // 3. Query Lengkap (Join ke Vendor Transportasi untuk LT & POD Standard)
       var query = supabase.from('shipping_request').select('''
             *,
             warehouse(warehouse_id, warehouse_name, lokasi),
             delivery_order(
               do_number,
-              customer(customer_id, customer_name),
+              customer(customer_id, customer_name, city, area),
               do_details(qty, material(material_id, material_name, net_weight))
             ),
             shipping_assignments(
@@ -299,6 +332,9 @@ int _calculatePODActual() {
               reason_rejected,
               catatan,
               id_vendor_details,
+              no_polisi,
+              checkIn_at,        
+              keluar_at,
               master_vendor:nik (vendor_name),
               vendor_transportasi:id_vendor_details(
                 lead_time,
@@ -317,8 +353,6 @@ int _calculatePODActual() {
       final List list = finalData as List;
       if (list.isNotEmpty) {
         final header = list[0];
-        
-        // Ambil data assignment aktif untuk Standard Info
         final assignments = header['shipping_assignments'] as List? ?? [];
         final activeAssign = assignments.firstWhere(
           (a) => !['rejected', 'rejected unit', 'cancel booking'].contains(a['status_assignment']),
@@ -335,10 +369,11 @@ int _calculatePODActual() {
             'stuffing_date': header['stuffing_date'],
             'is_dedicated': header['is_dedicated'],
             
-            // Info Standar dari Database (Hanya Tampil)
+            'no_polisi': activeAssign?['no_polisi'] ?? "-",
+            'checkin_at': activeAssign?['checkIn_at'],
+            'keluar_at': activeAssign?['keluar_at'],
             'std_lead_time': activeAssign?['vendor_transportasi']?['lead_time'] ?? 0,
             'std_pod_return': activeAssign?['vendor_transportasi']?['pod_return'] ?? "-",
-
             'delivery_order': list.expand((s) {
               final List dos = s['delivery_order'] as List? ?? [];
               return dos.map((d) {
@@ -364,8 +399,6 @@ int _calculatePODActual() {
       setState(() => _isSearching = false);
     }
   }
-
-  // --- FUNGSI SIMPAN POD ---
   Future<void> _submitPOD() async {
     if (_tanggalBongkar == null || _tanggalSJKembali == null || 
         _tanggalTibaCustomer == null) {
@@ -380,15 +413,11 @@ int _calculatePODActual() {
         _showSnackBar("Sesi Anda telah berakhir, silakan login ulang.", Colors.red);
         return;
       }
-
-      // 2. Ambil data 'name' dari tabel 'profiles' berdasarkan UUID user
       final profileRes = await supabase
           .from('profiles')
           .select('name')
           .eq('id', currentUser.id)
           .maybeSingle();
-
-      // Gunakan nama dari profile. Jika kosong/null, gunakan email sebagai cadangan
       final String activeUserName = profileRes?['name'] ?? currentUser.email ?? 'System POD';
       final List<int> shipIds = List<int>.from(_foundData!['all_shipping_ids']);
 
@@ -403,18 +432,9 @@ int _calculatePODActual() {
         'createdpod_by': activeUserName,
       }).inFilter('shipping_id', shipIds);
 
-// B. Update tabel shipping_request menjadi 'completed' (TAMBAHAN BARU)
       await supabase.from('shipping_request').update({
         'status': 'completed',
       }).inFilter('shipping_id', shipIds);
-// Menggunakan DateFormat untuk mengirim tanggal saja ke database
-// await supabase.from('shipping_assignments').update({
-//   'tanggal_bongkar': DateFormat('yyyy-MM-dd').format(_tanggalBongkar!),
-//   'sj_kembali': DateFormat('yyyy-MM-dd').format(_tanggalSJKembali!),
-//   'tanggal_tiba_customer': DateFormat('yyyy-MM-dd').format(_tanggalTibaCustomer!),
-//   // ...
-// });
-
       _showSnackBar("Data POD Berhasil Disimpan", Colors.green);
       setState(() {
         _foundData = null;
@@ -489,18 +509,6 @@ int _calculatePODActual() {
                 const Text("INPUT DETAIL PENGIRIMAN & POD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 16),
                 _buildDatePicker("Tanggal Tiba di Customer", _tanggalTibaCustomer, (val) => setState(() => _tanggalTibaCustomer = val)),
-                // const SizedBox(height: 12),
-                // Container(
-                //   padding: const EdgeInsets.all(16),
-                //   decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade100)),
-                //   child: Row(
-                //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                //     children: [
-                //       const Text("Lead Time Aktual:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                //       Text("${_calculateLeadTime()} Hari", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
-                //     ],
-                //   ),
-                // ),
                 const SizedBox(height: 12),
                 _buildDatePicker("Tanggal Bongkar / Unloading", _tanggalBongkar, (val) => setState(() => _tanggalBongkar = val)),
                 const SizedBox(height: 12),
@@ -508,28 +516,11 @@ int _calculatePODActual() {
                 // const SizedBox(height: 12),
                 _buildDatePicker("Tanggal SJ Kembali ke Logistik", _tanggalSJKembali, (val) => setState(() => _tanggalSJKembali = val)),
                 const SizedBox(height: 32),
-                // Container(
-                //   padding: const EdgeInsets.all(16),
-                //   decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade100)),
-                //   child: Row(
-                //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                //     children: [
-                //       const Text("Lead Time Aktual:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                //       Text("${_calculateLeadTime()} Hari", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
-                //       //const SizedBox(width: 50),
-                //     const Text("POD Aktual:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                //       Text("${_calculatePODActual()} Hari", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
-                    
-                //     ],
-                //   ),
-                  
-                // ),
                 Row(
   children: [
-    // KOTAK 1: LEAD TIME AKTUAL
     Expanded(
       child: Container(
-        padding: const EdgeInsets.all(12), // Sedikit diperkecil agar pas di dalam kotak kecil
+        padding: const EdgeInsets.all(12), 
         decoration: BoxDecoration(
           color: Colors.blue.shade50,
           borderRadius: BorderRadius.circular(8),
@@ -542,7 +533,7 @@ int _calculatePODActual() {
               "Lead Time Aktual:",
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 4), // Jarak vertikal antara label dan angka
+            const SizedBox(height: 4),
             Text(
               "${_calculateLeadTime()} Hari",
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
@@ -552,9 +543,7 @@ int _calculatePODActual() {
       ),
     ),
 
-    const SizedBox(width: 12), // JARAK ANTARA KOTAK KIRI DAN KOTAK KANAN
-
-    // KOTAK 2: POD AKTUAL
+    const SizedBox(width: 12),
     Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -570,7 +559,7 @@ int _calculatePODActual() {
               "POD Aktual:",
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 4), // Jarak vertikal antara label dan angka
+            const SizedBox(height: 4),
             Text(
               "${_calculatePODActual()} Hari",
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
@@ -591,8 +580,6 @@ int _calculatePODActual() {
                     child: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text("SIMPAN DATA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                //const SizedBox(height: 50),
-                //const SizedBox(height: 12),
                 
               ],
             ),
@@ -606,7 +593,7 @@ int _calculatePODActual() {
     final data = _foundData ?? {};
     final bool isGroup = data['group_id'] != null;
     final List dos = (data['delivery_order'] as List? ?? []);
-    final List rejectList = (data['reject_list'] as List? ?? []);
+    //final List rejectList = (data['reject_list'] as List? ?? []);
 
     return Container(
       decoration: BoxDecoration(
@@ -645,6 +632,28 @@ int _calculatePODActual() {
               ],
             ),
           ),
+
+          //const SizedBox(height: 3),
+          //const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(Icons.local_shipping_outlined, size: 12, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Text("No. Polisi: ${data['no_polisi']}", style: TextStyle(fontSize: 12,color: Colors.grey.shade800)),
+                      const SizedBox(width: 16),
+                      Icon(Icons.login_rounded, size: 12, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Text("Check-in: ${data['checkin_at'] != null ? DateFormat('dd/MM HH:mm').format(DateTime.parse(data['checkin_at'])) : '-'}", style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                      const SizedBox(width: 16),
+                      Icon(Icons.logout_rounded, size: 12, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Text("Keluar: ${data['keluar_at'] != null ? DateFormat('dd/MM HH:mm').format(DateTime.parse(data['keluar_at'])) : '-'}", style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 5),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -709,7 +718,7 @@ int _calculatePODActual() {
                               _tableCell((qty * nw).toStringAsFixed(2), align: TextAlign.right),
                             ],
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ),
@@ -718,7 +727,7 @@ int _calculatePODActual() {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -728,7 +737,7 @@ int _calculatePODActual() {
 
   Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 11, fontWeight: isBold ? FontWeight.bold : FontWeight.normal, color: isHeader ? Colors.black : Colors.black87)));
 
-  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color, width: 1)), child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)));
+  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color, width: 1)), child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)));
 
   String _formatDate(String? d) => d == null || d.isEmpty ? "-" : DateFormat('dd MMM yyyy').format(DateTime.parse(d));
 

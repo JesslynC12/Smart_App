@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:open_file_plus/open_file_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:universal_html/html.dart' as html; 
 class VendorEvaluationPage extends StatefulWidget {
   const VendorEvaluationPage({super.key});
 
@@ -23,19 +21,17 @@ class _VendorEvaluationPageState extends State<VendorEvaluationPage> {
   String? _selectedNik;
   DateTimeRange? _selectedDateRange;
   List<Map<String, dynamic>> _evaluationData = [];
-  String _selectedCarFilter = "Tidak Ada"; // Default dropdown
+  String _selectedCarFilter = "Tidak Ada"; 
 RealtimeChannel? _evaluationChannel;
 
 @override
   void initState() {
     super.initState();
-    // Inisialisasi pendengar data
     _initRealtimeStreams();
   }
 
   @override
   void dispose() {
-    // Tutup koneksi realtime agar tidak memory leak
     _evaluationChannel?.unsubscribe();
     if (_evaluationChannel != null) supabase.removeChannel(_evaluationChannel!);
     _vendorSearchController.dispose();
@@ -77,7 +73,6 @@ Future<void> _fetchEvaluationData({bool isSilent = false}) async {
 
   setState(() => _isLoading = true);
   try {
-    // Kita gunakan format ISO String YYYY-MM-DD agar cocok dengan tipe date di DB
     final String startDate = _selectedDateRange!.start.toIso8601String().split('T')[0];
     final String endDate = _selectedDateRange!.end.toIso8601String().split('T')[0];
 
@@ -125,14 +120,13 @@ Future<void> _fetchEvaluationData({bool isSilent = false}) async {
       'completed','cancel booking'
     ])
         .eq('nik', _selectedNik!)
-        // Filter berdasarkan stuffing_date di tabel shipping_request sesuai filter UI Anda
         .gte('shipping_request.stuffing_date', startDate)
         .lte('shipping_request.stuffing_date', endDate)
         .order('loading_at', ascending: false);
 
     setState(() {
       _evaluationData = List<Map<String, dynamic>>.from(response);
-      print("Data Ditemukan: ${_evaluationData.length}"); // Cek di console
+      // print("Data Ditemukan: ${_evaluationData.length}"); // Cek di console
     });
   } catch (e) {
     debugPrint("Error Fetch: $e");
@@ -145,11 +139,6 @@ Future<void> _fetchEvaluationData({bool isSilent = false}) async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text("Penilaian Performa Vendor", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       body: Column(
         children: [
           _buildFilterArea(),
@@ -166,40 +155,6 @@ Future<void> _fetchEvaluationData({bool isSilent = false}) async {
     );
   }
 
-// List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
-//   if (source.isEmpty) return [];
-  
-//   Map<String, Map<String, dynamic>> groupedMap = {};
-
-//   for (var req in source) {
-//     final requestNode = req['shipping_request'];
-//     final int? gId = requestNode?['group_id'];
-    
-//     // Tentukan ID unik baris: pakai Group ID jika ada, jika tidak pakai id_assignment
-//     String uniqueKey = gId != null ? "G_$gId" : "S_${req['id_assignment']}";
-
-//     if (!groupedMap.containsKey(uniqueKey)) {
-//       groupedMap[uniqueKey] = Map<String, dynamic>.from(req);
-//       groupedMap[uniqueKey]!['all_shipping_ids'] = [req['shipping_id']];
-      
-//       // Ambil daftar DO awal
-//       List dos = requestNode?['delivery_order'] is List 
-//           ? List.from(requestNode['delivery_order']) 
-//           : [];
-//       groupedMap[uniqueKey]!['collective_dos'] = dos;
-//     } else {
-//       // Tambahkan shipping_id baru ke baris yang sama
-//       List ids = groupedMap[uniqueKey]!['all_shipping_ids'];
-//       if (!ids.contains(req['shipping_id'])) ids.add(req['shipping_id']);
-      
-//       // Tambahkan DO baru ke list kolektif
-//       if (requestNode?['delivery_order'] != null) {
-//         groupedMap[uniqueKey]!['collective_dos'].addAll(requestNode['delivery_order']);
-//       }
-//     }
-//   }
-//   return groupedMap.values.toList();
-// }
 List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> source) {
   if (source.isEmpty) return [];
   
@@ -208,13 +163,10 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
   for (var req in source) {
     final requestNode = req['shipping_request'];
     final int? gId = requestNode?['group_id'];
-    
-    // Key unik: Tetap pakai Group ID jika ada, jika tidak pakai id_assignment
     String uniqueKey = gId != null ? "G_$gId" : "S_${req['id_assignment']}";
 
     if (!groupedMap.containsKey(uniqueKey)) {
       groupedMap[uniqueKey] = Map<String, dynamic>.from(req);
-      // Gunakan Set untuk ID agar tidak double
       groupedMap[uniqueKey]!['all_shipping_ids'] = {req['shipping_id']};
       
       List dos = requestNode?['delivery_order'] is List 
@@ -222,10 +174,8 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
           : [];
       groupedMap[uniqueKey]!['collective_dos'] = dos;
     } else {
-      // Tambahkan ke Set (otomatis mengabaikan jika ID sudah ada)
       (groupedMap[uniqueKey]!['all_shipping_ids'] as Set).add(req['shipping_id']);
       
-      // Tambahkan DO hanya jika belum ada di list (berdasarkan do_number)
       List existingDos = groupedMap[uniqueKey]!['collective_dos'];
       List newDos = requestNode?['delivery_order'] ?? [];
       
@@ -245,7 +195,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
     padding: const EdgeInsets.all(12.0),
     child: Row(
       children: [
-        // 1. DROPDOWN SEARCH VENDOR (Lebih Panjang)
         Expanded(
           flex: 3,
           child: Container(
@@ -257,13 +206,10 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
             child: Autocomplete<Map<String, dynamic>>(
               displayStringForOption: (option) => "${option['nik']} - ${option['vendor_name']}",
               
-              // Fungsi Filter & Munculkan Data saat diklik
               optionsBuilder: (TextEditingValue textEditingValue) async {
-                // Memanggil fungsi yang sama dengan limit 5 agar tidak kepanjangan
                 return await _getVendorSuggestions(textEditingValue.text);
               },
 
-              // Tampilan List Dropdown ke bawah (Sesuai Gambar Anda)
               optionsViewBuilder: (context, onSelected, options) {
                 return Align(
                   alignment: Alignment.topLeft,
@@ -271,7 +217,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
                     elevation: 4.0,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      width: MediaQuery.of(context).size.width * 0.5, // Menyesuaikan lebar filter
+                      width: MediaQuery.of(context).size.width * 0.5, 
                       constraints: const BoxConstraints(maxHeight: 300),
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
@@ -292,7 +238,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    option['vendor_name'], // Subtitle
+                                    option['vendor_name'], 
                                     style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                                   ),
                                 ],
@@ -305,10 +251,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
                   ),
                 );
               },
-
-              // Tampilan Field Inputnya
               fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                // Sinkronisasi controller dengan variabel state jika diperlukan
                 return TextField(
                   controller: controller,
                   focusNode: focusNode,
@@ -324,7 +267,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
               onSelected: (Map<String, dynamic> selection) {
                 setState(() {
                   _selectedNik = selection['nik'];
-                  _vendorSearchController.text = selection['nik']; // Simpan NIK
+                  _vendorSearchController.text = selection['nik'];
                 });
                 _fetchEvaluationData();
               },
@@ -334,7 +277,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
         
         const SizedBox(width: 8),
 
-        // 2. TOMBOL PERIODE (Lebih Pendek)
         Expanded(
           flex: 2,
           child: InkWell(
@@ -375,7 +317,6 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
         ),
         const SizedBox(width: 8),
 
-        // 3. TOMBOL EKSPOR (BARU)
         Container(
           height: 55,
           decoration: BoxDecoration(
@@ -384,7 +325,7 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
             border: Border.all(color: Colors.green.shade200),
           ),
           child: IconButton(
-            onPressed: _exportToExcel, // Panggil fungsi export
+            onPressed: _exportToExcel, 
             icon: const Icon(Icons.file_download, color: Colors.green, size: 26),
             tooltip: "Export Excel",
           ),
@@ -393,124 +334,38 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
     ),
   );
 }
-//  List<DataColumn> _buildColumns() {
-//   return const [
-//     DataColumn(label: SizedBox(width: 80, child: Text('Ship ID'))),
-//     DataColumn(label: SizedBox(width: 80, child: Text('Stuffing'))),
-//     DataColumn(label: SizedBox(width: 90, child: Text('No Polisi'))), // Baru
-//     DataColumn(label: SizedBox(width: 100, child: Text('No DO'))),
-//     DataColumn(label: SizedBox(width: 160, child: Text('Customer'))),
-//     //DataColumn(label: SizedBox(width: 150, child: Text('Material'))),
-//     //DataColumn(label: SizedBox(width: 50, child: Text('Qty'))),
-//     DataColumn(label: SizedBox(width: 100, child: Text('Ketepatan Waktu Pemasukan'))),
-//     DataColumn(label: SizedBox(width: 100, child: Text('Ketepatan Jumlah Pemasukan'))), // Baru
-//     DataColumn(label: SizedBox(width: 100, child: Text('Ketepatan Waktu Pengiriman'))),
-//     DataColumn(label: SizedBox(width: 100, child: Text('Pengembalian Dokumen Pengiriman'))), // Baru (pengembalian_dokumen_pengiriman)
-//     DataColumn(label: SizedBox(width: 100, child: Text('Temuan Kasus/CAR'))), // Baru (0)
-//     DataColumn(label: SizedBox(width: 100, child: Text('Kelayakan Kendaraan'))),
-//     DataColumn(label: SizedBox(width: 90, child: Text('Nilai LK3'))),
-//     DataColumn(label: SizedBox(width: 50, child: Text('Nilai'))), // Baru (0)
-//   ];
-// }
 
-// List<DataColumn> _buildColumns() {
-//   return [
-//     _buildCustomColumn('Ship ID', 60),
-//     _buildCustomColumn('Stuffing', 80),
-//     _buildCustomColumn('No Polisi', 90),
-//     _buildCustomColumn('No DO', 100),
-//     _buildCustomColumn('Customer Tujuan', 190),
-//     _buildCustomColumn('Ketepatan Waktu Pemasukan Harian', 80), // Teks panjang
-//     _buildCustomColumn('Ketepatan Jumlah Pemasukan Harian', 75), // Teks panjang
-//     _buildCustomColumn('Ketepatan Waktu Kirim', 75),
-//     _buildCustomColumn('Doc Balik', 70),
-//     _buildCustomColumn('Temuan Kasus', 70),
-//     _buildCustomColumn('Kelayakan Unit', 75),
-//     _buildCustomColumn('Nilai LK3', 70),
-//     _buildCustomColumn('Nilai Akhir', 75),
-//   ];
-// }
-
-// // Fungsi helper agar kode lebih bersih
-// DataColumn _buildCustomColumn(String label, double width) {
-//   return DataColumn(
-//     label: Container(
-//       width: width,
-//       child: Text(
-//         label,
-//         softWrap: true, // Mengizinkan teks turun ke bawah
-//         textAlign: TextAlign.center,
-//         style: const TextStyle(height: 1.2), // Mengatur jarak antar baris teks
-//       ),
-//     ),
-//   );
-// }
-
-// double hitungPengembalianPOD(Map<String, dynamic> data) {
-//   try {
-//     // 1. Ambil POD Return Aktual (dari shipping_assignments)
-//     int aktual = int.tryParse(data['pod_return_aktual']?.toString() ?? "0") ?? 0;
-
-//     // 2. Ambil POD Return Standar (dari relasi vendor_transportasi)
-//     var vendorTransport = data['vendor_transportasi'];
-//     int standar = 0;
-//     if (vendorTransport != null) {
-//       standar = int.tryParse(vendorTransport['pod_return']?.toString() ?? "0") ?? 0;
-//     }
-
-//     // Jika data standar tidak ada, kita asumsikan tidak bisa dinilai (0)
-//     if (standar == 0) return 0.0;
-
-//     // 3. Hitung Selisih Keterlambatan
-//     int selisih = aktual - standar;
-
-//     // --- LOGIKA PENILAIAN ---
-//     if (selisih <= 0) {
-//       return 5.0; // Tidak telat (Aktual <= Standar)
-//     } else if (selisih <= 2) {
-//       return 3.0; // Telat 1 - 2 hari
-//     } else {
-//       return 1.0; // Telat > 2 hari
-//     }
-//   } catch (e) {
-//     debugPrint("Error Hitung Doc Balik: $e");
-//     return 0.0;
-//   }
-// }
 double hitungKetepatanJumlahPemasukan(Map<String, dynamic> data) {
   try {
     String? status = data['status_assignment']?.toString().toLowerCase();
 
-    // Logika Utama: Hanya memproses data yang berstatus cancel booking
     if (status == 'cancel booking') {
       dynamic cancelledRaw = data['cancelled_at'];
       dynamic assignedRaw = data['assigned_at'];
       dynamic respondedRaw = data['responded_at'];
 
-      if (cancelledRaw == null) return 5.0; // Angka default aman jika data tanggal tidak lengkap
+      if (cancelledRaw == null) return 5.0; 
 
       DateTime cancelledAt = DateTime.parse(cancelledRaw.toString());
       
-      // Ambil acuan tanggal pembanding awal (prioritaskan assigned_at, fallback ke responded_at)
       dynamic baselineRaw = assignedRaw ?? respondedRaw;
       if (baselineRaw == null) return 5.0;
       
       DateTime baselineDate = DateTime.parse(baselineRaw.toString());
 
-      // Bandingkan hanya komponen tahun, bulan, dan hari (mengabaikan komponen jam)
       DateTime cancelledDay = DateTime(cancelledAt.year, cancelledAt.month, cancelledAt.day);
       DateTime baselineDay = DateTime(baselineDate.year, baselineDate.month, baselineDate.day);
 
       // Jika hari pembatalan melewati hari penugasan (H+1 atau lebih)
       if (cancelledDay.isAfter(baselineDay)) {
-        return 1.0; // Poin penalti ketepatan jumlah pemasukan harian
+        return 1.0; 
       } else {
-        // Jika dibatalkan pada hari yang sama, maka baris tersebut dibebaskan (tidak dihitung penalti)
+        // Jika dibatalkan pada hari yang sama, tidak dihitung penalti
         return 5.0; 
       }
     }
 
-    // Jika trip berstatus normal (check in, loading, dll) dan berhasil dijalankan, beri poin penuh 5
+    // Jika berstatus normal (check in, loading, dll) dan berhasil dijalankan, beri poin 5
     return 5.0;
   } catch (e) {
     debugPrint("Error Hitung Jumlah Pemasukan: $e");
@@ -519,29 +374,22 @@ double hitungKetepatanJumlahPemasukan(Map<String, dynamic> data) {
 }
 double hitungPengembalianPOD(Map<String, dynamic> data) {
   try {
-    // 1. Ambil POD Return Aktual (Gunakan int? agar bisa mendeteksi null)
     int? aktual = data['pod_return_aktual'] != null 
         ? int.tryParse(data['pod_return_aktual'].toString()) 
         : null;
 
-    // 2. Ambil POD Return Standar
     var vendorTransport = data['vendor_transportasi'];
     int? standar = (vendorTransport != null && vendorTransport['pod_return'] != null)
         ? int.tryParse(vendorTransport['pod_return'].toString())
         : null;
 
-    // LOGIKA KRUSIAL: Jika data aktual atau standar belum ada di DB
-    // Kembalikan 0.0 agar UI menampilkan tanda "-"
     if (aktual == null || standar == null) {
       return 0.0;
     }
-
-    // 3. Hitung Selisih Keterlambatan
     int selisih = aktual - standar;
 
-    // --- LOGIKA PENILAIAN ---
     if (selisih <= 0) {
-      return 5.0; // Tepat waktu / Lebih cepat
+      return 5.0; // Tepat waktu
     } else if (selisih <= 2) {
       return 3.0; // Telat 1 - 2 hari
     } else {
@@ -554,28 +402,22 @@ double hitungPengembalianPOD(Map<String, dynamic> data) {
 }
 double hitungKetepatanWaktuKirim(Map<String, dynamic> data) {
   try {
-    // 1. Ambil Lead Time Aktual (dari shipping_assignments)
     int? aktual = data['lead_time_aktual'] != null 
         ? int.tryParse(data['lead_time_aktual'].toString()) 
         : null;
 
-    // 2. Ambil Lead Time Standar (dari relasi vendor_transportasi)
     var vendorTransport = data['vendor_transportasi'];
     int? standar = vendorTransport != null && vendorTransport['lead_time'] != null
         ? int.tryParse(vendorTransport['lead_time'].toString())
         : null;
 
-    // JIKA DATA TIDAK LENGKAP
     if (aktual == null || standar == null) {
-      return 0.0; // Muncul tanda "-" di UI
+      return 0.0; 
     }
 
-    // --- LOGIKA PENILAIAN ---
-    // Jika aktual <= standar (Misal: standar 3 hari, aktual 2 hari atau 3 hari) -> Poin 5
     if (aktual <= standar) {
       return 5.0;
     } 
-    // Jika aktual > standar (Misal: standar 3 hari, aktual 4 hari) -> Poin 1
     else {
       return 1.0;
     }
@@ -585,166 +427,6 @@ double hitungKetepatanWaktuKirim(Map<String, dynamic> data) {
   }
 }
 
-// double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
-//   try {
-//     // 1. Ambil jam_booking (Contoh: "15:00 - 17:00")
-//     String? jamBookingRaw = data['jam_booking'];
-//     // 2. Ambil checkIn_at (Timestamptz dari Supabase)
-//     dynamic checkInRaw = data['checkIn_at'];
-
-//     if (jamBookingRaw == null || checkInRaw == null) return 0.0;
-
-//     // --- PROSES JAM BOOKING ---
-//     // Ambil bagian depan "15:00", lalu ambil angka jamnya saja "15"
-//     // split(' - ')[0] mengambil "15:00"
-//     // split(':')[0] mengambil "15"
-//     String jamDepanStr = jamBookingRaw.split(' - ')[0].split(':')[0];
-//     int jamBookingBatas = int.parse(jamDepanStr);
-
-//     // --- PROSES JAM CHECK-IN ---
-//     DateTime checkInAt = DateTime.parse(checkInRaw.toString());
-//     int jamCheckIn = checkInAt.hour;
-//     int menitCheckIn = checkInAt.minute;
-
-//     // --- LOGIKA PENILAIAN ---
-//     // Sesuai aturan: Datang sebelum atau pas di jam booking depan = 5
-//     // Jika jam check-in lebih kecil dari jam booking batas -> Poin 5
-//     if (jamCheckIn < jamBookingBatas) {
-//       return 5.0;
-//     } 
-//     // Jika jam sama, tapi menit ke-0 (tepat waktu) -> Poin 5
-//     else if (jamCheckIn == jamBookingBatas && menitCheckIn == 0) {
-//       return 5.0;
-//     } 
-//     // Selebihnya (jam lebih besar atau jam sama tapi menit > 0) -> Poin 1
-//     else {
-//       return 1.0;
-//     }
-//   } catch (e) {
-//     debugPrint("Error Hitung Waktu: $e");
-//     return 0.0;
-//   }
-// }
-
-// double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
-//   try {
-//     // 1. Ambil jam_booking saat ini (atau jam booking asli jika tersedia)
-//     String? jamBookingRaw = data['jam_booking'];
-//     if (jamBookingRaw == null) return 0.0;
-
-//     // --- PROSES RENTANG CHECK-IN (2 Jam Sebelum) ---
-//     // Misal jamBookingRaw = "11:00 - 13:00"
-//     String startTimeStr = jamBookingRaw.split(" - ")[0]; // "11:00"
-//     int startHour = int.parse(startTimeStr.split(":")[0]); // 11
-
-//     // Batas bawah check-in: 11 - 2 = 09:00
-//     int batasCheckInStart = startHour - 2;
-//     // Batas atas check-in: 11:00
-//     int batasCheckInEnd = startHour;
-
-//     // --- LOGIKA PENGECEKAN HISTORY ---
-//     // Cari apakah ada aktivitas reschedule oleh Admin di jam kritis
-//     List historyReschedule = data['booking_history'] is List ? data['booking_history'] : [];
-//     bool terlambatKarenaRescheduleAdmin = false;
-
-//     for (var history in historyReschedule) {
-//       if (history['created_at'] == null) continue;
-
-//       DateTime createdAt = DateTime.parse(history['created_at'].toString());
-//       String changedBy = history['changed_by'] ?? '';
-      
-//       // Cek apakah yang mengubah BUKAN vendor (berarti Admin)
-//       bool isNotVendor = changedBy.toLowerCase() != 'vendor';
-
-//       // Cek apakah waktu perubahan ada di dalam range check-in (2 jam sebelum booking)
-//       // Contoh: Booking jam 11, range check-in 09:00-11:00. 
-//       // Jika Admin reschedule di jam 10:30, maka masuk kondisi ini.
-//       bool isWithinCriticalRange = createdAt.hour >= batasCheckInStart && 
-//                                    createdAt.hour < batasCheckInEnd;
-
-//       if (isNotVendor && isWithinCriticalRange) {
-//         terlambatKarenaRescheduleAdmin = true;
-//         break; 
-//       }
-//     }
-
-//     // --- PENILAIAN ---
-//     if (terlambatKarenaRescheduleAdmin) {
-//       return 1.0; // Terlambat karena di-reschedule admin di jam kritis
-//     } else {
-//       return 5.0; // Tidak ada pelanggaran reschedule
-//     }
-
-//   } catch (e) {
-//     debugPrint("Error Hitung Waktu Reschedule: $e");
-//     return 0.0;
-//   }
-// }
-
-// double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
-//   try {
-//     // 1. Ambil jam_booking saat ini (misal: "11:00 - 13:00")
-//     String? jamBookingRaw = data['jam_booking'];
-//     if (jamBookingRaw == null) return 0.0;
-
-//     String startTimeStr = jamBookingRaw.split(" - ")[0]; // "11:00"
-//     List<String> timeParts = startTimeStr.split(":");
-//     int startHour = int.parse(timeParts[0]);
-//     int startMinute = int.parse(timeParts[1]);
-
-//     // --- LOGIKA PENGECEKAN HISTORY ---
-//     List historyReschedule = data['booking_history'] is List ? data['booking_history'] : [];
-//     bool terlambatKarenaRescheduleAdmin = false;
-
-//     for (var history in historyReschedule) {
-//       if (history['created_at'] == null) continue;
-
-//       // Waktu ketika Admin melakukan reschedule
-//       DateTime createdAt = DateTime.parse(history['created_at'].toString());
-//       String changedBy = history['changed_by'] ?? '';
-      
-//       // Cek apakah yang mengubah BUKAN vendor (berarti Admin)
-//       bool isNotVendor = changedBy.toLowerCase() != 'vendor';
-
-//       if (isNotVendor) {
-//         // Buat objek DateTime target booking pada HARI YANG SAMA dengan history dibuat
-//         DateTime bookingDateTime = DateTime(
-//           createdAt.year,
-//           createdAt.month,
-//           createdAt.day,
-//           startHour,
-//           startMinute,
-//         );
-
-//         // Hitung selisih waktu antara jadwal booking dengan waktu admin mengubahnya
-//         // Jika diubah sebelum jam booking, hasilnya positif.
-//         Duration selisihWaktu = bookingDateTime.difference(createdAt);
-
-//         // --- ATURAN BARU: 2 JAM ATAU LEBIH ---
-//         // Bersifat kritis jika dilakukan tepat pada waktu booking atau sebelumnya, 
-//         // dengan jarak maksimal sampai kapan pun (>= 2 jam sebelum).
-//         // selisihWaktu.inMinutes >= 120 artinya: diubah 2 jam (120 menit) atau lebih sebelum booking.
-//         bool isWithinCriticalRange = selisihWaktu.inMinutes >= 120;
-
-//         if (isWithinCriticalRange) {
-//           terlambatKarenaRescheduleAdmin = true;
-//           break; 
-//         }
-//       }
-//     }
-
-//     // --- PENILAIAN ---
-//     if (terlambatKarenaRescheduleAdmin) {
-//       return 1.0; // Terlambat/Kena penalti karena di-reschedule admin 2 jam atau lebih sebelum booking
-//     } else {
-//       return 5.0; // Aman (di-reschedule mepet di bawah 2 jam, atau tidak ada reschedule admin)
-//     }
-
-//   } catch (e) {
-//     debugPrint("Error Hitung Waktu Reschedule: $e");
-//     return 0.0;
-//   }
-// }
 double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
   try {
     // 1. Ambil data jam_booking saat ini (atau gunakan data booking awal jika ada)
@@ -775,7 +457,6 @@ double hitungKetepatanWaktuMasuk(Map<String, dynamic> data) {
     // Contoh: Booking jam 11:00, maka batasnya adalah jam 09:00
     DateTime batasMandiriVendor = targetBookingTime.subtract(const Duration(hours: 2));
 
-    // 4. --- PROSES PENGECEKAN HISTORY RESCHEDULE MALING/TERAKHIR ---
     List historyReschedule = data['booking_history'] is List ? data['booking_history'] : [];
     
     bool telatDanDiambilAlihAdmin = false;
@@ -1803,7 +1484,7 @@ Widget _buildSummaryAverage(List<Map<String, dynamic>> displayData) {
         borderRadius: BorderRadius.circular(6),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -1855,21 +1536,20 @@ Widget _buildSummaryAverage(List<Map<String, dynamic>> displayData) {
     ),
   );
 }
-     
-// Widget khusus untuk kotak Nilai Akhir yang paling bawah
-Widget _buildGrandTotalBox(double value) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.blue.shade900,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(
-      value.toStringAsFixed(2),
-      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-    ),
-  );
-}
+  
+// Widget _buildGrandTotalBox(double value) {
+//   return Container(
+//     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+//     decoration: BoxDecoration(
+//       color: Colors.blue.shade900,
+//       borderRadius: BorderRadius.circular(8),
+//     ),
+//     child: Text(
+//       value.toStringAsFixed(2),
+//       style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+//     ),
+//   );
+// }
 
 // Widget _avgBox(String label, double val, {bool isFinal = false}) {
 //     return Container(
@@ -1924,7 +1604,7 @@ Widget _avgBox(String label, double val, {bool isFinal = false}) {
             margin: const EdgeInsets.only(top: 4),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
             decoration: BoxDecoration(
-              color: isFinal ? Colors.blue.shade900.withOpacity(0.5) : Colors.white,
+              color: isFinal ? Colors.blue.shade900.withValues(alpha: 0.5) : Colors.white,
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -1990,9 +1670,9 @@ double _calculateGrandTotal(List<Map<String, dynamic>> displayData) {
   // --- UI HELPERS ---
   DataCell _buildValueCell(String txt, double width) => DataCell(SizedBox(width: width, child: Text(txt, style: const TextStyle(fontSize: 12), textAlign: TextAlign.center)));
 
-  DataCell _buildScoreCell(dynamic score, double width) => DataCell(SizedBox(width: width, child: Center(child: _buildScoreText(score))));
+  // DataCell _buildScoreCell(dynamic score, double width) => DataCell(SizedBox(width: width, child: Center(child: _buildScoreText(score))));
 
-  Widget _buildBadge(String txt, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color)), child: Text(txt, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)));
+  // Widget _buildBadge(String txt, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color)), child: Text(txt, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)));
 
   Widget _buildNestedColumn(List<String?> items) {
     return Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: items.map((item) => Text(item ?? "-", style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis)).toList());
@@ -2714,7 +2394,7 @@ DoubleCellValue(hitungKetepatanJumlahPemasukan(data)),
     // --- 5. PENYUSUNAN NAMA FILE ---
     String safeName = vendorDisplay.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
     String fileName = "Penilaian_${safeName}_${DateTime.now().millisecondsSinceEpoch}.xlsx";
-String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+//String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     // --- 6. SAVE & DOWNLOAD ---
     //var fileBytes = excel.save();
     //var fileBytes = excel.save(fileName: fileName);
@@ -2753,14 +2433,14 @@ String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
   }
 }
   // UI Helper: Pewarnaan skor otomatis
-  Widget _buildScoreText(dynamic score) {
-    double val = double.tryParse(score?.toString() ?? "0") ?? 0;
-    Color color = val >= 80 ? Colors.green : (val >= 60 ? Colors.orange : Colors.red);
-    return Text(
-      val.toStringAsFixed(1),
-      style: TextStyle(color: color, fontWeight: FontWeight.bold),
-    );
-  }
+  // Widget _buildScoreText(dynamic score) {
+  //   double val = double.tryParse(score?.toString() ?? "0") ?? 0;
+  //   Color color = val >= 80 ? Colors.green : (val >= 60 ? Colors.orange : Colors.red);
+  //   return Text(
+  //     val.toStringAsFixed(1),
+  //     style: TextStyle(color: color, fontWeight: FontWeight.bold),
+  //   );
+  // }
 
   Future<void> _pickDateRange() async {
   DateTimeRange? picked = await showDateRangePicker(

@@ -17,7 +17,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   RealtimeChannel? _assignmentsChannel;
   RealtimeChannel? _requestsChannel;
 
-  // 1. Dropdown Filter Wilayah (Hanya 2 Pilihan)
   final List<Map<String, dynamic>> _zones = [
     {
       'zone_key': 'rungkut',
@@ -31,15 +30,13 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
 
   String _selectedZoneKey = 'rungkut';
 
-  // 2. Daftar Semua Gudang
   final List<Map<String, dynamic>> _allWarehouses = [
     {'warehouse_id': 1, 'warehouse_name': 'GBJ CO CHIYODA', 'zone': 'rungkut'},
     {'warehouse_id': 2, 'warehouse_name': 'GBJ KUNCIMAS', 'zone': 'rungkut'},
     {'warehouse_id': 3, 'warehouse_name': 'GBJ MARSHO VNA', 'zone': 'rungkut'},
-    {'warehouse_id': 6, 'warehouse_name': 'TAMBAK LANGON', 'zone': 'tambak_langon'}, // ID: 6 sesuai halaman reschedule
+    {'warehouse_id': 6, 'warehouse_name': 'TAMBAK LANGON', 'zone': 'tambak_langon'}, 
   ];
 
-  // 3. Variasi Slot Jam Operasional
   final List<String> _rungkutTimeSlots = [
     '07:00 - 09:00',
     '09:00 - 11:00',
@@ -62,12 +59,9 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
     '22:00 - 24:00',
   ];
 
-  // GETTER DINAMIS: Mengembalikan daftar gudang berdasarkan wilayah aktif
   List<Map<String, dynamic>> get _currentWarehouses {
     return _allWarehouses.where((w) => w['zone'] == _selectedZoneKey).toList();
   }
-
-  // GETTER DINAMIS: Mengembalikan daftar jam berdasarkan wilayah aktif
   List<String> get _currentTimeSlots {
     if (_selectedZoneKey == 'tambak_langon') {
       return _tambakLangonTimeSlots;
@@ -234,7 +228,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
         }
       }
 
-      // Memetakan map data akhir agar sesuai jam versi masing-masing wilayah
       for (var warehouse in _allWarehouses) {
         int whId = warehouse['warehouse_id'];
         List<String> currentSlots = warehouse['zone'] == 'tambak_langon' ? _tambakLangonTimeSlots : _rungkutTimeSlots;
@@ -276,7 +269,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                         padding: const EdgeInsets.all(16),
                         child: Table(
                           border: TableBorder.all(color: Colors.grey.shade400),
-                          // Lebar kolom dinamis: Kolom jam otomatis, sisa kolom gudang diatur rata menyamping
                           columnWidths: {
                             0: const FixedColumnWidth(240),
                             for (int i = 1; i <= _currentWarehouses.length; i++) i: const FixedColumnWidth(350),
@@ -295,7 +287,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
     );
   }
 
-  // --- FILTER BAR (RUNGKUT VS TAMBAK LANGON) ---
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -348,7 +339,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
     );
   }
 
-  // --- RENDERING STRUKTUR BARIS HEADER KOLOM GUDANG ---
   TableRow _buildHeaderRow() {
     return TableRow(
       decoration: BoxDecoration(color: Colors.red.shade700),
@@ -370,12 +360,9 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
       ),
     );
   }
-
-  // --- RENDERING BARIS DATA OPERASIONAL GUDANG ---
   TableRow _buildTimeRow(String slot) {
     return TableRow(
       children: [
-        // Kolom pertama: Jam operasional
         Container(
           height: 180,
           alignment: Alignment.center,
@@ -386,7 +373,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
           ),
         ),
 
-        // Looping kolom berdasarkan gudang aktif di zona terpilih (Rungkut: 3 kolom, Tambak langon: 1 kolom)
         ..._currentWarehouses.map((warehouse) {
           int warehouseId = warehouse['warehouse_id'];
           String key = '${warehouseId}_$slot';
@@ -408,7 +394,7 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
             child: Container(
               height: 180,
               padding: const EdgeInsets.all(12),
-              color: isFull ? Colors.red.withOpacity(0.05) : Colors.white,
+              color: isFull ? Colors.red.withValues(alpha: 0.05) : Colors.white,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -455,7 +441,7 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                           decoration: BoxDecoration(
-                                            color: statusColor.withOpacity(0.1),
+                                            color: statusColor.withValues(alpha: 0.1),
                                             borderRadius: BorderRadius.circular(4),
                                             border: Border.all(color: statusColor, width: 0.5),
                                           ),
@@ -486,7 +472,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
     );
   }
 
-  // --- POPUP DIALOG DETAIL ---
   void _showDetailDialog(String warehouse, String slot, List<Map<String, dynamic>> details, int remaining, int booked, int max) {
     showDialog(
       context: context,
@@ -541,7 +526,7 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: statusColor.withOpacity(0.1),
+                                    color: statusColor.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: statusColor, width: 0.5),
                                   ),

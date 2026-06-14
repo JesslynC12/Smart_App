@@ -96,9 +96,7 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
         vendor_name
         ),
             vendor_transportasi:id_vendor_details(
-                id,
-                vendor_name,
-                nik
+                id
                 )
           )
         ''')
@@ -153,9 +151,7 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
         vendor_name
         ),
             vendor_transportasi:id_vendor_details(
-                id,
-                vendor_name,
-                nik
+                id
                 )
           )
           ''')
@@ -336,7 +332,13 @@ String storageLocDisplay = whData != null
             .limit(4),
         supabase
             .from('vendor_transportasi')
-            .select()
+           .select('''
+      *,
+      master_vendor:nik (
+        vendor_name
+      )
+    ''')
+            //.range(0, 4999)
             .order('vendor_name', ascending: true)
       ]);
 
@@ -771,7 +773,7 @@ Padding(
                   children: [
                     Text(vendor['vendor_name'] ?? "-", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                     Text("Unit: ${vendor['type_unit']} | Rank: $rank", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text("City: ${vendor['city']}", style: TextStyle(fontSize: 11, fontWeight: isMatchingCity ? FontWeight.bold : FontWeight.normal, color: isMatchingCity ? Colors.green.shade700 : Colors.grey.shade500)),
+                    Text("City: ${vendor['city']} | Area: ${vendor['area'] ?? '-'} | QCF: ${vendor['jenis_qcf'] ?? '-'}", style: TextStyle(fontSize: 11, fontWeight: isMatchingCity ? FontWeight.bold : FontWeight.normal, color: isMatchingCity ? Colors.green.shade700 : Colors.grey.shade500)),
                     // 🔥 TAMBAHKAN INFORMASI GUDANG DI SINI
                   const SizedBox(height: 2),
                   Text("🏠 Gudang: ${vendor['lokasi_gudang'] ?? '-'}", 
@@ -829,18 +831,23 @@ Padding(
           compareFn: (item, sItem) => item['id'] == sItem['id'],
           filterFn: (vendor, filter) {
             final String query = filter.toLowerCase().trim();
-            final String name = (vendor['vendor_name'] ?? "").toString().toLowerCase();
+            //final String name = (vendor['vendor_name'] ?? "").toString().toLowerCase().trim();
+            final String name = (vendor['master_vendor']?['vendor_name'] ?? "").toString().toLowerCase().trim();
             final String city = (vendor['city'] ?? "").toString().toLowerCase();
+            final String area = (vendor['area'] ?? "").toString().toLowerCase();
+            final String qcf = (vendor['jenis_qcf'] ?? "").toString().toLowerCase();
              final String unit = (vendor['type_unit'] ?? "").toString().toLowerCase();
     final String warehouse = (vendor['lokasi_gudang'] ?? "").toString().toLowerCase();
 
             return name.contains(query) ||
            city.contains(query) ||
+           area.contains(query) ||
+                qcf.contains(query) ||
            unit.contains(query) ||
            warehouse.contains(query);
 
           },
-          itemAsString: (v) => "${v['vendor_name']} (${v['type_unit']}) - ${v['city']}",
+          itemAsString: (v) => "${v['master_vendor']?['vendor_name'] ?? '-'} (${v['type_unit']}) - ${v['city']} [Area: ${v['area'] ?? '-'}, QCF: ${v['jenis_qcf'] ?? '-'}]",
           selectedItem: isFromRec ? null : _selectedVendor,
           enabled: _selectedVendor == null || !isFromRec,
           onChanged: (val) => setState(() => _selectedVendor = val),
@@ -852,13 +859,14 @@ Padding(
             itemBuilder: (context, item, isSelected, isHover) {
               double alokasiVal = double.tryParse(item['alokasi_persen'].toString()) ?? 0;
               String p = alokasiVal <= 1 ? "${(alokasiVal * 100).toInt()}%" : "${alokasiVal.toInt()}%";
+              String displayVendorName = item['master_vendor']?['vendor_name'] ?? "-";
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item['vendor_name'] ?? "-", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(displayVendorName,style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 4),
                   //   Text("📍 ${item['city']} | Rank: ${item['winner_rank']} | Alokasi: $p", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   //   Text("🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}", style: const TextStyle(fontSize: 10, color: Colors.blueGrey)),
@@ -874,7 +882,7 @@ Padding(
                   const SizedBox(height: 4),
                   // --- DETAIL LOKASI & GUDANG ---
                   Text(
-                    "📍 ${item['city']} | 🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}",
+                    "📍 ${item['city']} | Area: ${item['area'] ?? '-'} | QCF: ${item['jenis_qcf'] ?? '-'} | 🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}",
                     style: const TextStyle(fontSize: 10, color: Colors.grey),
                   ),
                    ],
