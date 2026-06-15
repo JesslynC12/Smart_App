@@ -26,7 +26,6 @@ class _PODReturnPageState extends State<PODReturnPage> {
   int podAktual = 0;
 
   List<DateTime> _daftarLiburNasional = [];
-  //bool _isLoadingHolidays = true;
 
   @override
   void initState() {
@@ -34,21 +33,17 @@ class _PODReturnPageState extends State<PODReturnPage> {
     _loadHolidaysData();
   }
 
+@override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadHolidaysData() async {
     int tahunSekarang = DateTime.now().year;
     
     List<DateTime> dataLibur = await getHolidays(tahunSekarang);
-
-    if (dataLibur.isEmpty) {
-      //print('Memuat Hari Libur Nasional Cadangan untuk Tahun $tahunSekarang');
-      dataLibur = [
-        DateTime(tahunSekarang, 1, 1),
-        DateTime(tahunSekarang, 5, 1),
-        DateTime(tahunSekarang, 6, 1),   
-        DateTime(tahunSekarang, 8, 17), 
-        DateTime(tahunSekarang, 12, 25), 
-      ];
-    }
+    if (!mounted) return;
     setState(() {
       _daftarLiburNasional = dataLibur;
     });
@@ -57,17 +52,12 @@ class _PODReturnPageState extends State<PODReturnPage> {
   int _calculateLeadTime() {
     if (_tanggalTibaCustomer == null || _foundData?['stuffing_date'] == null) return 0;
     try {
-    //   DateTime stuffing = DateTime.parse(_foundData!['stuffing_date']);
-    //   return _tanggalTibaCustomer!.difference(stuffing).inDays;
-    // } catch (e) {
-    //   return 0;
-    // }
     DateTime stuffingDate = DateTime.parse(_foundData!['stuffing_date']);
       DateTime arrivalDate = _tanggalTibaCustomer!;
 
       if (stuffingDate.isAfter(arrivalDate)) return 0;
 
-      // Ubah daftar libur nasional ke format string "YYYY-MM-DD" agar pencocokannya akurat
+      // Ubah daftar ke format string 
       List<String> formattedHolidays = _daftarLiburNasional.map((date) =>
           "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}"
       ).toList();
@@ -130,7 +120,6 @@ int _calculatePODActual() {
 Future<List<DateTime>> getHolidays(int year) async {
   final supabase = Supabase.instance.client;
 
-  // Cache first
   final cached = await supabase
       .from('holidays')
       .select('date')
@@ -172,10 +161,8 @@ Future<List<DateTime>> getHolidays(int year) async {
         ..sort();
     }
   } catch (_) {
-    // Fall through to default holidays
   }
 
-  // Fallback if API/cache unavailable
   if (dates.isEmpty) {
     dates = _defaultIndonesiaHolidays(year);
   }
@@ -193,6 +180,7 @@ Future<List<DateTime>> getHolidays(int year) async {
           .toList(),
       onConflict: 'year,date',
     );
+    
   }
 
   return dates;
@@ -207,41 +195,6 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
     DateTime(year, 12, 25), // Natal
   ];
 }
-// Future<List<DateTime>> fetchIndonesianHolidays(int year) async {
-//   // Ubah sesuai dengan path endpoint API internal Anda
-//   final String url = 'https://api.co.id/holidays?year=$year'; 
-
-//   try {
-//     final response = await http.get(
-//       Uri.parse(url),
-//       headers: {
-//         "Accept": "application/json",
-//         // Jika API internal membutuhkan autentikasi (Token/API Key), tambahkan di sini:
-//         // "Authorization": "Bearer TOKEN_ANDA", 
-//       },
-//     );
-
-//     if (response.statusCode == 200) {
-//       final List<dynamic> responseData = json.decode(response.body);
-//       List<DateTime> holidayList = [];
-
-//       for (var item in responseData) {
-//         // PERHATIAN: Sesuaikan key 'holiday_date' jika API internal Anda menggunakan nama field berbeda
-//         // Contoh: jika di API Anda namanya 'tanggal', ubah menjadi item['tanggal']
-//         if (item['holiday_date'] != null) {
-//           DateTime parsedDate = DateTime.parse(item['holiday_date']);
-//           holidayList.add(parsedDate);
-//         }
-//       }
-//       return holidayList;
-//     } else {
-//       return [];
-//     }
-//   } catch (e) {
-//     debugPrint('Gagal memuat API internal: $e');
-//     return [];
-//   }
-// }
 
   Future<void> _searchDO() async {
     final search = _searchController.text.trim();
@@ -382,12 +335,6 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
                 return d;
               });
             }).toList(),
-
-            'reject_list': list.expand((s) {
-              final List assigns = s['shipping_assignments'] as List? ?? [];
-              return assigns.where((a) => ['rejected', 'rejected unit', 'cancel booking'].contains(a['status_assignment']));
-            }).toList(),
-
             'all_shipping_ids': list.map((e) => e['shipping_id'] as int).toList(),
           };
         });

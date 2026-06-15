@@ -14,8 +14,8 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
   bool _isAccountLoading = false;
 
   List<Map<String, dynamic>> _masterVendors = [];
-  Map<String, dynamic>? _selectedVendor; // Vendor aktif yang diklik
-  List<Map<String, dynamic>> _vendorAccounts = []; // Akun profiles milik vendor aktif
+  Map<String, dynamic>? _selectedVendor; 
+  List<Map<String, dynamic>> _vendorAccounts = []; 
 
   @override
   void initState() {
@@ -23,7 +23,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
     _fetchMasterVendors();
   }
 
-  // --- 1. AMBIL MASTER VENDOR (PANEL KIRI) ---
   Future<void> _fetchMasterVendors() async {
     setState(() => _isVendorLoading = true);
     try {
@@ -38,14 +37,13 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
     }
   }
 
-  // --- 2. AMBIL AKUN PROFILES VENDOR (PANEL KANAN) ---
   Future<void> _fetchVendorAccounts(String nik) async {
     setState(() => _isAccountLoading = true);
     try {
       final data = await supabase
           .from('profiles')
           .select()
-          .eq('nik_vendor', nik) // Relasi ke master_vendor (nik)
+          .eq('nik_vendor', nik) 
           .order('created_at', ascending: false);
       setState(() {
         _vendorAccounts = List<Map<String, dynamic>>.from(data);
@@ -57,7 +55,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
     }
   }
 
-  // --- 3. AKSI: TOGGLE STATUS AKTIF (is_active) ---
   Future<void> _toggleAccountStatus(String profileId, bool currentStatus) async {
     try {
       await supabase
@@ -74,10 +71,8 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
     }
   }
 
-  // --- 4. AKSI: HAPUS AKUN (Trigger CASCADE ke auth.users via handle_delete_user_auth) ---
   Future<void> _deleteVendorAccount(String profileId) async {
     try {
-      // Menghapus record di public.profiles otomatis memicu trigger_delete_auth_user Anda
       await supabase.from('profiles').delete().eq('id', profileId);
 
       _showSnackBar("Akun vendor berhasil dihapus", Colors.redAccent);
@@ -96,18 +91,10 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Manajemen Akun Login Vendor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-      //   backgroundColor: Colors.blueGrey.shade800,
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isVendorLoading
           ? const Center(child: CircularProgressIndicator())
           : Row(
               children: [
-                // =======================================================
-                // 🏢 PANEL KIRI: DAFTAR MASTER VENDOR (FLEX 2)
-                // =======================================================
                 Expanded(
                   flex: 2,
                   child: Container(
@@ -168,10 +155,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                     ),
                   ),
                 ),
-
-                // =======================================================
-                // 👥 PANEL KANAN: MANAJEMEN AKUN PROFILES VENDOR (FLEX 3)
-                // =======================================================
                 Expanded(
                   flex: 3,
                   child: _selectedVendor == null
@@ -188,7 +171,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                         )
                       : Column(
                           children: [
-                            // Header Informasi Vendor Terpilih
                             Container(
                               padding: const EdgeInsets.all(16.0),
                               color: Colors.grey.shade100,
@@ -214,7 +196,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                             ),
                             const Divider(height: 1),
                             
-                            // Daftar User Terdaftar (Profiles)
                             Expanded(
                               child: _isAccountLoading
                                   ? const Center(child: CircularProgressIndicator())
@@ -263,7 +244,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                                                       ),
                                                     ),
                                                     
-                                                    // TOMBOL AKSI: Block / Unblock Status Akun
                                                     IconButton(
                                                       tooltip: isActive ? "Non-aktifkan Akun" : "Aktifkan Akun",
                                                       icon: Icon(
@@ -273,7 +253,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                                                       onPressed: () => _toggleAccountStatus(profile['id'], isActive),
                                                     ),
                                                     
-                                                    // TOMBOL AKSI: Hapus Akun Total
                                                     IconButton(
                                                       tooltip: "Hapus Akun Permanen",
                                                       icon: const Icon(Icons.delete_forever, color: Colors.red),
@@ -293,10 +272,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
             ),
     );
   }
-
-  // =======================================================
-  // 💾 DIALOG POPUP: INPUT MASTER VENDOR BARU
-  // =======================================================
   void _showAddMasterVendorDialog() {
     final nikController = TextEditingController();
     final nameController = TextEditingController();
@@ -347,10 +322,6 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
       ),
     );
   }
-
-  // =======================================================
-  // 💾 DIALOG KONFIRMASI: HAPUS AKUN TOTAL
-  // =======================================================
   void _showConfirmDeleteDialog(String profileId, String profileName) {
     showDialog(
       context: context,

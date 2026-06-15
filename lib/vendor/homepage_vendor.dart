@@ -21,6 +21,7 @@ class _HomepageVendorState extends State<HomepageVendor> {
   model.User? currentUser;
   bool isLoading = true;
   bool _isOrderLoading = false;
+  List<int> _vendorDetailIds = [];
 Timer? _timer;
 
 // tambahkan variabel subscription untuk mengontrol realtime stream
@@ -54,19 +55,22 @@ Timer? _timer;
   // Memastikan User terisi sebelum mengambil statistik
   Future<void> _loadInitialData() async {
     await _loadUserData();
-    if (currentUser != null) {
-     await Future.wait([
-        _fetchStatistics(),
-        _fetchNewOrders(),
-      ]);
+    final nik = currentUser?.nikVendor;
+    if (nik != null) {
+      _vendorDetailIds = await AuthService.getVendorDetailIds(nik);
+      if (_vendorDetailIds.isNotEmpty) {
+        await Future.wait([
+          _fetchStatistics(),
+          _fetchNewOrders(),
+        ]);
+      }
       // 2. Setup listener realtime setelah data user (NIK) tersedia
       _setupRealtime();
     }
   }
 // Fungsi baru untuk setup Realtime menggunakan Supabase Stream
   void _setupRealtime() {
-    final nik = currentUser?.nikVendor;
-    if (nik == null) return;
+    if (_vendorDetailIds.isEmpty) return;
 
     // Batalkan subscription lama jika ada sebelum membuat yang baru
     _realtimeSubscription?.cancel();
@@ -75,7 +79,7 @@ Timer? _timer;
     _realtimeSubscription = supabase
         .from('shipping_assignments')
         .stream(primaryKey: ['id_assignment'])
-        .eq('nik', nik) // Filter agar hanya memantau data milik vendor ini saja
+        .inFilter('id_vendor_details', _vendorDetailIds) // Filter agar hanya memantau data milik vendor ini saja
         .listen((_) {
           debugPrint("Realtime Update Terdeteksi di shipping_assignments!");
           // Jalankan fetch data ulang setiap kali ada perubahan data (INSERT/UPDATE/DELETE) di database
@@ -348,8 +352,7 @@ Future<void> _updateAssignment(List<int> assignmentIds, String status, List<int>
 //   }
 Future<void> _fetchNewOrders() async {
   try {
-    final nik = currentUser?.nikVendor;
-    if (nik == null) return;
+    if (_vendorDetailIds.isEmpty) return;
 
     setState(() => _isOrderLoading = true);
 
@@ -372,7 +375,7 @@ Future<void> _fetchNewOrders() async {
             )
           )
         ''')
-        .eq('nik', nik)
+        .inFilter('id_vendor_details', _vendorDetailIds)
         .eq('status_assignment', 'offered')
         .order('assigned_at', ascending: false);
 
@@ -401,8 +404,7 @@ Future<void> _fetchNewOrders() async {
 
   Future<void> _fetchStatistics() async {
     try {
-      final nik = currentUser?.nikVendor;
-      if (nik == null) return;
+      if (_vendorDetailIds.isEmpty) return;
       
 // 1. Dapatkan range waktu bulan sekarang (Awal bulan s/d Akhir bulan)
     DateTime now = DateTime.now();
@@ -418,7 +420,7 @@ Future<void> _fetchNewOrders() async {
           status_assignment,
           request:shipping_id (group_id)
         ''')
-          .eq('nik', nik)
+          .inFilter('id_vendor_details', _vendorDetailIds)
           // Filter: assigned_at >= awal bulan AND assigned_at < awal bulan depan
         .gte('assigned_at', firstDayOfMonth.toIso8601String())
         .lt('assigned_at', firstDayOfNextMonth.toIso8601String());

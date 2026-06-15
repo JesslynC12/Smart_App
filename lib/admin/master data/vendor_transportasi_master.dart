@@ -50,7 +50,6 @@ Future<void> _initializeAllData() async {
 
       final ruteData = List<Map<String, dynamic>>.from(results[0]);
       
-      // Ambil daftar area unik dari data rute yang sudah ada untuk dropdown Area
       final Set<String> uniqueAreas = {};
       for (var rute in ruteData) {
         if (rute['area'] != null && rute['area'].toString().trim().isNotEmpty) {
@@ -309,9 +308,9 @@ Widget _buildActionButton({required IconData icon, required Color color, require
   return Container(
     height: 55,
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: IconButton(
       onPressed: onPressed,
@@ -600,7 +599,7 @@ Future<void> _fetchDataFallback() async {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: (value == null || value.isEmpty || !items.contains(value)) ? null : value,
+        initialValue: (value == null || value.isEmpty || !items.contains(value)) ? null : value,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
         items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
         onChanged: onChanged,
@@ -608,35 +607,7 @@ Future<void> _fetchDataFallback() async {
     );
   }
 
-  // --- HELPER WIDGET UNTUK EDITABLE DROPDOWN (Autocomplete) ---
-  Widget _buildEditableDropdown(TextEditingController ctrl, String label, List<String> options) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Autocomplete<String>(
-        optionsBuilder: (TextEditingValue textEditingValue) {
-          if (textEditingValue.text == '') return options;
-          return options.where((String option) => option.contains(textEditingValue.text.toUpperCase()));
-        },
-        onSelected: (String selection) => ctrl.text = selection,
-        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-          // Sinkronisasi controller autocomplete dengan controller utama
-          if (controller.text != ctrl.text) controller.text = ctrl.text;
-          controller.addListener(() => ctrl.text = controller.text);
-          
-          return TextField(
-            controller: controller,
-            focusNode: focusNode,
-            decoration: InputDecoration(
-              labelText: label,
-              border: const OutlineInputBorder(),
-              isDense: true,
-              suffixIcon: const Icon(Icons.arrow_drop_down),
-            ),
-          );
-        },
-      ),
-    );
-  }
+
 
   Widget _buildComboboxAreaField(TextEditingController ctrl, String label, List<String> options) {
     return Padding(
@@ -822,7 +793,7 @@ Future<void> _fetchDataFallback() async {
     Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: DropdownButtonFormField<String>(
-                      value: _masterVendorList.any((v) => v['nik'] == selectedNik) ? selectedNik : null,
+                      initialValue: _masterVendorList.any((v) => v['nik'] == selectedNik) ? selectedNik : null,
                       decoration: const InputDecoration(
                         labelText: 'Pilih Vendor (NIK - Nama Vendor) *',
                         border: OutlineInputBorder(),

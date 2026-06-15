@@ -1,6 +1,7 @@
 import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/material.dart';
 import 'package:open_file_plus/open_file_plus.dart';
+import 'package:project_app/auth/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,6 +22,7 @@ class _VendorEvaluationPageState extends State<VendorEvaluationPage> {
   String? _selectedNik;
   DateTimeRange? _selectedDateRange;
   List<Map<String, dynamic>> _evaluationData = [];
+  List<int> _vendorDetailIds = [];
   String _selectedCarFilter = "Tidak Ada"; 
 RealtimeChannel? _evaluationChannel;
 
@@ -68,7 +70,7 @@ Future<List<Map<String, dynamic>>> _getVendorSuggestions(String query) async {
 }
 
 Future<void> _fetchEvaluationData({bool isSilent = false}) async {
-  if (_selectedNik == null || _selectedDateRange == null) return;
+  if (_selectedNik == null || _selectedDateRange == null || _vendorDetailIds.isEmpty) return;
   if (!isSilent) setState(() => _isLoading = true);
 
   setState(() => _isLoading = true);
@@ -119,7 +121,7 @@ Future<void> _fetchEvaluationData({bool isSilent = false}) async {
       'keluar', 
       'completed','cancel booking'
     ])
-        .eq('nik', _selectedNik!)
+        .inFilter('id_vendor_details', _vendorDetailIds)
         .gte('shipping_request.stuffing_date', startDate)
         .lte('shipping_request.stuffing_date', endDate)
         .order('loading_at', ascending: false);
@@ -264,10 +266,13 @@ List<Map<String, dynamic>> _getGroupedDisplayData(List<Map<String, dynamic>> sou
                 );
               },
 
-              onSelected: (Map<String, dynamic> selection) {
+              onSelected: (Map<String, dynamic> selection) async {
+                final nik = selection['nik'] as String;
+                final detailIds = await AuthService.getVendorDetailIds(nik);
                 setState(() {
-                  _selectedNik = selection['nik'];
-                  _vendorSearchController.text = selection['nik'];
+                  _selectedNik = nik;
+                  _vendorDetailIds = detailIds;
+                  _vendorSearchController.text = nik;
                 });
                 _fetchEvaluationData();
               },

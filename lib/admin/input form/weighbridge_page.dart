@@ -56,9 +56,9 @@ final TextEditingController _searchController = TextEditingController();
 
     setState(() {
       _filteredPlanningList = _planningList.where((item) {
-        final vendor = item['master_vendor'] ?? {};
+        final vendor = item['vendor_transportasi'] ?? {};
         final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
-        final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
+        final String nikVendor = (vendor['nik'] ?? '').toString().toLowerCase();
         final request = item['request'] ?? {};
         final List dos = request['delivery_order'] as List? ?? [];
         bool matchDO = dos.any((doItem) {
@@ -203,13 +203,23 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
         .from('shipping_assignments')
         .select('''
           *,
-          master_vendor:nik (vendor_name), 
-           vendor_transportasi:id_vendor_details (
-        qcf,
-        city,
-        area,
-        type_unit
-      ),
+          vendor_transportasi:id_vendor_details (
+            nik,
+            vendor_name,
+            qcf,
+            city,
+            area,
+            type_unit
+          ),
+          loading:loading (
+            id_loading,
+            loading_at,
+            loading_by,
+            checker_id,
+            verifikasi_rekomendasi_logistic,
+            ganjal_ban,
+            no_segel_smart
+          ),
           loading!id_assignment (
             loading_at,
             loading_by,
@@ -518,7 +528,7 @@ Future<void> _selectSingleDate() async {
 
 Widget _buildPlanningCard(Map<String, dynamic> item,int sid, bool isExpanded) {
   final Map<String, dynamic> request = item['request'] ?? {};
-  final vendor = item['master_vendor'] ?? {};
+  final vendor = item['vendor_transportasi'] ?? {};
 
   if (request.isEmpty) return const SizedBox.shrink();
   
@@ -640,7 +650,7 @@ final String checkerName = checkerData != null ? checkerData['checker_name'] : "
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
                     Text(
-                      "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
+                      "${vendor['nik'] ?? '-'} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
           if (item['vendor_transportasi'] != null)

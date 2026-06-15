@@ -1,5 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/auth_service.dart';
@@ -35,7 +33,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
   final List<String> roles = ['admin', 'supervisor', 'ppic', 'logistik', 'gudang', 'satpam'];
 
 
-// Letakkan di dalam _UserManagementPageState
 final Map<String, List<String>> roleTemplates = {
   'admin': ['Loading', 'KelayakanUnit','InputDO', 'ListDO', 'Complain', 'ListComplain','Occupancy','VendorRequest','slotAntrian'],
   'logistik': ['KelayakanUnit', 'Loading', 'ListDO','VendorRequest', 'InputDO', 'PODForm','planningAntrian', 'penilaianVendor','slotAntrian'],
@@ -43,7 +40,6 @@ final Map<String, List<String>> roleTemplates = {
   'gudang': ['Loading', 'OccupancyForm','Occupancy','DOdetailsGBJ'],
   'ppic': ['PPICForm', 'ListPPIC','Occupancy'],
   'satpam': ['PosKeluar','slotAntrian'],
-  // Tambahkan role lainnya...
 };
 
 
@@ -67,7 +63,6 @@ final Map<String, List<String>> roleTemplates = {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      // Mengambil profil internal (non-vendor)
       var query = supabase
           .from('profiles')
           .select('*, profile_privileges(privileges(name, id))')
@@ -125,7 +120,6 @@ final Map<String, List<String>> roleTemplates = {
       return;
     }
 
-    // Menampilkan Loading
     showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
 
     try {
@@ -136,11 +130,10 @@ final Map<String, List<String>> roleTemplates = {
           newRole: selectedRole!,
           newPrivilegeIds: selectedPrivilegeIds.toList(),
           newName: _nameController.text.trim(),
-          newNik: _nikController.text.trim(), // Wajib dikirim untuk sinkronisasi
+          newNik: _nikController.text.trim(), 
           newLokasi: selectedLokasi!,
         );
       } else {
-        // REGISTER via Edge Function (Mencegah Admin ter-logout)
         await AuthService.registerInternalUser(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -153,8 +146,8 @@ final Map<String, List<String>> roleTemplates = {
       }
 
       if (mounted) {
-        Navigator.pop(context); // Tutup loading
-        Navigator.pop(context); // Tutup dialog form
+        Navigator.pop(context); 
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: Colors.green, 
           content: Text(isEditing ? "Data berhasil diperbarui" : "User Berhasil Didaftarkan")
@@ -170,14 +163,13 @@ final Map<String, List<String>> roleTemplates = {
     }
   }
 
-  // Fungsi Hapus yang Disesuaikan
   Future<void> _handleDelete(String id) async {
     showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
     
     try {
       await AuthService.deleteUserPermanently(id);
       if (mounted) {
-        Navigator.pop(context); // Tutup loading
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User berhasil dihapus permanent")));
         _fetchData();
       }
@@ -199,7 +191,6 @@ final Map<String, List<String>> roleTemplates = {
     );
 
     return Scaffold(
-      //appBar: AppBar(title: const Text("Manajemen User"), backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.red.shade700,
         onPressed: () => _showAddUserDialog(),
@@ -208,7 +199,7 @@ final Map<String, List<String>> roleTemplates = {
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator()) 
         : SingleChildScrollView(
-            padding: const EdgeInsets.all(50), // Disesuaikan agar tidak terlalu lebar di web/desktop
+            padding: const EdgeInsets.all(50), 
             child: Column(
               children: [
                 TextField(
@@ -221,17 +212,16 @@ final Map<String, List<String>> roleTemplates = {
             icon: const Icon(Icons.clear),
             onPressed: () {
               setState(() {
-                _searchController.clear(); // Hapus teks di controller
-                _searchQuery = "";         // Reset query pencarian
+                _searchController.clear(); 
+                _searchQuery = "";         
               });
-              _fetchData();            // Refresh data setelah direset
+              _fetchData();           
             },
           )
         : null,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onChanged: (val) {
-    // Memanggil setState agar suffixIcon diupdate saat user mengetik
     setState(() {});
   },
                   onSubmitted: (val) { _searchQuery = val; _fetchData(); },
@@ -283,14 +273,12 @@ final Map<String, List<String>> roleTemplates = {
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
         title: Text(isEditing ? "Edit User" : "Tambah User Baru"),
-        // Mengatur lebar dialog secara proporsional terhadap layar
         content: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.6, // Lebar 60% dari layar
+          width: MediaQuery.of(context).size.width * 0.6,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Baris 1: Nama dan NIK berdampingan
                 Row(
                   children: [
                     Expanded(child: _buildTextField("Nama Lengkap *", Icons.person, _nameController)),
@@ -300,7 +288,6 @@ final Map<String, List<String>> roleTemplates = {
                 ),
                 const SizedBox(height: 15),
 
-                // Baris 2: Email dan Password berdampingan
                 Row(
                   children: [
                     Expanded(child: _buildTextField("Email Address *", Icons.email, _emailController, enabled: !isEditing)),
@@ -311,13 +298,11 @@ final Map<String, List<String>> roleTemplates = {
                   ],
                 ),
                 const SizedBox(height: 15),
-
-                // Baris 3: Lokasi dan Role berdampingan
                 Row(
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: selectedLokasi,
+                        initialValue: selectedLokasi,
                         items: lokasiOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                         onChanged: (val) => setDialogState(() => selectedLokasi = val),
                         decoration: const InputDecoration(labelText: "Lokasi *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
@@ -326,13 +311,11 @@ final Map<String, List<String>> roleTemplates = {
                     const SizedBox(width: 15),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: selectedRole,
+                        initialValue: selectedRole,
                         items: roles.map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase()))).toList(),
                        onChanged: (val) {
     if (val != null) {
-      // Panggil template otomatis saat role dipilih
       _applyRoleTemplate(val, setDialogState);
-      // Simpan role yang dipilih ke variable utama
       setDialogState(() => selectedRole = val);
     }
   },
@@ -350,25 +333,11 @@ final Map<String, List<String>> roleTemplates = {
                   const Align(alignment: Alignment.centerLeft, child: Text("Pilih Hak Akses: *", style: TextStyle(fontWeight: FontWeight.bold))),
                   const SizedBox(height: 8),
                   Container(
-                    height: 250, // Menghindari dialog terlalu panjang
+                    height: 250, 
                     decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                    // child: ListView(
-                    //   shrinkWrap: true,
-                    //   children: _masterPrivileges.map((priv) {
-                    //     return CheckboxListTile(
-                    //       title: Text(priv['name']),
-                    //       value: selectedPrivilegeIds.contains(priv['id']),
-                    //       onChanged: (val) {
-                    //         setDialogState(() {
-                    //           if (val == true) selectedPrivilegeIds.add(priv['id']);
-                    //           else selectedPrivilegeIds.remove(priv['id']);
-                    //         });
-                    //       },
-                    //     );
-                    //   }).toList(),
-                    child: Column( // Ubah jadi Column agar Select All selalu di atas
+                   
+                    child: Column( 
     children: [
-      // --- CHECKBOX SELECT ALL ---
       CheckboxListTile(
         title: const Text("PILIH SEMUA", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
         activeColor: Colors.red,
@@ -377,7 +346,6 @@ final Map<String, List<String>> roleTemplates = {
         onChanged: (val) {
           setDialogState(() {
             if (val == true) {
-              // Tambahkan semua ID dari master ke set
               for (var priv in _masterPrivileges) {
   //               print("Membandingkan DB: ${priv['name']} dengan Template: ${roleTemplates[selectedRole] ?? []}");
   // if (roleTemplates[selectedRole]?.contains(priv['name']) == true) {
@@ -392,9 +360,8 @@ final Map<String, List<String>> roleTemplates = {
           });
         },
       ),
-      const Divider(height: 1), // Garis pemisah
+      const Divider(height: 1), 
       
-      // List Privilege yang sudah ada
       Expanded(
         child: ListView(
           shrinkWrap: true,
@@ -435,44 +402,8 @@ final Map<String, List<String>> roleTemplates = {
     );
   }
 
-//   void _applyRoleTemplate(String role, Function setDialogState) {
-//   if (roleTemplates.containsKey(role)) {
-//     final templateNames = roleTemplates[role]!;
-    
-//     setDialogState(() {
-//       // Kita cari ID dari _masterPrivileges berdasarkan nama di template
-//       for (var priv in _masterPrivileges) {
-//         if (templateNames.contains(priv['name'])) {
-//           selectedPrivilegeIds.add(priv['id']);
-//         }
-//       }
-//     });
-//   }
-// }
-
-// void _applyRoleTemplate(String role, Function setDialogState) {
-//   // 1. Cek apakah role ada di template
-//   if (roleTemplates.containsKey(role)) {
-//     final List<String> templateNames = roleTemplates[role]!;
-    
-//     setDialogState(() {
-//       // 2. Kosongkan pilihan hak akses sebelumnya (opsional, tergantung kebutuhan)
-//       selectedPrivilegeIds.clear();
-
-//       // 3. Cocokkan nama di template dengan data dari _masterPrivileges
-//       for (var priv in _masterPrivileges) {
-//         // Jika nama privilege di database ada dalam daftar template
-//         if (templateNames.contains(priv['name'])) {
-//           selectedPrivilegeIds.add(priv['id']);
-//         }
-//       }
-//     });
-//   }
-// }
-
 void _applyRoleTemplate(String role, Function setDialogState) {
   if (roleTemplates.containsKey(role)) {
-    // Ubah semua nama di template ke lowercase untuk pembanding
     final List<String> templateNames = roleTemplates[role]!
         .map((e) => e.toLowerCase().trim())
         .toList();
@@ -481,7 +412,6 @@ void _applyRoleTemplate(String role, Function setDialogState) {
       selectedPrivilegeIds.clear();
 
       for (var priv in _masterPrivileges) {
-        // Bandingkan dengan versi lowercase
         String dbPrivName = priv['name'].toString().toLowerCase().trim();
         
         if (templateNames.contains(dbPrivName)) {
@@ -537,11 +467,11 @@ class UserDataSource extends DataTableSource {
       DataCell(Text(user['role']?.toString().toUpperCase() ?? '-')),
       DataCell(
       Container(
-        width: 600, // Tentukan lebar maksimal kolom Hak Akses di sini
+        width: 600, 
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
           privString.isEmpty ? '-' : privString,
-          softWrap: true, // Membuat teks turun ke bawah
+          softWrap: true, 
           style: const TextStyle(fontSize: 12),
         ),
       ),

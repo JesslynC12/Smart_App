@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/vendor/booking_antrian.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,6 +18,7 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
   final supabase = Supabase.instance.client;
   bool _isLoading = false;
   List<Map<String, dynamic>> _dataList = [];
+  List<int> _vendorDetailIds = [];
 
   DateTimeRange? _selectedDateRange;
   String _dateFilterType = "RDD";
@@ -24,12 +26,24 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
   @override
   void initState() {
     super.initState();
-    _fetchVendorOrders();
+    _loadVendorDetailIds().then((_) => _fetchVendorOrders());
+  }
+
+  Future<void> _loadVendorDetailIds() async {
+    _vendorDetailIds = await AuthService.getVendorDetailIds(widget.vendorNik);
   }
 
   Future<void> _fetchVendorOrders() async {
     try {
       setState(() => _isLoading = true);
+
+      if (_vendorDetailIds.isEmpty) {
+        setState(() {
+          _dataList = [];
+          _isLoading = false;
+        });
+        return;
+      }
 
       // 1. Query ambil dari shipping_assignments dan join ke shipping_request (Flat Table)
       var query = supabase.from('shipping_assignments').select('''
@@ -45,7 +59,7 @@ class _VendorOrderListPageState extends State<VendorOrderListPage> {
               )
             )
           ''')
-          .eq('nik', widget.vendorNik)
+          .inFilter('id_vendor_details', _vendorDetailIds)
           .eq('status_assignment', 'offered'); // Hanya yang baru ditawarkan
 
       // 2. Filter Tanggal

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -31,6 +32,7 @@ class _ScheduleSelectionPageState extends State<ScheduleSelectionPage> {
   Map<String, dynamic>? _shippingData;
   String? _selectedTime;
   List<String> _timeSlots = [];
+  List<int> _vendorDetailIds = [];
 final TextEditingController _otherReasonController = TextEditingController(); // Tambahkan ini
   // final List<String> _timeSlots = [
   //   '08:00', '09:00', '10:00', '11:00', 
@@ -78,6 +80,7 @@ Map<String, int> _bookedCounts = {};
 //     }
 //   }
 Future<void> _loadInitialData() async {
+  _vendorDetailIds = await AuthService.getVendorDetailIds(widget.vendorNik);
   await _loadData(); // 1. Muat detail shipment dulu
   if (_shippingData != null) {
     final warehouseId = _shippingData?['warehouse_id'];
@@ -234,6 +237,13 @@ Future<void> _loadData() async {
 
     final int? groupId = initialRes['group_id'];
     
+    if (_vendorDetailIds.isEmpty) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
     PostgrestFilterBuilder query = supabase.from('shipping_request').select('''
           *,
           so, 
@@ -241,7 +251,6 @@ Future<void> _loadData() async {
           shipping_assignments!inner(
             id_assignment,
             id_vendor_details,
-            nik,
             vendor_transportasi:id_vendor_details(
               qcf,
               city,
@@ -260,7 +269,7 @@ Future<void> _loadData() async {
           )
         ''');
 // Filter agar hanya mengambil assignment milik vendor yang sedang login/dipilih
-    query = query.eq('shipping_assignments.nik', widget.vendorNik);
+    query = query.inFilter('shipping_assignments.id_vendor_details', _vendorDetailIds);
 
     dynamic response;
     if (groupId != null) {
@@ -537,7 +546,7 @@ Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
           .from('shipping_assignments')
           .select('id_assignment')
           .inFilter('shipping_id', shipIds)
-          .eq('nik', widget.vendorNik)
+          .inFilter('id_vendor_details', _vendorDetailIds)
           .inFilter('status_assignment', ['offered', 'accepted']); // Kunci utama: Abaikan status reject/cancel lama!
 
       assignmentIds = (assignmentRes as List)

@@ -45,7 +45,7 @@ void _setupRealtime() {
         .from('shipping_request')
         .stream(primaryKey: ['shipping_id'])
         .listen((_) {
-          _fetchShippingRequests(); 
+          _fetchShippingRequests(isRealtimeTrigger: true);
         });
   }
 
@@ -57,149 +57,10 @@ void _setupRealtime() {
     super.dispose();
   }
 
-Future<void> _importMassalTigaTabel() async {
-  try {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-      withData: true,
-    );
-
-    if (result == null || result.files.isEmpty) return;
-
-    setState(() => _isLoading = true);
-    final bytes = result.files.first.bytes;
-    var excel = Excel.decodeBytes(bytes!);
-    var sheet = excel.tables.values.first;
-
-    Map<String, List<Map<String, dynamic>>> groupedByDO = {};
-    
-    for (int i = 1; i < sheet.maxRows; i++) {
-      var row = sheet.rows[i];
-      
-      if (row.isEmpty || row[0]?.value == null) continue;
-
-      String doNum = row[0]!.value.toString().trim();
-      if (!groupedByDO.containsKey(doNum)) groupedByDO[doNum] = [];
-
-      groupedByDO[doNum]!.add({
-        "so": row[1]?.value?.toString().trim() ?? "",
-        "cust_id": int.tryParse(row[2]?.value?.toString() ?? ""),
-        "mat_id": int.tryParse(row[3]?.value?.toString() ?? ""),
-        "qty": int.tryParse(row[4]?.value?.toString() ?? "0"),
-        "rdd": row[5]?.value?.toString(),
-        "stuffing": row[6]?.value?.toString(), 
-      });
-    }
-
-    List<String> duplicateDOs = [];
-    List<String> materialNotFoundDOs = []; 
-    int successCount = 0;
-   
-    for (var entry in groupedByDO.entries) {
-      String doNumber = entry.key;
-      var items = entry.value;
-      var firstItem = items.first;
-
-  final existingDO = await supabase
-      .from('delivery_order')
-      .select('do_id, shipping_id')
-      .eq('do_number', doNumber)
-      .maybeSingle();
-
-  if (existingDO != null) {
-   
-    duplicateDOs.add(doNumber);
-    continue;
-  }
-  
-      bool allMaterialsValid = true;
-      List<int> invalidMaterialIds = [];
-
-      for (var item in items) {
-        final int? matId = item['mat_id'];
-        if (matId == null) {
-          allMaterialsValid = false;
-          break;
-        }
-
-        final checkMat = await supabase
-            .from('material') 
-            .select('material_id')
-            .eq('material_id', matId)
-            .maybeSingle();
-
-        if (checkMat == null) {
-          allMaterialsValid = false;
-          invalidMaterialIds.add(matId);
-        }
-      }
-
-      if (!allMaterialsValid) {
-        materialNotFoundDOs.add("$doNumber (Mat: $invalidMaterialIds)");
-        continue; 
-      }
-  
-      String rddRaw = firstItem['rdd']?.toString() ?? '';
-      String stuffing = firstItem['stuffing']?.toString() ?? '';
-      if (rddRaw.contains(" ")) rddRaw = rddRaw.split(" ")[0];
-
-      final shipRes = await supabase.from('shipping_request').insert({
-        'so': firstItem['so'],
-        'status': 'waiting approval',
-        'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
-        'stuffing_date': stuffing,
-        'createdDO_by': userDisplayName ?? 'System Import',
-      }).select().single();
-
-      final int newShipId = shipRes['shipping_id'];
-
-      final doRes = await supabase.from('delivery_order').insert({
-        'shipping_id': newShipId,
-        'do_number': doNumber,
-        'customer_id': firstItem['cust_id'],
-      }).select().single();
-
-      final int newDoId = doRes['do_id'];
-
-      List<Map<String, dynamic>> detailsToInsert = items.map((item) => {
-        'do_id': newDoId,
-        'material_id': item['mat_id'],
-        'qty': item['qty'],
-      }).toList();
-
-      await supabase.from('do_details').insert(detailsToInsert);
-      successCount++;
-    }
-
-    _fetchShippingRequests();
-   
-    if (duplicateDOs.isNotEmpty || materialNotFoundDOs.isNotEmpty) {
-      String feedbackMessage = "Berhasil import $successCount data. \n";
-      
-      if (duplicateDOs.isNotEmpty) {
-        feedbackMessage += "⚠️ DO Duplikat (Dilewati): ${duplicateDOs.join(', ')}\n";
-      }
-      if (materialNotFoundDOs.isNotEmpty) {
-        feedbackMessage += "❌ Material Tidak Ditemukan (Dilewati): ${materialNotFoundDOs.join(', ')}";
-      }
-
-      _showSnackBar(feedbackMessage.trim(), Colors.orange.shade900);
-    } else {
-      _showSnackBar("Berhasil import massal semua data tanpa kendala!", Colors.green);
-    }
-  } catch (e) {
-    debugPrint("Error: $e");
-    _showSnackBar("Gagal: $e", Colors.red);
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-
-Future<void> _fetchShippingRequests() async {
+Future<void> _fetchShippingRequests({bool isRealtimeTrigger = false}) async {
   try {
    
-    if (_allRequests.isEmpty) {
+    if (_allRequests.isEmpty && !isRealtimeTrigger) {
       setState(() => _isLoading = true);
     }
     final response = await supabase
@@ -1771,6 +1632,144 @@ Future<void> _exportToExcel() async {
   } finally {
     await Future.delayed(const Duration(seconds: 3));
     _globalExportLock = false;
+  }
+}
+Future<void> _importMassalTigaTabel() async {
+  try {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final bytes = result.files.first.bytes;
+    var excel = Excel.decodeBytes(bytes!);
+    var sheet = excel.tables.values.first;
+
+    Map<String, List<Map<String, dynamic>>> groupedByDO = {};
+    
+    for (int i = 1; i < sheet.maxRows; i++) {
+      var row = sheet.rows[i];
+      
+      if (row.isEmpty || row[0]?.value == null) continue;
+
+      String doNum = row[0]!.value.toString().trim();
+      if (!groupedByDO.containsKey(doNum)) groupedByDO[doNum] = [];
+
+      groupedByDO[doNum]!.add({
+        "so": row[1]?.value?.toString().trim() ?? "",
+        "cust_id": int.tryParse(row[2]?.value?.toString() ?? ""),
+        "mat_id": int.tryParse(row[3]?.value?.toString() ?? ""),
+        "qty": int.tryParse(row[4]?.value?.toString() ?? "0"),
+        "rdd": row[5]?.value?.toString(),
+        "stuffing": row[6]?.value?.toString(), 
+      });
+    }
+
+    List<String> duplicateDOs = [];
+    List<String> materialNotFoundDOs = []; 
+    int successCount = 0;
+   
+    for (var entry in groupedByDO.entries) {
+      String doNumber = entry.key;
+      var items = entry.value;
+      var firstItem = items.first;
+
+  final existingDO = await supabase
+      .from('delivery_order')
+      .select('do_id, shipping_id')
+      .eq('do_number', doNumber)
+      .maybeSingle();
+
+  if (existingDO != null) {
+   
+    duplicateDOs.add(doNumber);
+    continue;
+  }
+  
+      bool allMaterialsValid = true;
+      List<int> invalidMaterialIds = [];
+
+      for (var item in items) {
+        final int? matId = item['mat_id'];
+        if (matId == null) {
+          allMaterialsValid = false;
+          break;
+        }
+
+        final checkMat = await supabase
+            .from('material') 
+            .select('material_id')
+            .eq('material_id', matId)
+            .maybeSingle();
+
+        if (checkMat == null) {
+          allMaterialsValid = false;
+          invalidMaterialIds.add(matId);
+        }
+      }
+
+      if (!allMaterialsValid) {
+        materialNotFoundDOs.add("$doNumber (Mat: $invalidMaterialIds)");
+        continue; 
+      }
+  
+      String rddRaw = firstItem['rdd']?.toString() ?? '';
+      String stuffing = firstItem['stuffing']?.toString() ?? '';
+      if (rddRaw.contains(" ")) rddRaw = rddRaw.split(" ")[0];
+
+      final shipRes = await supabase.from('shipping_request').insert({
+        'so': firstItem['so'],
+        'status': 'waiting approval',
+        'rdd': DateTime.tryParse(rddRaw)?.toIso8601String(),
+        'stuffing_date': stuffing,
+        'createdDO_by': userDisplayName ?? 'System Import',
+      }).select().single();
+
+      final int newShipId = shipRes['shipping_id'];
+
+      final doRes = await supabase.from('delivery_order').insert({
+        'shipping_id': newShipId,
+        'do_number': doNumber,
+        'customer_id': firstItem['cust_id'],
+      }).select().single();
+
+      final int newDoId = doRes['do_id'];
+
+      List<Map<String, dynamic>> detailsToInsert = items.map((item) => {
+        'do_id': newDoId,
+        'material_id': item['mat_id'],
+        'qty': item['qty'],
+      }).toList();
+
+      await supabase.from('do_details').insert(detailsToInsert);
+      successCount++;
+    }
+
+    _fetchShippingRequests();
+   
+    if (duplicateDOs.isNotEmpty || materialNotFoundDOs.isNotEmpty) {
+      String feedbackMessage = "Berhasil import $successCount data. \n";
+      
+      if (duplicateDOs.isNotEmpty) {
+        feedbackMessage += "⚠️ DO Duplikat (Dilewati): ${duplicateDOs.join(', ')}\n";
+      }
+      if (materialNotFoundDOs.isNotEmpty) {
+        feedbackMessage += "❌ Material Tidak Ditemukan (Dilewati): ${materialNotFoundDOs.join(', ')}";
+      }
+
+      _showSnackBar(feedbackMessage.trim(), Colors.orange.shade900);
+    } else {
+      _showSnackBar("Berhasil import massal semua data tanpa kendala!", Colors.green);
+    }
+  } catch (e) {
+    debugPrint("Error: $e");
+    _showSnackBar("Gagal: $e", Colors.red);
+  } finally {
+    setState(() => _isLoading = false);
   }
 }
 

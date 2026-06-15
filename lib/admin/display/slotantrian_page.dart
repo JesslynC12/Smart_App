@@ -165,11 +165,9 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
           .from('shipping_assignments')
           .select('''
             jam_booking,
-            nik,
             status_assignment,
             no_polisi,
-            vendor_transportasi(type_unit),
-            master_vendor(vendor_name),
+            vendor_transportasi(nik, vendor_name, type_unit),
             request:shipping_id(
               shipping_id,
               group_id,
@@ -207,7 +205,7 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
         if (!uniqueVehicles[key]!.contains(vehicleKey)) {
           uniqueVehicles[key]!.add(vehicleKey);
 
-          String vendorName = row['master_vendor']?['vendor_name'] ?? '-';
+          String vendorName = row['vendor_transportasi']?['vendor_name'] ?? '-';
           List doList = request['delivery_order'] ?? [];
           String doNumbers = doList.map((e) => e['do_number']).join(", ");
           String customers = doList.map((e) => e['customer']?['customer_name'] ?? '-').toSet().join(", ");

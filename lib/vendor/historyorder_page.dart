@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/auth/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -15,11 +16,16 @@ class _VendorOrderHistoryPageState extends State<VendorOrderHistoryPage> {
   final supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<dynamic> _historyData = [];
+  List<int> _vendorDetailIds = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchHistory();
+    _loadVendorDetailIds().then((_) => _fetchHistory());
+  }
+
+  Future<void> _loadVendorDetailIds() async {
+    _vendorDetailIds = await AuthService.getVendorDetailIds(widget.vendorNik);
   }
 
 //   Future<void> _fetchHistory() async {
@@ -100,6 +106,14 @@ class _VendorOrderHistoryPageState extends State<VendorOrderHistoryPage> {
 Future<void> _fetchHistory() async {
   try {
     setState(() => _isLoading = true);
+
+    if (_vendorDetailIds.isEmpty) {
+      setState(() {
+        _historyData = [];
+        _isLoading = false;
+      });
+      return;
+    }
     
     final response = await supabase
         .from('shipping_assignments')
@@ -118,7 +132,7 @@ Future<void> _fetchHistory() async {
             )
           )
         ''')
-        .eq('nik', widget.vendorNik)
+        .inFilter('id_vendor_details', _vendorDetailIds)
         .inFilter('status_assignment', ['completed', 'rejected', 'no response', 'cancel booking'])
         .order('responded_at', ascending: false);
 

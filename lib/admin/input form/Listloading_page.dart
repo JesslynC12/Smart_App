@@ -59,9 +59,9 @@ void dispose() {
     setState(() {
       _filteredPlanningList = _planningList.where((item) {
 
-        final vendor = item['master_vendor'] ?? {};
+        final vendor = item['vendor_transportasi'] ?? {};
         final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
-        final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
+        final String nikVendor = (vendor['nik'] ?? '').toString().toLowerCase();
         final request = item['request'] ?? {};
         final List dos = request['delivery_order'] as List? ?? [];
         
@@ -101,13 +101,14 @@ Future<void> _fetchPlanningData() async {
         .from('shipping_assignments')
         .select('''
           *,
-          master_vendor:nik (vendor_name),
           vendor_transportasi:id_vendor_details (
-        qcf,
-        city,
-        area,
-        type_unit
-      ), 
+            nik,
+            vendor_name,
+            qcf,
+            city,
+            area,
+            type_unit
+          ), 
           loading:loading (
             id_loading,
             loading_at,
@@ -426,7 +427,7 @@ Future<void> _selectSingleDate() async {
 
 Widget _buildPlanningCard(Map<String, dynamic> item) {
   final Map<String, dynamic> request = item['request'] ?? {};
-  final vendor = item['master_vendor'] ?? {};
+  final vendor = item['vendor_transportasi'] ?? {};
 //final Map<String, dynamic>? loadingInfo = item['loading_info'];
   if (request.isEmpty) return const SizedBox.shrink();
   
@@ -532,7 +533,7 @@ Widget _buildPlanningCard(Map<String, dynamic> item) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
                     Text(
-                      "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
+                      "${vendor['nik'] ?? '-'} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
           if (item['vendor_transportasi'] != null)

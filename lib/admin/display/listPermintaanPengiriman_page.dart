@@ -130,7 +130,7 @@ Future<void> _fetchWarehouse() async {
             catatan,
             reason_rejected,
             cancelled_reason,
-             master_vendor(vendor_name)
+            vendor_transportasi:id_vendor_details(nik, vendor_name)
           )
           ''').eq('status', 'waiting assign vendor delivery')
          .or(
@@ -174,7 +174,7 @@ final List assignments = originalRow['shipping_assignments'] as List? ?? [];
 
   if (failedStatuses.contains(statusAss)) {
       
-          String vName = a['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          String vName = a['vendor_transportasi']?['vendor_name'] ?? "Unknown Vendor";
        
     if (statusAss == 'rejected unit') {
       a['reject_type'] = 'INSPEKSI';
@@ -577,7 +577,7 @@ final List rejectHistory = item['unique_reject_list'] ?? [];
         ),
         const SizedBox(height: 6),
         ...rejectHistory.map((rej) {
-          String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+          String vendorName = rej['vendor_transportasi']?['vendor_name'] ?? "Unknown Vendor";
           
 String typeText = "";
 String status = rej['status_assignment']?.toString().toLowerCase() ?? "";

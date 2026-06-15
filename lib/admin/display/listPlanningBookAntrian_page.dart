@@ -128,8 +128,7 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
           .from('shipping_assignments')
           .select('''
             *,
-            master_vendor:nik (vendor_name), 
-            vendor_transportasi:id_vendor_details (qcf, city, area, type_unit),
+            vendor_transportasi:id_vendor_details (nik, vendor_name, qcf, city, area, type_unit),
             loading:loading (loading_at, loading_by),
             request:shipping_id (
               shipping_id, so, rdd, status, stuffing_date, group_id, storage_location, is_dedicated,
@@ -167,7 +166,7 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
             : "SINGLE_${req['shipping_id']}";
 
         String currentStatus = item['status_assignment']?.toString().toLowerCase() ?? "";
-        String currentVendorName = item['master_vendor']?['vendor_name'] ?? 'Unknown Vendor';
+        String currentVendorName = item['vendor_transportasi']?['vendor_name'] ?? 'Unknown Vendor';
         String currentReason = 'Tanpa Alasan';
         if (currentStatus.contains('rejected')) {
           currentReason = item['reason_rejected'] ?? 'Tanpa Alasan Rejected';
@@ -273,9 +272,9 @@ Future<void> _fetchPlanningData({bool showGlobalLoading = false}) async {
     setState(() {
       _filteredPlanningList = _planningList.where((item) {
   
-        final vendor = item['master_vendor'] ?? {};
+        final vendor = item['vendor_transportasi'] ?? {};
         final String vendorName = (vendor['vendor_name'] ?? '').toString().toLowerCase();
-        final String nikVendor = (item['nik'] ?? '').toString().toLowerCase();
+        final String nikVendor = (vendor['nik'] ?? '').toString().toLowerCase();
 
         final request = item['request'] ?? {};
         final List dos = request['delivery_order'] as List? ?? [];
@@ -506,7 +505,7 @@ Future<void> _selectSingleDate() async {
 
 Widget _buildPlanningCard(Map<String, dynamic> item) {
   final Map<String, dynamic> request = item['request'] ?? {};
-  final vendor = item['master_vendor'] ?? {};
+  final vendor = item['vendor_transportasi'] ?? {};
 //final Map<String, dynamic> requestData = item['request'] ?? {};
 final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
   final loadingData = item['loading'] is List 
@@ -632,7 +631,7 @@ final String requestStatus = request['status']?.toString().toLowerCase() ?? "";
           Text(
             status == 'rejected' || status == 'no response' || status == 'cancel booking'
                 ? "Belum Ada Vendor"
-                : "${item['nik']} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
+                : "${vendor['nik'] ?? '-'} - ${vendor['vendor_name'] ?? 'Unknown Vendor'}",
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
           if (item['vendor_transportasi'] != null)
@@ -953,7 +952,7 @@ void _openEditTab(Map<String, dynamic> item) {
       assignmentId:item['id_assignment'],
       shippingId: request['shipping_id'],
       oldTime: item['jam_booking'],
-      vendorNik: item['nik'],
+      vendorNik: item['vendor_transportasi']?['nik'] ?? '',
       onSuccess: () {
         _fetchPlanningData(); 
         _showSnackBar("Jadwal Berhasil Diperbarui", Colors.green);

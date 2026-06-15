@@ -49,7 +49,6 @@ Future<void> _exportMaterialToExcel() async {
     Sheet sheetObject = excel['Master_Material'];
     excel.delete('Sheet1');
 
-    // --- 1. HEADER ---
     List<CellValue> headers = [
       TextCellValue('No Mat'),
       TextCellValue('Deskripsi Material'),
@@ -63,7 +62,6 @@ Future<void> _exportMaterialToExcel() async {
     ];
     sheetObject.appendRow(headers);
 
-    // --- 2. ISI DATA ---
     for (var mat in _materials) {
       final whData = mat['warehouse'] as Map<String, dynamic>?;
         final String whName = whData?['warehouse_name'] ?? "-";
@@ -87,7 +85,6 @@ var fileBytes = excel.save(fileName: fileName);
     if (kIsWeb) {
       final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       final url = html.Url.createObjectUrlFromBlob(content);
-     // html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
       html.Url.revokeObjectUrl(url);
       _showSnackBar("Download dimulai...", Colors.green);
     } else {
@@ -130,24 +127,20 @@ dynamic whValue = row[8]?.value;
       if (whValue != null) {
         String whString = whValue.toString().trim();
         
-        // Coba parsing jika user langsung memasukkan angka ID di Excel
         int? inputId = int.tryParse(whString);
         
         if (inputId != null) {
-          // Jika berupa angka, cek apakah ID tersebut ada di database lokal (_warehouseList)
           bool idExists = _warehouseList.any((w) => w['warehouse_id'] == inputId);
           if (idExists) {
             matchedWarehouseId = inputId;
           }
         } else {
-          // Jika berupa teks (misal: "COOLROOM"), cari yang nama gudangnya mirip/sama (case-insensitive)
           try {
             final foundWh = _warehouseList.firstWhere(
               (w) => w['warehouse_name'].toString().toLowerCase() == whString.toLowerCase(),
             );
             matchedWarehouseId = foundWh['warehouse_id'] as int?;
           } catch (_) {
-            // Jika tidak ditemukan nama yang cocok, matchedWarehouseId tetap null
             debugPrint("Warehouse dengan nama '$whString' tidak ditemukan di master data.");
           }
         }
@@ -234,7 +227,6 @@ Future<void> _initializeData() async {
     }
   }
 
-  // --- DELETE DATA ---
   Future<void> _deleteMaterial(int id) async {
     try {
       await supabase.from('material').delete().match({'material_id': id});
@@ -257,7 +249,6 @@ Future<void> _initializeData() async {
     }
   }
 
-  // --- SAVE / EDIT DATA ---
   Future<void> _saveData(
     bool isEdit,
     TextEditingController id,
@@ -305,7 +296,6 @@ Future<void> _initializeData() async {
     }
   }
 
-  // --- FORM DIALOG ---
   void _showFormDialog([Map<String, dynamic>? material]) {
     final bool isEdit = material != null;
     
@@ -332,11 +322,11 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder( // Gunakan StatefulBuilder agar UI dropdown terupdate saat dipilih
+      builder: (context) => StatefulBuilder( 
         builder: (context, setDialogState) {
           return AlertDialog(
             title: Text(isEdit ? 'Edit Material' : 'Tambah Material'),
-            content: SizedBox( // <-- Tambahkan SizedBox di sini
+            content: SizedBox( 
           width: 500,
             child: SingleChildScrollView(
               child: Column(
@@ -346,12 +336,10 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
                   _buildTextField(nameController, 'Material Deskripsi *', f2, f3, true),
                   _buildTextField(boxController, 'Box/Pallet *', f3, f4, true, isNumber: true),
                   
-                  // DROPDOWN: Marketing Division
                   _buildDropdownField('Marketing Div *', mDivController, mDivOptions, f4, (val) {
                     setDialogState(() => mDivController.text = val ?? '');
                   }),
 
-                  // DROPDOWN: Div Description
                   _buildDropdownField('Div Deskripsi *', divDescController, divDescOptions, f5, (val) {
                     setDialogState(() => divDescController.text = val ?? '');
                   }),
@@ -359,7 +347,6 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
                   _buildTextField(gwController, 'Gross Weight (GW) *', f6, f7, true, isDecimal: true),
                   _buildTextField(nwController, 'Net Weight (NW) *', f7, f8, true, isDecimal: true),
 
-                  // DROPDOWN: Material Type
                   _buildDropdownField('Type *', typeController, typeOptions, f8, (val) {
                     setDialogState(() => typeController.text = val ?? '');
                   }),
@@ -367,7 +354,7 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
                   Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: DropdownButtonFormField<int>(
-                        value: _warehouseList.any((w) => w['warehouse_id'] == selectedWarehouseId) 
+                        initialValue: _warehouseList.any((w) => w['warehouse_id'] == selectedWarehouseId) 
                             ? selectedWarehouseId 
                             : null,
                         focusNode: f9,
@@ -395,8 +382,8 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.red.shade700, // Warna background tombol
-      foregroundColor: Colors.white,       // Warna teks/icon tombol
+      backgroundColor: Colors.red.shade700, 
+      foregroundColor: Colors.white,       
     ),
                 onPressed: () => _validateAndSave(isEdit, idController, nameController, boxController, mDivController, divDescController, gwController, nwController, typeController, selectedWarehouseId),
                 child: const Text("Simpan"),
@@ -417,8 +404,6 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
     _saveData(isEdit, id, name, box, mDiv, div, gw, nw, type,warehouseId);
   }
 
-  // --- HELPER WIDGETS ---
-
   Widget _buildTextField(TextEditingController controller, String label, FocusNode current, FocusNode? next, bool enabled, {bool isNumber = false, bool isDecimal = false, bool isLast = false, VoidCallback? onSave}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -430,8 +415,8 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
         inputFormatters: isNumber 
           ? [
               isDecimal 
-                ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')) // Angka & Titik (Desimal)
-                : FilteringTextInputFormatter.digitsOnly, // Hanya Angka Bulat
+                ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                : FilteringTextInputFormatter.digitsOnly, 
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
             ] 
           : null,
@@ -457,7 +442,7 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: options.contains(controller.text) ? controller.text : null,
+        initialValue: options.contains(controller.text) ? controller.text : null,
         focusNode: focusNode,
         decoration: InputDecoration(
           labelText: label,
@@ -485,44 +470,12 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
     );
 
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Master Material', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(50),
               child: Column(
                 children: [
-                  // ValueListenableBuilder<TextEditingValue>(
-                  //   valueListenable: _searchController,
-                  //   builder: (context, value, child) {
-                  //     return TextField(
-                  //       controller: _searchController,
-                  //       decoration: InputDecoration(
-                  //         labelText: "Cari Deskripsi Material...",
-                  //         prefixIcon: const Icon(Icons.search),
-                  //         suffixIcon: value.text.isNotEmpty
-                  //             ? IconButton(
-                  //                 icon: const Icon(Icons.clear),
-                  //                 onPressed: () {
-                  //                   _searchController.clear();
-                  //                   _searchQuery = "";
-                  //                   _fetchData();
-                  //                 },
-                  //               )
-                  //             : null,
-                  //         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  //       ),
-                  //       onSubmitted: (val) {
-                  //         _searchQuery = val;
-                  //         _fetchData();
-                  //       },
-                  //     );
-                  //   },
-                  // ),
                   Row(
   children: [
     // KOLOM PENCARIAN
@@ -577,7 +530,6 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
     ),
   ],
 ),
-
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -620,9 +572,9 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
   return Container(
     height: 55,
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: IconButton(
       onPressed: onPressed,
@@ -633,7 +585,6 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
 }
 }
 
-// --- DATA SOURCE CLASS ---
 class MaterialDataSource extends DataTableSource {
   final List<Map<String, dynamic>> data;
   final BuildContext context;
@@ -680,8 +631,8 @@ final warehouseData = mat['warehouse'] as Map<String, dynamic>?;
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
           ElevatedButton(
     style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.red.shade700, // Warna background tombol
-      foregroundColor: Colors.white,       // Warna teks/icon tombol
+      backgroundColor: Colors.red.shade700, 
+      foregroundColor: Colors.white,     
     ),
             onPressed: () {
               onDelete(id);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -17,17 +18,47 @@ class _ComplainConfirmPageState extends State<ComplainConfirmPage> {
   
   bool _isLoading = false;
   bool _showHistory = false; // Sebagai ganti ToggleSwitch JavaFX
-  Set<int> _selectedIds = {}; // Menyimpan ID komplain yang dicentang
+  Set<int> _selectedIds = {};
+RealtimeChannel? _complainChannel;
 
   @override
   void initState() {
     super.initState();
     _loadComplainData();
+    _subscribeToComplainRealtime();
+  }
+  
+  @override
+  void dispose() {
+    // Pastikan untuk menghapus subscription saat halaman ditutup agar tidak memory leak
+    if (_complainChannel != null) {
+      supabase.removeChannel(_complainChannel!);
+    }
+    _searchController.dispose();
+    super.dispose();
   }
 
-  // Mengambil data dari RPC Supabase
-  Future<void> _loadComplainData() async {
-    setState(() => _isLoading = true);
+  // Fungsi untuk mendengarkan perubahan tabel secara realtime
+  void _subscribeToComplainRealtime() {
+    _complainChannel = supabase
+        .channel('public:complain')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all, // Dengarkan INSERT, UPDATE, dan DELETE
+          schema: 'public',
+          table: 'complain',
+          callback: (payload) {
+            // Jika ada perubahan data di database, panggil ulang fungsi RPC
+            _loadComplainData(isRealtimeTrigger: true);
+          },
+        );
+        
+    _complainChannel?.subscribe();
+  }
+
+  Future<void> _loadComplainData({bool isRealtimeTrigger = false}) async {
+    if (!isRealtimeTrigger) {
+      setState(() => _isLoading = true);
+    }
     try {
       final response = await supabase.rpc('get_complain_confirm_data', params: {
         'p_show_history': _showHistory,
@@ -81,7 +112,6 @@ class _ComplainConfirmPageState extends State<ComplainConfirmPage> {
       }
 
       _showSnackbar("Sukses! Data komplain berhasil di-$newStatus.");
-      _loadComplainData(); // Muat ulang data otomatis
     } catch (e) {
       _showSnackbar("Gagal memproses data: $e", isError: true);
     } finally {

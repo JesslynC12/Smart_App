@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/vendor/booking_antrian.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +18,7 @@ class _VendorOnProcessPageState extends State<VendorOnProcessPage> {
   bool _isLoading = false;
   List<Map<String, dynamic>> _dataList = [];
   List<Map<String, dynamic>> _filteredPlanningList = [];
+  List<int> _vendorDetailIds = [];
 
   final TextEditingController _searchController = TextEditingController();
   // Variabel Filter sesuai style BookingPlanning
@@ -28,8 +30,14 @@ RealtimeChannel? _onProcessChannel;
   void initState() {
     super.initState();
     _searchController.addListener(_filterDataBySearch);
-    _fetchOngoingOrders();
-    _initRealtimeStreams();
+    _loadVendorDetailIds().then((_) {
+      _fetchOngoingOrders();
+      _initRealtimeStreams();
+    });
+  }
+
+  Future<void> _loadVendorDetailIds() async {
+    _vendorDetailIds = await AuthService.getVendorDetailIds(widget.vendorNik);
   }
 @override
   void dispose() {
@@ -192,6 +200,8 @@ RealtimeChannel? _onProcessChannel;
 //   }
 // }
 void _initRealtimeStreams() {
+  if (_vendorDetailIds.isEmpty) return;
+
   _onProcessChannel = supabase
       .channel('vendor_on_process_realtime')
       .onPostgresChanges(
@@ -199,9 +209,9 @@ void _initRealtimeStreams() {
         schema: 'public',
         table: 'shipping_assignments',
         filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'nik',
-          value: widget.vendorNik,
+          type: PostgresChangeFilterType.inFilter,
+          column: 'id_vendor_details',
+          value: _vendorDetailIds,
         ),
         callback: (payload) {
           debugPrint("Realtime Update pada VendorOnProcessPage Terdeteksi!");
@@ -237,6 +247,16 @@ void _filterDataBySearch() {
 Future<void> _fetchOngoingOrders() async {
   try {
     setState(() => _isLoading = true);
+
+    if (_vendorDetailIds.isEmpty) {
+      setState(() {
+        _dataList = [];
+        _filteredPlanningList = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
     String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
     final response = await supabase.from('shipping_assignments').select('''
@@ -260,7 +280,7 @@ Future<void> _fetchOngoingOrders() async {
             )
           )
         ''')
-        .eq('nik', widget.vendorNik)
+        .inFilter('id_vendor_details', _vendorDetailIds)
         .inFilter('status_assignment', ['accepted', 'check in',  'loading','kelayakan unit','weighbridge','keluar','completed'])
         .not('jam_booking', 'is', null)
         .eq('shipping_request.$_dateFilterType', formattedDate)

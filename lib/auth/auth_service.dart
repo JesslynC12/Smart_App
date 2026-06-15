@@ -691,6 +691,19 @@ try {
   static Future<List<Map<String, dynamic>>> getAvailablePrivileges() async {
     return await _supabase.from('privileges').select('id, name').order('id');
   }
+
+  /// Mengambil semua [id] dari tabel vendor_transportasi yang dimiliki oleh vendor
+  /// dengan NIK tertentu. Digunakan untuk filter shipping_assignments setelah
+  /// kolom redundan nik dihapus dari shipping_assignments.
+  static Future<List<int>> getVendorDetailIds(String nik) async {
+    final response = await _supabase
+        .from('vendor_transportasi')
+        .select('id')
+        .eq('nik', nik);
+    return (response as List)
+        .map((e) => e['id'] as int)
+        .toList();
+  }
  
  
   // Tambahkan di dalam class AuthService

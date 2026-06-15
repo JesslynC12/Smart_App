@@ -58,11 +58,24 @@ Future<void> _searchDO() async {
 
     final assignmentData = await Supabase.instance.client
         .from('shipping_assignments')
-        .select('*, checker(checker_name), master_vendor(nik, vendor_name)')
+        .select('''
+      *, 
+      vendor_transportasi:id_vendor_details(nik, vendor_name),
+      loading(
+        checker(checker_name)
+      )
+    ''')
         .eq('shipping_id', shippingId)
         .limit(1);
 
     final assignment = (assignmentData as List).isNotEmpty ? (assignmentData as List)[0] : null;
+
+String checkerName = "-";
+if (assignment?['loading'] != null && (assignment!['loading'] as List).isNotEmpty) {
+  // Mengambil data loading pertama yang tersedia
+  final firstLoading = assignment['loading'][0]; 
+  checkerName = firstLoading['checker']?['checker_name'] ?? "-";
+}
 
     if ((allDos as List).isEmpty) {
       _showSnackBar("Data detail tidak ditemukan!");
@@ -98,14 +111,14 @@ Future<void> _searchDO() async {
         "tahun": assignment?['tahun_kendaraan'] ?? "-",
         "supir": assignment?['nama_supir'] ?? "-",
         "hp_supir": assignment?['no_hp_supir'] ?? "-",
-        "vendor": assignment?['master_vendor'] != null 
-            ? "${assignment['master_vendor']['nik']} - ${assignment['master_vendor']['vendor_name']}"
+        "vendor": assignment?['vendor_transportasi'] != null 
+            ? "${assignment['vendor_transportasi']['nik']} - ${assignment['vendor_transportasi']['vendor_name']}"
             : "-",
         "customer": customerList.toSet().join(", "),
         "stuffing": (allDos as List)[0]['shipping_request']?['stuffing_date'] ?? "-",
         "rdd": (allDos as List)[0]['shipping_request']?['rdd'] ?? "-",
         "gudang": (allDos as List)[0]['shipping_request']?['warehouse']?['warehouse_name'] ?? "-",
-        "checker": assignment?['checker']?['checker_name'] ?? "-",
+       "checker": checkerName,
         "jam_in": assignment?['checkIn_at'] != null 
             ? DateFormat('HH:mm').format(DateTime.parse(assignment['checkIn_at'])) : "-",
         "jam_out": assignment?['keluar_at'] != null 

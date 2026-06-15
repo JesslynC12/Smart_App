@@ -18,8 +18,7 @@ class _AssignVendorPageState extends State<AssignVendorPage> {
   final supabase = Supabase.instance.client;
   StreamSubscription? _realtimeSubscription;
   bool _isLoading = true;
-  // Di dalam class _AssignVendorPageState
-String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-dedicated'
+String? _selectedDedicated; 
 
   List<Map<String, dynamic>> _recommendations = [];
   List<Map<String, dynamic>> _allVendors = [];
@@ -27,7 +26,6 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
   Map<String, dynamic>? _shippingData;
   List<String> targetCities = [];
 
-  // 🔥 VARIABEL OPTIMASI (Agar tidak lemot)
   double _tnwTotal = 0;
   double _qtyTotal = 0;
   double _nwTotal = 0;
@@ -41,14 +39,11 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
   }
 
   void _setupRealtime() {
-    // Memantau perubahan hanya pada baris data yang sedang dibuka
     _realtimeSubscription = supabase
         .from('shipping_request')
         .stream(primaryKey: ['shipping_id'])
         .eq('shipping_id', widget.shippingId)
         .listen((data) {
-          // Jika ada perubahan di database (misal status berubah atau data diedit admin lain)
-          // panggil _loadData() untuk memperbarui kalkulasi NW/TNW dan rekomendasi vendor.
           if (data.isNotEmpty) {
             _loadData();
           }
@@ -57,7 +52,7 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
 
   @override
   void dispose() {
-    _realtimeSubscription?.cancel(); // WAJIB: mematikan stream saat keluar halaman
+    _realtimeSubscription?.cancel();
     super.dispose();
   }
 
@@ -65,14 +60,6 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
     try {
       setState(() => _isLoading = true);
 
-      // // 1. Ambil group_id
-      // final header = await supabase
-      //     .from('shipping_request')
-      //     .select('group_id')
-      //     .eq('shipping_id', widget.shippingId)
-      //     .single();
-
-// 1. Ambil data shipping utama
     final response = await supabase
         .from('shipping_request')
         .select('''
@@ -103,30 +90,9 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
         .eq('shipping_id', widget.shippingId)
         .single();
 
-      // final groupId = header['group_id'];
-      // dynamic rawData;
-
-      // // 2. Ambil data dengan Join lengkap
-      // String queryStr = '''
-      //   *,
-      //   delivery_order(
-      //     *,
-      //     customer(*),
-      //     do_details(
-      //       qty,
-      //       material:material_id (
-      //         material_id,
-      //         material_name,
-      //         net_weight
-      //       )
-      //     )
-      //   )
-      // ''';
-
       final groupId = response['group_id'];
     List<Map<String, dynamic>> shippingList = [];
 
-    // 2. Jika grup, ambil semua anggota grup
     if (groupId != null) {
       final groupData = await supabase
           .from('shipping_request')
@@ -147,11 +113,10 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
             reason_rejected,
               catatan,
             id_vendor_details,
-             master_vendor:nik (
-        vendor_name
-        ),
-            vendor_transportasi:id_vendor_details(
-                id
+             vendor_transportasi:id_vendor_details(
+                id,
+                nik,
+                vendor_name
                 )
           )
           ''')
@@ -161,18 +126,6 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
       shippingList = [response];
     }
 
-    // // --- Ambil Riwayat Reject Unik dari seluruh grup ---
-    // List<Map<String, dynamic>> combinedRejectHistory = [];
-    // for (var ship in shippingList) {
-    //   final rejects = ship['shipping_assignments'] as List? ?? [];
-    //   for (var r in rejects) {
-    //     if (r['status_assignment'] == 'rejected') {
-    //       combinedRejectHistory.add(r);
-    //     }
-    //   }
-    // }
-    // --- Ambil Riwayat Reject Unik dari seluruh grup ---
-    // Gunakan Map untuk memastikan vendor_name bersifat unik
     List allDOs = [];
       List<String> cities = [];
       List<String> areas = [];
@@ -191,8 +144,6 @@ String? _selectedDedicated; // Untuk menyimpan pilihan 'dedicated' atau 'non-ded
     // Tambahkan 'no response' ke dalam daftar status yang dipantau
     const failedStatuses = ['rejected', 'rejected unit', 'cancel booking', 'no response'];
     if (failedStatuses.contains(statusAss)) {
-      // Gunakan ID Vendor Details + Status sebagai Key agar unik 
-      // namun tetap bisa menampilkan riwayat berbeda dari vendor yang sama
       String vendorKey = "${r['id_vendor_details']}_$statusAss";
       uniqueRejects[int.tryParse(vendorKey.split('_')[0]) ?? 0] = r;
           // String vendorName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
@@ -333,12 +284,8 @@ String storageLocDisplay = whData != null
         supabase
             .from('vendor_transportasi')
            .select('''
-      *,
-      master_vendor:nik (
-        vendor_name
-      )
+      
     ''')
-            //.range(0, 4999)
             .order('vendor_name', ascending: true)
       ]);
 
@@ -412,12 +359,6 @@ if (mounted) {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      // appBar: AppBar(
-      //   title: const Text("Assign Transport Vendor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      //   elevation: 0,
-      // ),
       child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.red))
           : Column(
@@ -831,8 +772,7 @@ Padding(
           compareFn: (item, sItem) => item['id'] == sItem['id'],
           filterFn: (vendor, filter) {
             final String query = filter.toLowerCase().trim();
-            //final String name = (vendor['vendor_name'] ?? "").toString().toLowerCase().trim();
-            final String name = (vendor['master_vendor']?['vendor_name'] ?? "").toString().toLowerCase().trim();
+            final String name = (vendor['vendor_name'] ?? "").toString().toLowerCase().trim();
             final String city = (vendor['city'] ?? "").toString().toLowerCase();
             final String area = (vendor['area'] ?? "").toString().toLowerCase();
             final String qcf = (vendor['jenis_qcf'] ?? "").toString().toLowerCase();
@@ -847,7 +787,7 @@ Padding(
            warehouse.contains(query);
 
           },
-          itemAsString: (v) => "${v['master_vendor']?['vendor_name'] ?? '-'} (${v['type_unit']}) - ${v['city']} [Area: ${v['area'] ?? '-'}, QCF: ${v['jenis_qcf'] ?? '-'}]",
+          itemAsString: (v) => "${v['vendor_name']} (${v['type_unit']}) - ${v['city']} [Area: ${v['area'] ?? '-'}, QCF: ${v['jenis_qcf'] ?? '-'}]",
           selectedItem: isFromRec ? null : _selectedVendor,
           enabled: _selectedVendor == null || !isFromRec,
           onChanged: (val) => setState(() => _selectedVendor = val),
@@ -859,14 +799,14 @@ Padding(
             itemBuilder: (context, item, isSelected, isHover) {
               double alokasiVal = double.tryParse(item['alokasi_persen'].toString()) ?? 0;
               String p = alokasiVal <= 1 ? "${(alokasiVal * 100).toInt()}%" : "${alokasiVal.toInt()}%";
-              String displayVendorName = item['master_vendor']?['vendor_name'] ?? "-";
+              //String displayVendorName = item['master_vendor']?['vendor_name'] ?? "-";
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(displayVendorName,style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(item['vendor_name'] ?? "-",style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 4),
                   //   Text("📍 ${item['city']} | Rank: ${item['winner_rank']} | Alokasi: $p", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   //   Text("🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}", style: const TextStyle(fontSize: 10, color: Colors.blueGrey)),
@@ -1028,7 +968,7 @@ Future<void> _processToDatabase() async {
     //   throw "Vendor ini tidak memiliki kode vendor (regist_code) yang valid.";
     // }
     // 1. Gunakan NIK dari vendor_transportasi (sesuai tabel baru)
-    final String? nikVendor = _selectedVendor!['nik']; // Ambil NIK vendor
+   // final String? nikVendor = _selectedVendor!['nik']; // Ambil NIK vendor
 final int? idVendorDetails = _selectedVendor!['id'];
 
     // if (nikVendor == null || nikVendor.isEmpty) {
@@ -1065,7 +1005,7 @@ final int? idVendorDetails = _selectedVendor!['id'];
     // A. Masukkan data ke shipping_assignments
     final List<Map<String, dynamic>> assignmentData = idsToAssign.map((sid) => {
       'shipping_id': sid,
-      'nik': nikVendor, // Simpan NIK vendor untuk referensi
+      //'nik': nikVendor, // Simpan NIK vendor untuk referensi
       'id_vendor_details': idVendorDetails,
       'status_assignment': 'offered', // Status awal sesuai schema Anda
       // 'assigned_at': DateTime.now().toIso8601String(),

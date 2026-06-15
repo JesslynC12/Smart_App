@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:project_app/auth/auth_service.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:project_app/login.dart';
-// import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
-import 'package:project_app/vendor/rejectedpage_vendor.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -71,90 +69,108 @@ class _AuthWrapperState extends State<AuthWrapper> {
     super.initState();
     _checkAuth();
   }
-
-  Future<void> _checkAuth() async {
-    // Delay sedikit agar transisi mulus
-    
-    
-    // Ambil data user lengkap (termasuk role & status)
+Future<void> _checkAuth() async {
+  try {
     final user = await AuthService.getCurrentUser();
-    // await Future.delayed(const Duration(seconds: 1));
+
     if (!mounted) return;
 
-    if (user != null) {
-      // LOGIKA NAVIGASI BERDASARKAN ROLE
-      if (user.role == 'vendor') {
-        if (user.status == 'verified') {
-          Navigator.pushReplacementNamed(context, '/home-vendor');
-        } 
-        // JIKA DITOLAK: Arahkan ke halaman edit data
-      else if (user.status == 'rejected') {
-        // Kita ambil data mentah dari Supabase untuk dikirim ke RejectedVendorPage
-        final rawVendorData = await Supabase.instance.client
-            .from('profiles_vendor')
-            .select()
-            .eq('profile_id', user.id)
-            .single();
-
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RejectedVendorPage(vendorData: rawVendorData)),
-            (route) => false,
-          
-        );
-      } else {
-          // Jika vendor belum di-approve, paksa logout atau arahkan ke login dengan pesan
-          await AuthService.logout();
-          _navigateToLoginWithMsg("Akun Vendor Anda masih menunggu persetujuan Admin.");
-        }
-      } else {
-        // Jika Admin/PPIC/Gudang
-        Navigator.pushReplacementNamed(context, '/home-admin');
-      }
-    } else {
-      // Jika tidak ada session, arahkan ke login
+    // Belum login
+    if (user == null) {
       Navigator.pushReplacementNamed(context, '/login');
+      return;
     }
-  }
 
-  // void _navigateToLoginWithMsg(String msg) {
-  //   Navigator.pushAndRemoveUntil(
-  //     context,
-  //     MaterialPageRoute(builder: (context) => const LoginPage()),
-  //     (route) => false,
-  //   );
-  //   // Tampilkan pesan kenapa dia tidak bisa masuk
-  //   ScaffoldMessenger.of(context).showSnackBar(
-  //     SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800),
-  //   );
-  // }
+    // Vendor
+    if (user.role?.toLowerCase() == 'vendor') {
+      final status = user.status?.toLowerCase();
 
-  void _navigateTo(String routeName) {
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, routeName);
-    }
-  }
-  
-  void _navigateToLoginWithMsg(String msg) {
-    if (!mounted) return;
-    // Pindah dulu
-    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-    
-    // Gunakan postFrameCallback agar SnackBar muncul setelah halaman login siap
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg), 
-            backgroundColor: Colors.orange.shade800,
-            behavior: SnackBarBehavior.floating, // Lebih modern
-            margin: const EdgeInsets.all(20),
-          ),
-        );
+      // Akun vendor sudah diverifikasi
+      if (status == 'verified') {
+        Navigator.pushReplacementNamed(context, '/home-vendor');
+        return;
       }
-    });
+
+      // Pending verifikasi email/admin
+      if (status == 'pending') {
+        await AuthService.logout();
+
+        if (!mounted) return;
+
+        _navigateToLoginWithMsg(
+          'Silakan verifikasi email Anda terlebih dahulu.',
+        );
+        return;
+      }
+
+      // Rejected atau akun tidak aktif
+      if (status == 'rejected' || !user.isActive) {
+        await AuthService.logout();
+
+        if (!mounted) return;
+
+        _navigateToLoginWithMsg(
+          'Akun Vendor Anda telah ditolak atau dinonaktifkan oleh Admin.',
+        );
+        return;
+      }
+
+      // Status lain yang tidak dikenal
+      await AuthService.logout();
+
+      if (!mounted) return;
+
+      _navigateToLoginWithMsg(
+        'Status akun Anda tidak valid. Silakan hubungi Admin.',
+      );
+      return;
+    }
+
+    // Internal User (Admin, PPIC, Gudang, dll)
+    if (!user.isActive) {
+      await AuthService.logout();
+
+      if (!mounted) return;
+
+      _navigateToLoginWithMsg(
+        'Akun Anda telah dinonaktifkan oleh Admin.',
+      );
+      return;
+    }
+
+    Navigator.pushReplacementNamed(context, '/home-admin');
+  } catch (e) {
+    await AuthService.logout();
+
+    if (!mounted) return;
+
+    _navigateToLoginWithMsg(
+      'Terjadi kesalahan saat memeriksa sesi: $e',
+    );
   }
+}
+  void _navigateToLoginWithMsg(String msg) {
+  if (!mounted) return;
+
+  Navigator.pushNamedAndRemoveUntil(
+    context,
+    '/login',
+    (route) => false,
+  );
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+
+    scaffoldMessenger?.showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.orange.shade800,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(20),
+      ),
+    );
+  });
+}
 
   @override
   Widget build(BuildContext context) {

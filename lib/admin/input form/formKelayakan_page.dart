@@ -807,7 +807,7 @@ final data = _shippingData ?? widget.item;
     final String vCity = vendorDetails?['city'] ?? '-';
     final String vArea = vendorDetails?['area'] ?? '-';
     final String vUnit = vendorDetails?['type_unit'] ?? '-';
-    final String vendorNikDisplay = data['nik'] ?? request['nik'] ?? vendorDetails?['nik'] ?? '-';
+    final String vendorNikDisplay = vendorDetails?['nik'] ?? '-';
 
     return Container(
       decoration: BoxDecoration(

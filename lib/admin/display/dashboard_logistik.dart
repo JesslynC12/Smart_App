@@ -26,6 +26,8 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
+RealtimeChannel? _dashboardRealtimeChannel;
+
  @override
   void initState() {
     super.initState();
@@ -34,11 +36,46 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
       end: DateTime.now(),
     );
     _fetchDashboardData();
+    _setupDashboardRealtime();
   }
 
-  Future<void> _fetchDashboardData() async {
+@override
+  void dispose() {
+    if (_dashboardRealtimeChannel != null) {
+      supabase.removeChannel(_dashboardRealtimeChannel!);
+    }
+    _searchController.dispose();
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
+  void _setupDashboardRealtime() {
+    _dashboardRealtimeChannel = supabase
+        .channel('public:logistic_dashboard_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all, // Tangkap kejadian INSERT, UPDATE, dan DELETE
+          schema: 'public',
+          table: 'shipping_request', // Mendengarkan tabel utama
+          callback: (payload) {
+            // Ambil data ulang di background secara senyap tanpa memunculkan loading spinner utama
+            _fetchDashboardData(isRealtimeTrigger: true);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shipping_assignments',
+          callback: (payload) {
+            _fetchDashboardData(isRealtimeTrigger: true);
+          },
+        );
+
+    _dashboardRealtimeChannel?.subscribe();
+  }
+
+  Future<void> _fetchDashboardData({bool isRealtimeTrigger = false}) async {
     try {
-      if (_allRequests.isEmpty) {
+      if (_allRequests.isEmpty && !isRealtimeTrigger) {
         setState(() => _isLoading = true);
       }
 
@@ -84,7 +121,7 @@ class _LogisticDashboardPageState extends State<LogisticDashboardPage> {
             )
           ''')
           
-          .not('shipping_assignments.status_assignment', 'in', '("rejected","rejected unit","no response","cancel booking")',)
+          .not('shipping_assignments.status_assignment', 'in', '(rejected,"rejected unit","no response","cancel booking")',)
           .eq('shipping_assignments.loading.verifikasi_rekomendasi_logistic', 'OKE',)
          .order('shipping_id', ascending: false);
           
