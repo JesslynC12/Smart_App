@@ -37,151 +37,179 @@ class _MaterialPaginatedPageState extends State<MaterialPaginatedPage> {
     super.dispose();
   }
 
-Future<void> _exportMaterialToExcel() async {
-  if (_materials.isEmpty) {
-    _showSnackBar("Tidak ada data untuk diekspor", Colors.orange);
-    return;
-  }
+  Future<void> _exportMaterialToExcel() async {
+    if (_materials.isEmpty) {
+      _showSnackBar("Tidak ada data untuk diekspor", Colors.orange);
+      return;
+    }
 
-  try {
-    setState(() => _isLoading = true);
-    var excel = Excel.createExcel();
-    Sheet sheetObject = excel['Master_Material'];
-    excel.delete('Sheet1');
+    try {
+      setState(() => _isLoading = true);
+      var excel = Excel.createExcel();
+      Sheet sheetObject = excel['Master_Material'];
+      excel.delete('Sheet1');
 
-    List<CellValue> headers = [
-      TextCellValue('No Mat'),
-      TextCellValue('Deskripsi Material'),
-      TextCellValue('Box/Pallet'),
-      TextCellValue('Marketing Div'),
-      TextCellValue('Div Deskripsi'),
-      TextCellValue('Gross Weight'),
-      TextCellValue('Net Weight'),
-      TextCellValue('Type'),
-      TextCellValue('Gudang'),
-    ];
-    sheetObject.appendRow(headers);
+      List<CellValue> headers = [
+        TextCellValue('No Mat'),
+        TextCellValue('Deskripsi Material'),
+        TextCellValue('Box/Pallet'),
+        TextCellValue('Marketing Div'),
+        TextCellValue('Div Deskripsi'),
+        TextCellValue('Gross Weight'),
+        TextCellValue('Net Weight'),
+        TextCellValue('Type'),
+        TextCellValue('Gudang'),
+      ];
+      sheetObject.appendRow(headers);
 
-    for (var mat in _materials) {
-      final whData = mat['warehouse'] as Map<String, dynamic>?;
+      for (var mat in _materials) {
+        final whData = mat['warehouse'] as Map<String, dynamic>?;
         final String whName = whData?['warehouse_name'] ?? "-";
-      sheetObject.appendRow([
-        TextCellValue(mat['material_id']?.toString() ?? ""),
-        TextCellValue(mat['material_name'] ?? "-"),
-        TextCellValue(mat['box_per_pallet']?.toString() ?? "0"),
-        TextCellValue(mat['marketing_division'] ?? "-"),
-        TextCellValue(mat['division_description'] ?? "-"),
-        DoubleCellValue(double.tryParse(mat['gross_weight']?.toString() ?? "0") ?? 0.0),
-        DoubleCellValue(double.tryParse(mat['net_weight']?.toString() ?? "0") ?? 0.0),
-        TextCellValue(mat['material_type'] ?? "-"),
-        TextCellValue(whName),
-      ]);
+        sheetObject.appendRow([
+          TextCellValue(mat['material_id']?.toString() ?? ""),
+          TextCellValue(mat['material_name'] ?? "-"),
+          TextCellValue(mat['box_per_pallet']?.toString() ?? "0"),
+          TextCellValue(mat['marketing_division'] ?? "-"),
+          TextCellValue(mat['division_description'] ?? "-"),
+          DoubleCellValue(
+            double.tryParse(mat['gross_weight']?.toString() ?? "0") ?? 0.0,
+          ),
+          DoubleCellValue(
+            double.tryParse(mat['net_weight']?.toString() ?? "0") ?? 0.0,
+          ),
+          TextCellValue(mat['material_type'] ?? "-"),
+          TextCellValue(whName),
+        ]);
+      }
+
+      String fileName =
+          "Master_Material_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+      var fileBytes = excel.save(fileName: fileName);
+      if (kIsWeb) {
+        final content = html.Blob([
+          fileBytes,
+        ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final url = html.Url.createObjectUrlFromBlob(content);
+        html.Url.revokeObjectUrl(url);
+        _showSnackBar("Download dimulai...", Colors.green);
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        String filePath = '${directory.path}/$fileName';
+        io.File(filePath)
+          ..createSync(recursive: true)
+          ..writeAsBytesSync(fileBytes!);
+        await OpenFile.open(filePath);
+        _showSnackBar("Berhasil ekspor ke Dokumen", Colors.green);
+      }
+    } catch (e) {
+      _showSnackBar("Gagal Ekspor: $e", Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
     }
-
-
-
-    String fileName = "Master_Material_${DateTime.now().millisecondsSinceEpoch}.xlsx";
-var fileBytes = excel.save(fileName: fileName);
-    if (kIsWeb) {
-      final content = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      final url = html.Url.createObjectUrlFromBlob(content);
-      html.Url.revokeObjectUrl(url);
-      _showSnackBar("Download dimulai...", Colors.green);
-    } else {
-      final directory = await getApplicationDocumentsDirectory();
-      String filePath = '${directory.path}/$fileName';
-      io.File(filePath)..createSync(recursive: true)..writeAsBytesSync(fileBytes!);
-      await OpenFile.open(filePath);
-      _showSnackBar("Berhasil ekspor ke Dokumen", Colors.green);
-    }
-  } catch (e) {
-    _showSnackBar("Gagal Ekspor: $e", Colors.red);
-  } finally {
-    setState(() => _isLoading = false);
   }
-}
 
-Future<void> _importMaterialFromExcel() async {
-  try {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-      withData: true,
-    );
+  Future<void> _importMaterialFromExcel() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        withData: true,
+      );
 
-    if (result == null || result.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-    setState(() => _isLoading = true);
-    final bytes = result.files.first.bytes;
-    var excel = Excel.decodeBytes(bytes!);
-    var sheet = excel.tables.values.first;
+      setState(() => _isLoading = true);
+      final bytes = result.files.first.bytes;
+      var excel = Excel.decodeBytes(bytes!);
+      var sheet = excel.tables.values.first;
 
-    List<Map<String, dynamic>> importData = [];
+      List<Map<String, dynamic>> importData = [];
 
-    for (int i = 1; i < sheet.maxRows; i++) {
-      var row = sheet.rows[i];
-      if (row.isEmpty || row[0] == null || row[0]?.value == null) continue;
-dynamic whValue = row[8]?.value;
-      int? matchedWarehouseId;
+      for (int i = 1; i < sheet.maxRows; i++) {
+        var row = sheet.rows[i];
+        if (row.isEmpty || row[0] == null || row[0]?.value == null) continue;
+        dynamic whValue = row[8]?.value;
+        int? matchedWarehouseId;
 
-      if (whValue != null) {
-        String whString = whValue.toString().trim();
-        
-        int? inputId = int.tryParse(whString);
-        
-        if (inputId != null) {
-          bool idExists = _warehouseList.any((w) => w['warehouse_id'] == inputId);
-          if (idExists) {
-            matchedWarehouseId = inputId;
-          }
-        } else {
-          try {
-            final foundWh = _warehouseList.firstWhere(
-              (w) => w['warehouse_name'].toString().toLowerCase() == whString.toLowerCase(),
+        if (whValue != null) {
+          String whString = whValue.toString().trim();
+
+          int? inputId = int.tryParse(whString);
+
+          if (inputId != null) {
+            bool idExists = _warehouseList.any(
+              (w) => w['warehouse_id'] == inputId,
             );
-            matchedWarehouseId = foundWh['warehouse_id'] as int?;
-          } catch (_) {
-            debugPrint("Warehouse dengan nama '$whString' tidak ditemukan di master data.");
+            if (idExists) {
+              matchedWarehouseId = inputId;
+            }
+          } else {
+            try {
+              final foundWh = _warehouseList.firstWhere(
+                (w) =>
+                    w['warehouse_name'].toString().toLowerCase() ==
+                    whString.toLowerCase(),
+              );
+              matchedWarehouseId = foundWh['warehouse_id'] as int?;
+            } catch (_) {
+              debugPrint(
+                "Warehouse dengan nama '$whString' tidak ditemukan di master data.",
+              );
+            }
           }
         }
+        importData.add({
+          'material_id': int.tryParse(row[0]?.value.toString() ?? ""),
+          'material_name': row[1]?.value?.toString(),
+          'box_per_pallet': int.tryParse(row[2]?.value?.toString() ?? ""),
+          'marketing_division': row[3]?.value?.toString(),
+          'division_description': row[4]?.value?.toString(),
+          'gross_weight':
+              double.tryParse(row[5]?.value?.toString() ?? "0")?.toDouble() ??
+              0.0,
+          'net_weight':
+              double.tryParse(row[6]?.value?.toString() ?? "0")?.toDouble() ??
+              0.0,
+          'material_type': row[7]?.value?.toString(),
+          'warehouse_id': matchedWarehouseId,
+        });
       }
-      importData.add({
-        'material_id': int.tryParse(row[0]?.value.toString() ?? ""),
-        'material_name': row[1]?.value?.toString(),
-        'box_per_pallet': row[2]?.value?.toString(),
-        'marketing_division': row[3]?.value?.toString(),
-        'division_description': row[4]?.value?.toString(),
-        'gross_weight': double.tryParse(row[5]?.value?.toString() ?? "0"),
-        'net_weight': double.tryParse(row[6]?.value?.toString() ?? "0"),
-        'material_type': row[7]?.value?.toString(),
-        'warehouse_id': matchedWarehouseId,
-      });
-    }
 
-    if (importData.isNotEmpty) {
-      await supabase.from('material').upsert(importData);
-      _showSnackBar("Berhasil import ${importData.length} material", Colors.green);
-      _fetchData();
-    } else {
-      _showSnackBar("Tidak ada data valid di file Excel", Colors.orange);
+      if (importData.isNotEmpty) {
+        await supabase.from('material').upsert(importData);
+        _showSnackBar(
+          "Berhasil import ${importData.length} material",
+          Colors.green,
+        );
+        _fetchData();
+      } else {
+        _showSnackBar("Tidak ada data valid di file Excel", Colors.orange);
+      }
+    } catch (e) {
+      _showSnackBar("Error Import: $e", Colors.red);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } catch (e) {
-    _showSnackBar("Error Import: $e", Colors.red);
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
 
-void _showSnackBar(String msg, Color color) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
-}
+  void _showSnackBar(String msg, Color color) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  }
 
-Future<void> _initializeData() async {
+  Future<void> _initializeData() async {
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
-        supabase.from('material').select('*, warehouse(warehouse_name)').order('material_id', ascending: true),
-        supabase.from('warehouse').select('warehouse_id, warehouse_name').order('warehouse_name'),
+        supabase
+            .from('material')
+            .select('*, warehouse(warehouse_name)')
+            .order('material_id', ascending: true),
+        supabase
+            .from('warehouse')
+            .select('warehouse_id, warehouse_name')
+            .order('warehouse_name'),
       ]);
 
       if (mounted) {
@@ -196,23 +224,25 @@ Future<void> _initializeData() async {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-  
+
   Future<void> _fetchData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      var query = supabase.from('material').select('*, warehouse(warehouse_name)');
+      var query = supabase
+          .from('material')
+          .select('*, warehouse(warehouse_name)');
       if (_searchQuery.isNotEmpty) {
-       final isNumber = int.tryParse(_searchQuery) != null;
+        final isNumber = int.tryParse(_searchQuery) != null;
         if (isNumber) {
-          // Mencari ID yang tepat (exact) ATAU nama yang mengandung angka tersebut
-          query = query.or('material_id.eq.$_searchQuery, material_name.ilike.%$_searchQuery%');
+          query = query.or(
+            'material_id.eq.$_searchQuery, material_name.ilike.%$_searchQuery%',
+          );
         } else {
           query = query.ilike('material_name', '%$_searchQuery%');
         }
-        
-  }
+      }
       final data = await query.order('material_id', ascending: true);
 
       if (mounted) {
@@ -230,7 +260,7 @@ Future<void> _initializeData() async {
   Future<void> _deleteMaterial(int id) async {
     try {
       await supabase.from('material').delete().match({'material_id': id});
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -243,7 +273,10 @@ Future<void> _initializeData() async {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Gagal menghapus: $e"), backgroundColor: Colors.black),
+          SnackBar(
+            content: Text("Gagal menghapus: $e"),
+            backgroundColor: Colors.black,
+          ),
         );
       }
     }
@@ -263,12 +296,12 @@ Future<void> _initializeData() async {
   ) async {
     try {
       final cleanGW = double.tryParse(gw.text.replaceAll(',', '.')) ?? 0.0;
-    final cleanNW = double.tryParse(nw.text.replaceAll(',', '.')) ?? 0.0;
-
+      final cleanNW = double.tryParse(nw.text.replaceAll(',', '.')) ?? 0.0;
+      final cleanBox = int.tryParse(boxPallet.text) ?? 0;
       await supabase.from('material').upsert({
         'material_id': int.parse(id.text),
         'material_name': name.text,
-        'box_per_pallet': boxPallet.text,
+        'box_per_pallet': cleanBox,
         'marketing_division': mDiv.text,
         'division_description': divDesc.text,
         'gross_weight': cleanGW,
@@ -278,10 +311,12 @@ Future<void> _initializeData() async {
       });
 
       if (mounted) {
-        Navigator.pop(context); 
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isEdit ? "Data berhasil diperbarui" : "Data berhasil disimpan"),
+            content: Text(
+              isEdit ? "Data berhasil diperbarui" : "Data berhasil disimpan",
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -290,7 +325,10 @@ Future<void> _initializeData() async {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Terjadi kesalahan: $e"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("Terjadi kesalahan: $e"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -298,75 +336,173 @@ Future<void> _initializeData() async {
 
   void _showFormDialog([Map<String, dynamic>? material]) {
     final bool isEdit = material != null;
-    
-    final idController = TextEditingController(text: material?['material_id']?.toString() ?? '');
-    final nameController = TextEditingController(text: material?['material_name'] ?? '');
-    final boxController = TextEditingController(text: material?['box_per_pallet'] ?? '');
-    final mDivController = TextEditingController(text: material?['marketing_division'] ?? '');
-    final divDescController = TextEditingController(text: material?['division_description'] ?? '');
-    final gwController = TextEditingController(text: material?['gross_weight']?.toString() ?? '');
-    final nwController = TextEditingController(text: material?['net_weight']?.toString() ?? '');
-    final typeController = TextEditingController(text: material?['material_type'] ?? '');
 
-int? selectedWarehouseId = material?['warehouse_id'] != null 
-        ? int.tryParse(material!['warehouse_id'].toString()) 
-        : null;
-        
-    final List<String> mDivOptions = ['OilBR', 'OilBI', 'OilBX', 'OilTR', 'MarshoBR', 'MarshoBI', 'MarshoBX', 'MarshoTR'];
-    final List<String> divDescOptions = ['Branded', 'Branded Industry', 'Branded Export'];
+    final idController = TextEditingController(
+      text: material?['material_id']?.toString() ?? '',
+    );
+    final nameController = TextEditingController(
+      text: material?['material_name'] ?? '',
+    );
+    final boxController = TextEditingController(
+      text: material?['box_per_pallet']?.toString() ?? '',
+    );
+    final mDivController = TextEditingController(
+      text: material?['marketing_division'] ?? '',
+    );
+    final divDescController = TextEditingController(
+      text: material?['division_description'] ?? '',
+    );
+    final gwController = TextEditingController(
+      text: material?['gross_weight']?.toString() ?? '',
+    );
+    final nwController = TextEditingController(
+      text: material?['net_weight']?.toString() ?? '',
+    );
+    final typeController = TextEditingController(
+      text: material?['material_type'] ?? '',
+    );
+
+    int? selectedWarehouseId;
+    if (material != null && material['warehouse_id'] != null) {
+      selectedWarehouseId = int.tryParse(material['warehouse_id'].toString());
+    }
+
+    final List<String> mDivOptions = [
+      'OilBR',
+      'OilBI',
+      'OilBX',
+      'OilTR',
+      'MarshoBR',
+      'MarshoBI',
+      'MarshoBX',
+      'MarshoTR',
+    ];
+    final List<String> divDescOptions = [
+      'Branded',
+      'Branded Industry',
+      'Branded Export',
+    ];
     final List<String> typeOptions = ['OILS', 'MARG', 'SHRT', 'SPEC'];
 
-    final f1 = FocusNode(); final f2 = FocusNode(); final f3 = FocusNode();
-    final f4 = FocusNode(); final f5 = FocusNode(); final f6 = FocusNode();
-    final f7 = FocusNode(); final f8 = FocusNode(); final f9 = FocusNode();
+    final f1 = FocusNode();
+    final f2 = FocusNode();
+    final f3 = FocusNode();
+    final f4 = FocusNode();
+    final f5 = FocusNode();
+    final f6 = FocusNode();
+    final f7 = FocusNode();
+    final f8 = FocusNode();
+    final f9 = FocusNode();
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder( 
+      builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
             title: Text(isEdit ? 'Edit Material' : 'Tambah Material'),
-            content: SizedBox( 
-          width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTextField(idController, 'No Mat *', f1, f2, !isEdit, isNumber: true),
-                  _buildTextField(nameController, 'Material Deskripsi *', f2, f3, true),
-                  _buildTextField(boxController, 'Box/Pallet *', f3, f4, true, isNumber: true),
-                  
-                  _buildDropdownField('Marketing Div *', mDivController, mDivOptions, f4, (val) {
-                    setDialogState(() => mDivController.text = val ?? '');
-                  }),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTextField(
+                      idController,
+                      'No Mat *',
+                      f1,
+                      f2,
+                      !isEdit,
+                      isNumber: true,
+                    ),
+                    _buildTextField(
+                      nameController,
+                      'Material Deskripsi *',
+                      f2,
+                      f3,
+                      true,
+                    ),
+                    _buildTextField(
+                      boxController,
+                      'Box/Pallet *',
+                      f3,
+                      f4,
+                      true,
+                      isNumber: true,
+                    ),
 
-                  _buildDropdownField('Div Deskripsi *', divDescController, divDescOptions, f5, (val) {
-                    setDialogState(() => divDescController.text = val ?? '');
-                  }),
+                    _buildDropdownField(
+                      'Marketing Div *',
+                      mDivController,
+                      mDivOptions,
+                      f4,
+                      (val) {
+                        setDialogState(() => mDivController.text = val ?? '');
+                      },
+                    ),
 
-                  _buildTextField(gwController, 'Gross Weight (GW) *', f6, f7, true, isDecimal: true),
-                  _buildTextField(nwController, 'Net Weight (NW) *', f7, f8, true, isDecimal: true),
+                    _buildDropdownField(
+                      'Div Deskripsi *',
+                      divDescController,
+                      divDescOptions,
+                      f5,
+                      (val) {
+                        setDialogState(
+                          () => divDescController.text = val ?? '',
+                        );
+                      },
+                    ),
 
-                  _buildDropdownField('Type *', typeController, typeOptions, f8, (val) {
-                    setDialogState(() => typeController.text = val ?? '');
-                  }),
-                  const SizedBox(height: 5),
-                  Padding(
+                    _buildTextField(
+                      gwController,
+                      'Gross Weight (GW) *',
+                      f6,
+                      f7,
+                      true,
+                      isDecimal: true,
+                    ),
+                    _buildTextField(
+                      nwController,
+                      'Net Weight (NW) *',
+                      f7,
+                      f8,
+                      true,
+                      isDecimal: true,
+                    ),
+
+                    _buildDropdownField(
+                      'Type *',
+                      typeController,
+                      typeOptions,
+                      f8,
+                      (val) {
+                        setDialogState(() => typeController.text = val ?? '');
+                      },
+                    ),
+                    const SizedBox(height: 5),
+                    Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: DropdownButtonFormField<int>(
-                        initialValue: _warehouseList.any((w) => w['warehouse_id'] == selectedWarehouseId) 
-                            ? selectedWarehouseId 
+                        value:
+                            _warehouseList.any(
+                              (w) => w['warehouse_id'] == selectedWarehouseId,
+                            )
+                            ? selectedWarehouseId
                             : null,
                         focusNode: f9,
                         decoration: const InputDecoration(
                           labelText: 'Lokasi Warehouse *',
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                         ),
                         items: _warehouseList.map((wh) {
                           return DropdownMenuItem<int>(
                             value: wh['warehouse_id'] as int,
-                            child: Text("${wh['warehouse_id']} - ${wh['warehouse_name']}"),
+                            child: Text(
+                              "${wh['warehouse_id']} - ${wh['warehouse_name']}",
+                            ),
                           );
                         }).toList(),
                         onChanged: (val) {
@@ -379,51 +515,101 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Batal"),
+              ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.red.shade700, 
-      foregroundColor: Colors.white,       
-    ),
-                onPressed: () => _validateAndSave(isEdit, idController, nameController, boxController, mDivController, divDescController, gwController, nwController, typeController, selectedWarehouseId),
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => _validateAndSave(
+                  isEdit,
+                  idController,
+                  nameController,
+                  boxController,
+                  mDivController,
+                  divDescController,
+                  gwController,
+                  nwController,
+                  typeController,
+                  selectedWarehouseId,
+                ),
                 child: const Text("Simpan"),
-              )
+              ),
             ],
           );
-        }
+        },
       ),
     );
   }
 
-  void _validateAndSave(bool isEdit, TextEditingController id, TextEditingController name, TextEditingController box, TextEditingController mDiv, TextEditingController div, TextEditingController gw, TextEditingController nw, TextEditingController type, int? warehouseId,) {
-   if (id.text.isEmpty || name.text.isEmpty || box.text.isEmpty || mDiv.text.isEmpty || 
-        div.text.isEmpty || gw.text.isEmpty || nw.text.isEmpty || type.text.isEmpty || warehouseId == null) {
-      _showSnackBar("Semua field termasuk Warehouse wajib diisi!", Colors.orange);
+  void _validateAndSave(
+    bool isEdit,
+    TextEditingController id,
+    TextEditingController name,
+    TextEditingController box,
+    TextEditingController mDiv,
+    TextEditingController div,
+    TextEditingController gw,
+    TextEditingController nw,
+    TextEditingController type,
+    int? warehouseId,
+  ) {
+    if (id.text.isEmpty ||
+        name.text.isEmpty ||
+        box.text.isEmpty ||
+        mDiv.text.isEmpty ||
+        div.text.isEmpty ||
+        gw.text.isEmpty ||
+        nw.text.isEmpty ||
+        type.text.isEmpty ||
+        warehouseId == null) {
+      _showSnackBar(
+        "Semua field termasuk Warehouse wajib diisi!",
+        Colors.orange,
+      );
       return;
     }
-    _saveData(isEdit, id, name, box, mDiv, div, gw, nw, type,warehouseId);
+    _saveData(isEdit, id, name, box, mDiv, div, gw, nw, type, warehouseId);
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, FocusNode current, FocusNode? next, bool enabled, {bool isNumber = false, bool isDecimal = false, bool isLast = false, VoidCallback? onSave}) {
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    FocusNode current,
+    FocusNode? next,
+    bool enabled, {
+    bool isNumber = false,
+    bool isDecimal = false,
+    bool isLast = false,
+    VoidCallback? onSave,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
         controller: controller,
         focusNode: current,
         enabled: enabled,
-        keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-        inputFormatters: isNumber 
-          ? [
-              isDecimal 
-                ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
-                : FilteringTextInputFormatter.digitsOnly, 
+        keyboardType: isNumber
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
+        inputFormatters: isNumber
+            ? [
+                isDecimal
+                    ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    : FilteringTextInputFormatter.digitsOnly,
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-            ] 
-          : null,
+              ]
+            : null,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
           filled: !enabled,
           fillColor: enabled ? null : Colors.grey.shade200,
         ),
@@ -438,22 +624,28 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
     );
   }
 
-  Widget _buildDropdownField(String label, TextEditingController controller, List<String> options, FocusNode focusNode, Function(String?) onChanged) {
+  Widget _buildDropdownField(
+    String label,
+    TextEditingController controller,
+    List<String> options,
+    FocusNode focusNode,
+    Function(String?) onChanged,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        initialValue: options.contains(controller.text) ? controller.text : null,
+        value: options.contains(controller.text) ? controller.text : null,
         focusNode: focusNode,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
         ),
         items: options.map((String value) {
-          return DropdownMenuItem<String>(
-            value: value,
-            child: Text(value),
-          );
+          return DropdownMenuItem<String>(value: value, child: Text(value));
         }).toList(),
         onChanged: onChanged,
       ),
@@ -477,81 +669,132 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
               child: Column(
                 children: [
                   Row(
-  children: [
-    // KOLOM PENCARIAN
-    Expanded(
-      child: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: _searchController,
-        builder: (context, value, child) {
-          return TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              labelText: "Cari No Mat, Material Deskripsi...",
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: value.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        _searchQuery = "";
-                        _fetchData();
-                      },
-                    )
-                  : null,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onSubmitted: (val) {
-              _searchQuery = val;
-              _fetchData();
-            },
-          );
-        },
-      ),
-    ),
-    
-    const SizedBox(width: 10),
+                    children: [
+                      Expanded(
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _searchController,
+                          builder: (context, value, child) {
+                            return TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: "Cari No Mat, Material Deskripsi...",
+                                prefixIcon: const Icon(Icons.search),
+                                suffixIcon: value.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          _searchQuery = "";
+                                          _fetchData();
+                                        },
+                                      )
+                                    : null,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onSubmitted: (val) {
+                                _searchQuery = val;
+                                _fetchData();
+                              },
+                            );
+                          },
+                        ),
+                      ),
 
-    // TOMBOL IMPORT
-    _buildActionButton(
-      icon: Icons.file_upload,
-      color: Colors.orange,
-      tooltip: "Import Material",
-      onPressed: _importMaterialFromExcel,
-    ),
+                      const SizedBox(width: 10),
 
-    const SizedBox(width: 8),
+                      _buildActionButton(
+                        icon: Icons.file_upload,
+                        color: Colors.orange,
+                        tooltip: "Import Material",
+                        onPressed: _importMaterialFromExcel,
+                      ),
 
-    // TOMBOL EXPORT
-    _buildActionButton(
-      icon: Icons.download,
-      color: Colors.green,
-      tooltip: "Export Material",
-      onPressed: _exportMaterialToExcel,
-    ),
-  ],
-),
+                      const SizedBox(width: 8),
+
+                      _buildActionButton(
+                        icon: Icons.download,
+                        color: Colors.green,
+                        tooltip: "Export Material",
+                        onPressed: _exportMaterialToExcel,
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     child: Theme(
-                      data: Theme.of(context).copyWith(scrollbarTheme: ScrollbarThemeData(
-                        thumbVisibility: WidgetStateProperty.all(true),
-                      )),
+                      data: Theme.of(context).copyWith(
+                        scrollbarTheme: ScrollbarThemeData(
+                          thumbVisibility: WidgetStateProperty.all(true),
+                        ),
+                      ),
                       child: PaginatedDataTable(
-                        columnSpacing: 12, 
+                        columnSpacing: 12,
                         rowsPerPage: 10,
                         columns: const [
-
-                          DataColumn(label: Text('No Mat', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Material Deskripsi', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Box/Pallet', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('M.Div', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Div Deskripsi', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('GW', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('NW', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Gudang', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Aksi', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                            label: Text(
+                              'No Mat',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Material Deskripsi',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Box/Pallet',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'M.Div',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Div Deskripsi',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'GW',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'NW',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Type',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Gudang',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Aksi',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         ],
                         source: dataContent,
                       ),
@@ -568,21 +811,26 @@ int? selectedWarehouseId = material?['warehouse_id'] != null
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required Color color, required String tooltip, required VoidCallback onPressed}) {
-  return Container(
-    height: 55,
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: color.withValues(alpha: 0.3)),
-    ),
-    child: IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon, color: color, size: 26),
-      tooltip: tooltip,
-    ),
-  );
-}
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 55,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, color: color, size: 26),
+        tooltip: tooltip,
+      ),
+    );
+  }
 }
 
 class MaterialDataSource extends DataTableSource {
@@ -591,34 +839,49 @@ class MaterialDataSource extends DataTableSource {
   final Function(Map<String, dynamic>) onEdit;
   final Function(int) onDelete;
 
-  MaterialDataSource(this.data, this.context, {required this.onEdit, required this.onDelete});
+  MaterialDataSource(
+    this.data,
+    this.context, {
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   DataRow? getRow(int index) {
     if (index >= data.length) return null;
     final mat = data[index];
 
-final warehouseData = mat['warehouse'] as Map<String, dynamic>?;
+    final warehouseData = mat['warehouse'] as Map<String, dynamic>?;
     final String warehouseName = warehouseData?['warehouse_name'] ?? '-';
 
-    return DataRow(cells: [
-      DataCell(Text(mat['material_id'].toString())),
-      DataCell(Text(mat['material_name'] ?? '-')),
-      DataCell(Text(mat['box_per_pallet'] ?? '-')),
-      DataCell(Text(mat['marketing_division'] ?? '-')),
-      DataCell(Text(mat['division_description'] ?? '-')),
-      DataCell(Text(mat['gross_weight']?.toString() ?? '0')),
-      DataCell(Text(mat['net_weight']?.toString() ?? '0')),
-      DataCell(Text(mat['material_type'] ?? '-')),
-      DataCell(Text(warehouseName)),
-      DataCell(Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(icon: const Icon(Icons.edit, color: Colors.blue, size: 20), onPressed: () => onEdit(mat)),
-          IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: () => _confirm(mat['material_id'])),
-        ],
-      )),
-    ]);
+    return DataRow(
+      cells: [
+        DataCell(Text(mat['material_id'].toString())),
+        DataCell(Text(mat['material_name'] ?? '-')),
+        DataCell(Text(mat['box_per_pallet']?.toString() ?? '-')),
+        DataCell(Text(mat['marketing_division'] ?? '-')),
+        DataCell(Text(mat['division_description'] ?? '-')),
+        DataCell(Text(mat['gross_weight']?.toString() ?? '0')),
+        DataCell(Text(mat['net_weight']?.toString() ?? '0')),
+        DataCell(Text(mat['material_type'] ?? '-')),
+        DataCell(Text(warehouseName)),
+        DataCell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                onPressed: () => onEdit(mat),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                onPressed: () => _confirm(mat['material_id']),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   void _confirm(int id) {
@@ -628,24 +891,33 @@ final warehouseData = mat['warehouse'] as Map<String, dynamic>?;
         title: const Text("Hapus?"),
         content: const Text("Data material ini akan dihapus secara permanen."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("Batal")),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text("Batal"),
+          ),
           ElevatedButton(
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.red.shade700, 
-      foregroundColor: Colors.white,     
-    ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               onDelete(id);
               Navigator.pop(c);
             },
-            child: const Text("Ya, Hapus", style: TextStyle(color: Colors.white)),
+            child: const Text(
+              "Ya, Hapus",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
     );
   }
 
-  @override bool get isRowCountApproximate => false;
-  @override int get rowCount => data.length;
-  @override int get selectedRowCount => 0;
+  @override
+  bool get isRowCountApproximate => false;
+  @override
+  int get rowCount => data.length;
+  @override
+  int get selectedRowCount => 0;
 }

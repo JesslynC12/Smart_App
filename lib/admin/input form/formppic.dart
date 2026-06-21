@@ -19,14 +19,16 @@ class _PPICFormPageState extends State<PPICFormPage> {
 
   List<Map<String, dynamic>> _mesinList = [];
   List<Map<String, dynamic>> _materialList = [];
-  String? _currentUserName; 
-  List<Map<String, dynamic>> _rows = []; 
+  String? _currentUserName;
+  List<Map<String, dynamic>> _rows = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _dateController = TextEditingController(text: "${_selectedDate.toLocal()}".split(' ')[0]);
+    _dateController = TextEditingController(
+      text: "${_selectedDate.toLocal()}".split(' ')[0],
+    );
     _initializeData();
     _fetchUserProfile();
   }
@@ -34,52 +36,65 @@ class _PPICFormPageState extends State<PPICFormPage> {
   Future<void> _initializeData() async {
     try {
       final results = await Future.wait([
-        supabase.from('mesin').select('mesin_id, nama_mesin').order('nama_mesin'),
-        supabase.from('material').select('material_id, material_name').order('material_name'),
+        supabase
+            .from('mesin')
+            .select('mesin_id, nama_mesin')
+            .order('nama_mesin'),
+        supabase
+            .from('material')
+            .select('material_id, material_name')
+            .order('material_name'),
       ]);
 
       setState(() {
-       
-        _mesinList = (results[0] as List).map((e) => {
-          'mesin_id': int.parse(e['mesin_id'].toString()), 
-          'nama_mesin': e['nama_mesin']
-        }).toList();
+        _mesinList = (results[0] as List)
+            .map(
+              (e) => {
+                'mesin_id': int.parse(e['mesin_id'].toString()),
+                'nama_mesin': e['nama_mesin'],
+              },
+            )
+            .toList();
 
-        _materialList = (results[1] as List).map((e) => {
-          'material_id': int.parse(e['material_id'].toString()), 
-          'material_name': e['material_name']
-        }).toList();
+        _materialList = (results[1] as List)
+            .map(
+              (e) => {
+                'material_id': int.parse(e['material_id'].toString()),
+                'material_name': e['material_name'],
+              },
+            )
+            .toList();
 
         _isLoading = false;
       });
-      _addRow(); 
+      _addRow();
     } catch (e) {
       _showSnackBar("Gagal memuat data master: $e", Colors.red);
       setState(() => _isLoading = false);
     }
   }
 
-Future<void> _fetchUserProfile() async {
-  try {
-    final user = supabase.auth.currentUser;
-    if (user != null) {
-      final data = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
-          .single();
+  Future<void> _fetchUserProfile() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        final data = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', user.id)
+            .single();
 
+        setState(() {
+          _currentUserName = data['name'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Gagal mengambil profil: $e");
       setState(() {
-        _currentUserName = data['name'];
+        _currentUserName = "Unknown User";
       });
     }
-  } catch (e) {
-    debugPrint("Gagal mengambil profil: $e");
-    setState(() {
-      _currentUserName = "Unknown User";
-    });
   }
-}
 
   void _addRow() {
     setState(() {
@@ -113,11 +128,15 @@ Future<void> _fetchUserProfile() async {
     setState(() => _isLoading = true);
 
     try {
-      final headerRes = await supabase.from('ppic_forms').insert({
-        'tanggal': _dateController.text,
-        'production_type': _selectedProductionType,
-        'created_by': _currentUserName ?? 'admin',
-      }).select().single();
+      final headerRes = await supabase
+          .from('ppic_forms')
+          .insert({
+            'tanggal': _dateController.text,
+            'production_type': _selectedProductionType,
+            'created_by': _currentUserName ?? 'admin',
+          })
+          .select()
+          .single();
 
       final int newPpicId = headerRes['ppic_id'];
 
@@ -155,7 +174,9 @@ Future<void> _fetchUserProfile() async {
 
   void _showSnackBar(String message, Color color) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
   @override
@@ -172,9 +193,15 @@ Future<void> _fetchUserProfile() async {
                   children: [
                     _buildHeaderSection(),
                     const SizedBox(height: 25),
-                    const Text("Detail Produksi", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      "Detail Produksi",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const Divider(),
-                    
+
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -187,7 +214,9 @@ Future<void> _fetchUserProfile() async {
                       onPressed: _addRow,
                       icon: const Icon(Icons.add_circle),
                       label: const Text("Tambah Item Produksi"),
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade700),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
                     ),
 
                     const SizedBox(height: 30),
@@ -197,12 +226,23 @@ Future<void> _fetchUserProfile() async {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red.shade700,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                         onPressed: _isLoading ? null : _saveData,
-                        child: _isLoading 
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text("SIMPAN KE DATABASE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: _isLoading
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
+                            : const Text(
+                                "SIMPAN KE DATABASE",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -218,9 +258,18 @@ Future<void> _fetchUserProfile() async {
         TextFormField(
           controller: _dateController,
           readOnly: true,
-          decoration: const InputDecoration(labelText: "Tanggal", prefixIcon: Icon(Icons.calendar_today), border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: "Tanggal",
+            prefixIcon: Icon(Icons.calendar_today),
+            border: OutlineInputBorder(),
+          ),
           onTap: () async {
-            final picked = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2024), lastDate: DateTime(2100));
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate,
+              firstDate: DateTime(2024),
+              lastDate: DateTime(2100),
+            );
             if (picked != null) {
               setState(() {
                 _selectedDate = picked;
@@ -232,8 +281,15 @@ Future<void> _fetchUserProfile() async {
         const SizedBox(height: 15),
         DropdownButtonFormField<String>(
           initialValue: _selectedProductionType,
-          decoration: const InputDecoration(labelText: "Production Type", border: OutlineInputBorder()),
-          items: ['marsho', 'filling'].map((t) => DropdownMenuItem(value: t, child: Text(t.toUpperCase()))).toList(),
+          decoration: const InputDecoration(
+            labelText: "Production Type",
+            border: OutlineInputBorder(),
+          ),
+          items: ['marsho', 'filling']
+              .map(
+                (t) => DropdownMenuItem(value: t, child: Text(t.toUpperCase())),
+              )
+              .toList(),
           onChanged: (val) => setState(() => _selectedProductionType = val),
           validator: (v) => v == null ? "Wajib pilih type" : null,
         ),
@@ -256,8 +312,19 @@ Future<void> _fetchUserProfile() async {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                CircleAvatar(backgroundColor: Colors.red.shade700, radius: 12, child: Text("${index + 1}", style: const TextStyle(fontSize: 12, color: Colors.white))),
-                if (_rows.length > 1) IconButton(onPressed: () => _removeRow(index), icon: const Icon(Icons.delete_outline, color: Colors.red)),
+                CircleAvatar(
+                  backgroundColor: Colors.red.shade700,
+                  radius: 12,
+                  child: Text(
+                    "${index + 1}",
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                ),
+                if (_rows.length > 1)
+                  IconButton(
+                    onPressed: () => _removeRow(index),
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -265,10 +332,21 @@ Future<void> _fetchUserProfile() async {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: "Shift", border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: "Shift",
+                      border: OutlineInputBorder(),
+                    ),
                     initialValue: _rows[index]['shift'],
-                    items: ['I', 'II', 'III'].map((s) => DropdownMenuItem(value: s, child: Text("Shift $s"))).toList(),
-                    onChanged: (val) => setState(() => _rows[index]['shift'] = val),
+                    items: ['I', 'II', 'III']
+                        .map(
+                          (s) => DropdownMenuItem(
+                            value: s,
+                            child: Text("Shift $s"),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) =>
+                        setState(() => _rows[index]['shift'] = val),
                     validator: (v) => v == null ? "!" : null,
                   ),
                 ),
@@ -277,13 +355,24 @@ Future<void> _fetchUserProfile() async {
                   flex: 2,
                   child: DropdownButtonFormField<int>(
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: "Mesin", border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: "Mesin",
+                      border: OutlineInputBorder(),
+                    ),
                     initialValue: _rows[index]['mesin_id'],
-                    items: _mesinList.map((m) => DropdownMenuItem<int>(
-                      value: m['mesin_id'] as int, 
-                      child: Text("${m['mesin_id']} - ${m['nama_mesin']}", overflow: TextOverflow.ellipsis)
-                    )).toList(),
-                    onChanged: (val) => setState(() => _rows[index]['mesin_id'] = val),
+                    items: _mesinList
+                        .map(
+                          (m) => DropdownMenuItem<int>(
+                            value: m['mesin_id'] as int,
+                            child: Text(
+                              "${m['mesin_id']} - ${m['nama_mesin']}",
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) =>
+                        setState(() => _rows[index]['mesin_id'] = val),
                     validator: (v) => v == null ? "!" : null,
                   ),
                 ),
@@ -296,14 +385,21 @@ Future<void> _fetchUserProfile() async {
                   flex: 2,
                   child: DropdownSearch<Map<String, dynamic>>(
                     items: (filter, loadProps) => _materialList,
-                    itemAsString: (Map<String, dynamic> m) => "${m['material_id']} - ${m['material_name']}",
-                    compareFn: (item, selectedItem) => item['material_id'] == selectedItem['material_id'],
-                    selectedItem: currentMaterial.isEmpty ? null : currentMaterial,
+                    itemAsString: (Map<String, dynamic> m) =>
+                        "${m['material_id']} - ${m['material_name']}",
+                    compareFn: (item, selectedItem) =>
+                        item['material_id'] == selectedItem['material_id'],
+                    selectedItem: currentMaterial.isEmpty
+                        ? null
+                        : currentMaterial,
                     decoratorProps: const DropDownDecoratorProps(
                       decoration: InputDecoration(
                         labelText: "Material",
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                       ),
                     ),
                     popupProps: PopupProps.menu(
@@ -317,8 +413,13 @@ Future<void> _fetchUserProfile() async {
                       ),
                       itemBuilder: (context, item, isDisabled, isSelected) {
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: Text("${item['material_id']} - ${item['material_name']}")
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            "${item['material_id']} - ${item['material_name']}",
+                          ),
                         );
                       },
                     ),
@@ -335,7 +436,10 @@ Future<void> _fetchUserProfile() async {
                   child: TextFormField(
                     controller: _rows[index]['qty_controller'],
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Qty", border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: "Qty",
+                      border: OutlineInputBorder(),
+                    ),
                     validator: (v) {
                       if (v == null || v.isEmpty) return "!";
                       if (int.tryParse(v) == null) return "No!";

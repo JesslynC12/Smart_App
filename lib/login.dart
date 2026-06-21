@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:project_app/admin/home_page.dart';
 import 'package:project_app/auth/auth_service.dart';
-import 'package:project_app/vendor/homepage_vendor.dart';
 import 'package:project_app/vendor/register_vendor.dart';
-import 'package:project_app/dynamic_tab_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
@@ -14,10 +11,9 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Menggunakan identifier karena bisa berisi NIK atau Email
   final identifierController = TextEditingController();
   final passwordController = TextEditingController();
-  
+
   bool isLoading = false;
   bool rememberMe = false;
   bool obscurePassword = true;
@@ -28,7 +24,6 @@ class _LoginPageState extends State<LoginPage> {
     _loadSavedIdentifier();
   }
 
-  // Memuat NIK/Email yang tersimpan
   Future<void> _loadSavedIdentifier() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUser = prefs.getString('saved_user_login');
@@ -44,22 +39,14 @@ class _LoginPageState extends State<LoginPage> {
     final identifier = identifierController.text.trim();
     final password = passwordController.text.trim();
 
-    // Validasi Input Kosong
     if (identifier.isEmpty || password.isEmpty) {
       _showErrorSnackBar('NIK/Email & Password harus diisi');
       return;
     }
 
-    // Validasi Panjang NIK (Jika input bukan email, asumsikan itu NIK)
-    // if (!identifier.contains('@') && identifier.length != 8) {
-    //   _showErrorSnackBar('NIK harus berjumlah 8 karakter');
-    //   return;
-    // }
-
     setState(() => isLoading = true);
 
     try {
-      // Memanggil AuthService yang sudah mendukung pencarian NIK/Email
       final user = await AuthService.login(identifier, password);
 
       if (user != null) {
@@ -84,18 +71,11 @@ class _LoginPageState extends State<LoginPage> {
   void _navigateBasedOnRole(User user) {
     if (user.role == 'vendor') {
       if (user.status == 'verified') {
-        // Navigator.of(context).pushReplacement(
-        //   MaterialPageRoute(builder: (_) => const HomepageVendor()),
-        // );
         Navigator.pushReplacementNamed(context, '/home-vendor');
       } else {
         _showErrorSnackBar('Akun vendor Anda sedang dalam proses verifikasi.');
       }
     } else {
-      // Role Admin (PPIC, Logistic, dll)
-      // Navigator.of(context).pushReplacement(
-      //   MaterialPageRoute(builder: (_) => const HomePage()),
-      // );
       Navigator.pushReplacementNamed(context, '/home-admin');
     }
   }
@@ -120,22 +100,27 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             children: [
               const SizedBox(height: 40),
-              // Header Icon
+
               Container(
-                width: 80, height: 80,
+                width: 80,
+                height: 80,
                 decoration: BoxDecoration(
                   color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(Icons.badge_outlined, size: 40, color: Colors.red.shade700),
+                child: Icon(
+                  Icons.badge_outlined,
+                  size: 40,
+                  color: Colors.red.shade700,
+                ),
               ),
               const SizedBox(height: 24),
               Text(
                 'Selamat Datang',
                 style: TextStyle(
-                  fontSize: 28, 
-                  fontWeight: FontWeight.bold, 
-                  color: Colors.red.shade700
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade700,
                 ),
               ),
               const SizedBox(height: 8),
@@ -145,199 +130,128 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 40),
 
-              // Input NIK atau Email
-  //             TextField(
-  //               controller: identifierController,
-  //               textInputAction: TextInputAction.next,
-  //               decoration: InputDecoration(
-  //                 labelText: 'NIK / Email',
-  //                 hintText: 'Masukkan 8 digit NIK atau Email',
-  //                 prefixIcon: const Icon(Icons.person_outline),
-  //                 border: OutlineInputBorder(
-  //                   borderRadius: BorderRadius.circular(12)
-  //                 ),
-  //               ),
-  //             ),
-  //             const SizedBox(height: 20),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: identifierController,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: 'NIK / Email',
+                          hintText: 'Masukkan NIK atau Email',
+                          prefixIcon: const Icon(Icons.person_outline),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 12,
+                          ),
+                        ),
+                      ),
 
-  //             // Password
-  //             TextField(
-  //               controller: passwordController,
-  //               obscureText: obscurePassword,
-  //               textInputAction: TextInputAction.done, // Menampilkan tombol 'Done' atau 'Masuk'
-  // onSubmitted: (_) => _login(),
-  //               decoration: InputDecoration(
-  //                 labelText: 'Password',
-  //                 prefixIcon: const Icon(Icons.lock_outline),
-  //                 suffixIcon: IconButton(
-  //                   icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility),
-  //                   onPressed: () => setState(() => obscurePassword = !obscurePassword),
-  //                 ),
-  //                 border: OutlineInputBorder(
-  //                   borderRadius: BorderRadius.circular(12)
-  //                 ),
-  //               ),
-  //             ),
+                      const SizedBox(height: 20),
 
-  //             Row(
-  //               children: [
-  //                 Checkbox(
-  //                   value: rememberMe,
-  //                   onChanged: (val) => setState(() => rememberMe = val ?? false),
-  //                   activeColor: Colors.red.shade700,
-  //                 ),
-  //                 const Text('Ingat saya'),
-  //               ],
-  //             ),
-  //             const SizedBox(height: 32),
+                      TextField(
+                        controller: passwordController,
+                        obscureText: obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _login(),
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () => setState(
+                              () => obscurePassword = !obscurePassword,
+                            ),
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 12,
+                          ),
+                        ),
+                      ),
 
-  //             // Button Login
-  //             SizedBox(
-  //               width: double.infinity, height: 56,
-  //               child: ElevatedButton(
-  //                 onPressed: isLoading ? null : _login,
-  //                 style: ElevatedButton.styleFrom(
-  //                   backgroundColor: Colors.red.shade700,
-  //                   shape: RoundedRectangleBorder(
-  //                     borderRadius: BorderRadius.circular(12)
-  //                   ),
-  //                   elevation: 0,
-  //                 ),
-  //                 child: isLoading 
-  //                   ? const SizedBox(
-  //                       width: 24, 
-  //                       height: 24, 
-  //                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
-  //                     )
-  //                   : const Text(
-  //                       'Login', 
-  //                       style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)
-  //                     ),
-  //               ),
-  //             ),
-  //             const SizedBox(height: 24),
-Center(
-  child: ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 380),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+                      const SizedBox(height: 8),
 
-        // Input NIK / Email
-        TextField(
-          controller: identifierController,
-          textInputAction: TextInputAction.next,
-          decoration: InputDecoration(
-            labelText: 'NIK / Email',
-            hintText: 'Masukkan NIK atau Email',
-            prefixIcon: const Icon(Icons.person_outline),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 14,
-              horizontal: 12,
-            ),
-          ),
-        ),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: rememberMe,
+                            onChanged: (val) =>
+                                setState(() => rememberMe = val ?? false),
+                            activeColor: Colors.red,
+                          ),
+                          const Text('Ingat saya'),
+                        ],
+                      ),
 
-        const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-        // Password
-        TextField(
-          controller: passwordController,
-          obscureText: obscurePassword,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _login(),
-          decoration: InputDecoration(
-            labelText: 'Password',
-            prefixIcon: const Icon(Icons.lock_outline),
-            suffixIcon: IconButton(
-              icon: Icon(
-                obscurePassword
-                    ? Icons.visibility_off
-                    : Icons.visibility,
-              ),
-              onPressed: () =>
-                  setState(() => obscurePassword = !obscurePassword),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 14,
-              horizontal: 12,
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        // Checkbox Ingat Saya
-        Row(
-          children: [
-            Checkbox(
-              value: rememberMe,
-              onChanged: (val) =>
-                  setState(() => rememberMe = val ?? false),
-              activeColor: Colors.red,
-            ),
-            const Text('Ingat saya'),
-          ],
-        ),
-
-        const SizedBox(height: 20),
-
-        // Button Login
-        SizedBox(
-          height: 48,
-          child: ElevatedButton(
-            onPressed: isLoading ? null : _login,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-            child: isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3,
-                    ),
-                  )
-                : const Text(
-                    'Login',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: isLoading ? null : _login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 3,
+                                  ),
+                                )
+                              : const Text(
+                                  'Login',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-        ),
-      ],
-    ),
-  ),
-),
-              // Register Link
+                ),
+              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text("Vendor baru? "),
                   TextButton(
                     onPressed: () => Navigator.push(
-                      context, 
-                      MaterialPageRoute(builder: (_) => const RegisterVendorPage())
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RegisterVendorPage(),
+                      ),
                     ),
                     child: Text(
-                      'Registrasi', 
-                      style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold)
+                      'Registrasi',
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],

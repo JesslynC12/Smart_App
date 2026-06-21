@@ -13,7 +13,6 @@ class RegisterVendorPage extends StatefulWidget {
 class _RegisterVendorPageState extends State<RegisterVendorPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
   final emailController = TextEditingController();
   final nikController = TextEditingController();
   final nameController = TextEditingController();
@@ -36,8 +35,6 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
     super.dispose();
   }
 
-  // --- LOGIKA REGISTRASI ---
-  // Disesuaikan dengan AuthService: registerVendor(email, password, name, nikInput, registCodeInput)
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -56,37 +53,12 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
 
       _showSuccessDialog();
     } catch (e) {
-      // Menghilangkan prefix 'Exception: ' agar pesan lebih bersih di SnackBar
       _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
 
-  // void _showSuccessDialog() {
-  //   showDialog(
-  //     context: context,
-  //     barrierDismissible: false,
-  //     builder: (context) => AlertDialog(
-  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-  //       title: const Text('Pendaftaran Berhasil'),
-  //       content: const Text(
-  //           'Akun Anda telah didaftarkan. Silakan cek email untuk verifikasi, lalu tunggu persetujuan admin untuk bisa login.'),
-  //       actions: [
-  //         TextButton(
-  //           onPressed: () {
-  //             Navigator.of(context).pop();
-  //             Navigator.of(context).pushReplacement(
-  //               MaterialPageRoute(builder: (context) => const LoginPage()),
-  //             );
-  //           },
-  //           child: const Text('SAYA MENGERTI',
-  //               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
   void _showSuccessDialog() {
     showDialog(
       context: context,
@@ -95,7 +67,8 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Pendaftaran Berhasil'),
         content: const Text(
-            'Akun Anda telah dibuat. Silakan Login dengan menggunakan NIK yang sudah anda daftarkan.'),
+          'Akun Anda telah dibuat. Silakan Login dengan menggunakan NIK yang sudah anda daftarkan.',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -104,8 +77,10 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                 MaterialPageRoute(builder: (context) => const LoginPage()),
               );
             },
-            child: const Text('Oke',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+            child: const Text(
+              'Oke',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -115,13 +90,13 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating),
+        content: Text(message),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
-  // --- UI BUILDER ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -153,15 +128,13 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                       controller: nikController,
                       hint: 'Masukkan NIK',
                       icon: Icons.badge_outlined,
-                     // inputFormatters: [LengthLimitingTextInputFormatter(8)],
-                      // validator: (v) =>
-                      //     v!.length != 8 ? 'NIK harus 8 karakter' : null,
+
                       validator: (v) {
-    if (v == null || v.trim().isEmpty) {
-      return 'NIK wajib diisi'; // Hanya memvalidasi jika kosong
-    }
-    return null;
-  },
+                        if (v == null || v.trim().isEmpty) {
+                          return 'NIK wajib diisi';
+                        }
+                        return null;
+                      },
                     ),
                     _customTextField(
                       label: 'Nama Admin Vendor',
@@ -205,8 +178,9 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                       icon: Icons.lock_reset,
                       isPassword: true,
                       obscure: obscurePasswordConfirm,
-                      onToggle: () => setState(() =>
-                          obscurePasswordConfirm = !obscurePasswordConfirm),
+                      onToggle: () => setState(
+                        () => obscurePasswordConfirm = !obscurePasswordConfirm,
+                      ),
                       validator: (v) => v != passwordController.text
                           ? 'Password tidak cocok'
                           : null,
@@ -232,12 +206,15 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         Text(
           'Registrasi Vendor',
           style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.red.shade900),
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.red.shade900,
+          ),
         ),
-        const Text('Lengkapi data untuk mendaftarkan akun',
-            style: TextStyle(color: Colors.grey)),
+        const Text(
+          'Lengkapi data untuk mendaftarkan akun',
+          style: TextStyle(color: Colors.grey),
+        ),
       ],
     );
   }
@@ -249,8 +226,9 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
         onPressed: isLoading ? null : _register,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.red.shade700,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 2,
         ),
         child: isLoading
@@ -258,14 +236,17 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
                 height: 22,
                 width: 22,
                 child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
               )
             : const Text(
                 'DAFTAR SEKARANG',
                 style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
       ),
     );
@@ -299,12 +280,14 @@ class _RegisterVendorPageState extends State<RegisterVendorPage> {
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-                  onPressed: onToggle)
+                  onPressed: onToggle,
+                )
               : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red.shade700, width: 2)),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.red.shade700, width: 2),
+          ),
         ),
       ),
     );

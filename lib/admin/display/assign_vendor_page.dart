@@ -16,9 +16,10 @@ class AssignVendorPage extends StatefulWidget {
 
 class _AssignVendorPageState extends State<AssignVendorPage> {
   final supabase = Supabase.instance.client;
-  StreamSubscription? _realtimeSubscription;
+  bool _isReloading = false;
   bool _isLoading = true;
-String? _selectedDedicated; 
+  Timer? _reloadTimer;
+  String? _selectedDedicated;
 
   List<Map<String, dynamic>> _recommendations = [];
   List<Map<String, dynamic>> _allVendors = [];
@@ -35,34 +36,25 @@ String? _selectedDedicated;
   void initState() {
     super.initState();
     _loadData();
-    _setupRealtime();
-  }
-
-  void _setupRealtime() {
-    _realtimeSubscription = supabase
-        .from('shipping_request')
-        .stream(primaryKey: ['shipping_id'])
-        .eq('shipping_id', widget.shippingId)
-        .listen((data) {
-          if (data.isNotEmpty) {
-            _loadData();
-          }
-        });
   }
 
   @override
   void dispose() {
-    _realtimeSubscription?.cancel();
+    _reloadTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _loadData() async {
+    if (_isReloading) return;
+
+    _isReloading = true;
+
     try {
       setState(() => _isLoading = true);
 
-    final response = await supabase
-        .from('shipping_request')
-        .select('''
+      final response = await supabase
+          .from('shipping_request')
+          .select('''
           *,
           warehouse(warehouse_id, warehouse_name, lokasi),
           delivery_order(
@@ -73,30 +65,31 @@ String? _selectedDedicated;
               material:material_id (material_id, material_name, net_weight)
             )
           ),
-          shipping_assignments(
+           shipping_assignments(
             status_assignment,
             responded_at,
             reason_rejected,
             catatan,
             id_vendor_details,
-           master_vendor:nik (
-        vendor_name
-        ),
-            vendor_transportasi:id_vendor_details(
-                id
-                )
-          )
+           vendor_transportasi:id_vendor_details(
+    id,
+    nik,
+    master_vendor:nik (
+      vendor_name
+    )
+  )
+)
         ''')
-        .eq('shipping_id', widget.shippingId)
-        .single();
+          .eq('shipping_id', widget.shippingId)
+          .single();
 
       final groupId = response['group_id'];
-    List<Map<String, dynamic>> shippingList = [];
+      List<Map<String, dynamic>> shippingList = [];
 
-    if (groupId != null) {
-      final groupData = await supabase
-          .from('shipping_request')
-          .select('''
+      if (groupId != null) {
+        final groupData = await supabase
+            .from('shipping_request')
+            .select('''
             *,
             warehouse(warehouse_id, warehouse_name, lokasi),
             delivery_order(
@@ -113,167 +106,97 @@ String? _selectedDedicated;
             reason_rejected,
               catatan,
             id_vendor_details,
-             vendor_transportasi:id_vendor_details(
-                id,
-                nik,
-                vendor_name
-                )
-          )
+           vendor_transportasi:id_vendor_details(
+    id,
+    nik,
+    master_vendor:nik (
+      vendor_name
+    )
+  )
+)
           ''')
-          .eq('group_id', groupId);
-      shippingList = List<Map<String, dynamic>>.from(groupData);
-    } else {
-      shippingList = [response];
-    }
+            .eq('group_id', groupId);
+        shippingList = List<Map<String, dynamic>>.from(groupData);
+      } else {
+        shippingList = [response];
+      }
 
-    List allDOs = [];
+      List allDOs = [];
       List<String> cities = [];
       List<String> areas = [];
       double sumQty = 0;
       double sumNW = 0;
-    Map<int, Map<String, dynamic>> uniqueRejects = {};
-    
-    for (var ship in shippingList) {
-      final rejects = ship['shipping_assignments'] as List? ?? [];
-      for (var r in rejects) {
-        //if (r['status_assignment'] == 'rejected') {
-          // if (r['status_assignment'] == 'rejected' || r['status_assignment'] == 'rejected unit' || 
-          //   r['status_assignment'] == 'cancel booking') {
-          final String statusAss = r['status_assignment']?.toString().toLowerCase() ?? "";
-    
-    // Tambahkan 'no response' ke dalam daftar status yang dipantau
-    const failedStatuses = ['rejected', 'rejected unit', 'cancel booking', 'no response'];
-    if (failedStatuses.contains(statusAss)) {
-      String vendorKey = "${r['id_vendor_details']}_$statusAss";
-      uniqueRejects[int.tryParse(vendorKey.split('_')[0]) ?? 0] = r;
-          // String vendorName = r['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-          // // Masukkan ke Map, jika nama sama maka akan tertimpa (menjadi unik)
-          // uniqueRejects[vendorName] = r;
-          // int vendorDetailsId = r['id_vendor_details'] ?? 0;
-          //   uniqueRejects[vendorDetailsId] = r;
-        }
-      }
-    
-    // for (var doItem in ship['delivery_order'] ?? []) {
-        List currentShipDOs = List.from(ship['delivery_order'] ?? []);
-         for (var doItem in currentShipDOs) {
-        // SUNTIK RDD ASAL KE TIAP DO AGAR TAMPIL SPESIFIK DI UI
-        doItem['rdd_origin'] = ship['rdd'];
-         doItem['so_origin'] = ship['so'];
-          var cust = doItem['customer'];
-          // Ambil Kota Tujuan
-          String city = doItem['customer']?['city']?.toString().trim().toUpperCase() ?? "";
-          String area = cust['area']?.toString().trim().toUpperCase() ?? "";
-         if (city.isNotEmpty && !cities.contains(city)) cities.add(city);
-        if (area.isNotEmpty && !areas.contains(area)) areas.add(area);
+      Map<int, Map<String, dynamic>> uniqueRejects = {};
 
-            // Ambil Area (Sesuai kolom area di tabel customer Anda)
-          // Hitung Berat (Logika tidak berubah)
+      for (var ship in shippingList) {
+        final rejects = ship['shipping_assignments'] as List? ?? [];
+        for (var r in rejects) {
+          final String statusAss =
+              r['status_assignment']?.toString().toLowerCase() ?? "";
+
+          const failedStatuses = [
+            'rejected',
+            'rejected unit',
+            'cancel booking',
+            'no response',
+          ];
+          if (failedStatuses.contains(statusAss)) {
+            String vendorKey = "${r['id_vendor_details']}_$statusAss";
+            uniqueRejects[int.tryParse(vendorKey.split('_')[0]) ?? 0] = r;
+          }
+        }
+
+        List currentShipDOs = List.from(ship['delivery_order'] ?? []);
+        for (var doItem in currentShipDOs) {
+          doItem['rdd_origin'] = ship['rdd'];
+          doItem['so_origin'] = ship['so'];
+          var cust = doItem['customer'];
+
+          String city =
+              doItem['customer']?['city']?.toString().trim().toUpperCase() ??
+              "";
+          String area = cust['area']?.toString().trim().toUpperCase() ?? "";
+          if (city.isNotEmpty && !cities.contains(city)) cities.add(city);
+          if (area.isNotEmpty && !areas.contains(area)) areas.add(area);
+
           for (var det in doItem['do_details'] ?? []) {
             double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-            // Akses net_weight dari hasil join material
-            double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-            
+
+            double unitWeight =
+                double.tryParse(
+                  det['material']?['net_weight']?.toString() ?? "0",
+                ) ??
+                0;
+
             sumNW += (qty * unitWeight);
             sumQty += qty;
           }
         }
         allDOs.addAll(currentShipDOs);
       }
-      
-    // Ubah kembali menjadi List untuk disimpan di state
-    List<Map<String, dynamic>> combinedRejectHistory = uniqueRejects.values.toList();
-     double tnwCalculated = sumNW / 1000;
-      //String unitRequired = _determineUnitByWeight(tnwCalculated);
-// Panggil fungsi penentu unit dengan parameter lengkap
-      String unitRequired = _determineUnitByWeight(tnwCalculated, cities, areas);
 
-final whData = shippingList.first['warehouse'];
-      String storageLoc = whData != null ? whData['lokasi']?.toString() ?? "" : "";
-String storageLocDisplay = whData != null 
-    ? "${whData['lokasi']} - ${whData['warehouse_name']}" 
-    : "-";
-      // if (groupId != null) {
-      //   rawData = await supabase
-      //       .from('shipping_request')
-      //       .select(queryStr)
-      //       .eq('group_id', groupId)
-      //       .order('shipping_id');
-      // } else {
-      //   rawData = await supabase
-      //       .from('shipping_request')
-      //       .select(queryStr)
-      //       .eq('shipping_id', widget.shippingId)
-      //       .single();
-      // }
+      List<Map<String, dynamic>> combinedRejectHistory = uniqueRejects.values
+          .toList();
+      double tnwCalculated = sumNW / 1000;
 
-      // List<Map<String, dynamic>> shippingList = groupId != null
-      //     ? List<Map<String, dynamic>>.from(rawData)
-      //     : [rawData];
+      String unitRequired = _determineUnitByWeight(
+        tnwCalculated,
+        cities,
+        areas,
+      );
 
-     // 3. Inisialisasi variabel perhitungan
-      
+      final whData = shippingList.first['warehouse'];
+      String storageLoc = whData != null
+          ? whData['lokasi']?.toString() ?? ""
+          : "";
+      String storageLocDisplay = whData != null
+          ? "${whData['lokasi']} - ${whData['warehouse_name']}"
+          : "-";
 
-      // 4. Loop data untuk mengumpulkan DO, Kota, dan Berat
-      //for (var ship in shippingList) {
-        // allDOs.addAll(ship['delivery_order'] ?? []);
-      
-     
-
-      // 🔥 3. AMBIL STORAGE LOCATION (Titik Muat)
-    // Kita ambil dari baris pertama shipping_request_details
-    // final detailsList = shippingList.first['shipping_request_details'] as List? ?? [];
-    // String storageLoc = "";
-    // if (detailsList.isNotEmpty) {
-    //   storageLoc = detailsList[0]['storage_location']?.toString().trim() ?? "";
-    // }
-
-      // 3. Hitung Kota Tujuan
-      
-      // for (var doItem in allDOs) {
-      //   var cust = doItem['customer'];
-      //   if (cust is Map<String, dynamic>) {
-      //     String city = cust['city']?.toString().trim() ?? "";
-      //     if (city.isNotEmpty && !cities.contains(city)) {
-      //       cities.add(city);
-      //     }
-     
-
-      // 🔥 4. OPTIMASI: HITUNG TOTALITAS SEKALI SAJA DI SINI
-      // double sumQty = 0;
-      // double sumNW = 0;
-      // for (var doItem in allDOs) {
-      //   final details = doItem['do_details'] as List? ?? [];
-      //   for (var det in details) {
-      //     double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-      //     dynamic matSource = det['material'];
-      //     Map<String, dynamic>? materialMap;
-      //     if (matSource is List && matSource.isNotEmpty) {
-      //       materialMap = matSource.first as Map<String, dynamic>;
-      //     } else if (matSource is Map<String, dynamic>) {
-      //       materialMap = matSource;
-      //     }
-      //     double unitWeight = 0;
-      //     if (materialMap != null) {
-      //       var nw = materialMap['net_weight'];
-      //       unitWeight = nw is num ? nw.toDouble() : (double.tryParse(nw?.toString() ?? "0") ?? 0);
-      // //     }
-      // for (var det in doItem['do_details'] ?? []) {
-      //       double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-      //       double unitWeight = double.tryParse(det['material']?['net_weight']?.toString() ?? "0") ?? 0;
-      //     sumNW += (qty * unitWeight);
-      //     sumQty += qty;
-      //   }
-      // }
-      // }
-      
-//String storageLoc = shippingList.first['storage_location']?.toString().trim() ?? "";
-     
-      // 5. Ambil vendor
       final responses = await Future.wait([
         supabase
             .from('vendor_transportasi')
-            .select()
+            .select('*, master_vendor(vendor_name)')
             .eq('type_unit', unitRequired)
             .filter('city', 'in', '(${cities.map((e) => '"$e"').join(',')})')
             .filter('area', 'in', '(${areas.map((e) => '"$e"').join(',')})')
@@ -283,77 +206,91 @@ String storageLocDisplay = whData != null
             .limit(4),
         supabase
             .from('vendor_transportasi')
-           .select('''
-      
-    ''')
-            .order('vendor_name', ascending: true)
+            .select('*, master_vendor(vendor_name)')
+            .order('vendor_name', ascending: true),
       ]);
 
-if (mounted) {
-      setState(() {
-        _shippingData = {
-          'group_id': groupId,
-          'shipping_id': widget.shippingId,
-          'all_ids': shippingList.map((e) => e['shipping_id']).toList(), // Untuk proses insert assignments
-          'so': shippingList.first['so'],
-          'delivery_order': allDOs,
-          'rdd': shippingList.first['rdd'],
-          'stuffing_date': shippingList.first['stuffing_date'],
-          'warehouse': storageLocDisplay,
-          //'is_dedicated': shippingList.first['is_dedicated'],
-          'reject_list': combinedRejectHistory, // Simpan riwayat reject di sini
-        };
-        targetCities = cities;
-        _qtyTotal = sumQty;
-        _nwTotal = sumNW;
-        _tnwTotal = tnwCalculated;
-        _requiredUnit = unitRequired;
-        _recommendations = List<Map<String, dynamic>>.from(responses[0]);
-        _allVendors = List<Map<String, dynamic>>.from(responses[1]);
-        _isLoading = false;
-      });
-}
+      if (mounted) {
+        setState(() {
+          _shippingData = {
+            'group_id': groupId,
+            'shipping_id': widget.shippingId,
+            'all_ids': shippingList.map((e) => e['shipping_id']).toList(),
+            'so': shippingList.first['so'],
+            'delivery_order': allDOs,
+            'rdd': shippingList.first['rdd'],
+            'stuffing_date': shippingList.first['stuffing_date'],
+            'warehouse': storageLocDisplay,
+
+            'reject_list': combinedRejectHistory,
+          };
+          targetCities = cities;
+          _qtyTotal = sumQty;
+          _nwTotal = sumNW;
+          _tnwTotal = tnwCalculated;
+          _requiredUnit = unitRequired;
+          _recommendations = List<Map<String, dynamic>>.from(responses[0]);
+          _allVendors = List<Map<String, dynamic>>.from(responses[1]);
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnackBar("Error loading data: $e", Colors.red);
     }
   }
 
-  // String _determineUnitByWeight(double ton) {
-  //   if (ton <= 2.0) return "CDE";
-  //   if (ton <= 4.0) return "CDD";
-  //   if (ton <= 10.0) return "FUSO";
-  //   return "WB";
-  // }
-  String _determineUnitByWeight(double ton, List<String> cities, List<String> areas) {
-  bool isToMarunda = cities.any((c) => c.toUpperCase().contains("MARUNDA"));
-  
-  // Daftar area khusus Container (berdasarkan gambar Anda)
-  const contAreas = [
-    'GORONTALO', 'KALIMANTAN BARAT', 'KALIMANTAN SELATAN', 'KALIMANTAN TENGAH',
-    'KALIMANTAN TIMUR', 'KALIMANTAN UTARA', 'KEPULAUAN RIAU', 'MALUKU',
-    'MALUKU UTARA', 'NTB', 'NTT', 'P. BANGKA & BELITUNG', 'PAPUA',
-    'PAPUA BARAT', 'RIAU', 'SULAWESI SELATAN', 'SULAWESI TENGAH',
-    'SULAWESI TENGGARA', 'SULAWESI UTARA', 'SUMATERA BARAT',
-    'SUMATERA SELATAN', 'SUMATERA UTARA', 'NUSA TENGGARA BARAT', 'NUSA TENGGARA TIMUR'
-  ];
+  String _determineUnitByWeight(
+    double ton,
+    List<String> cities,
+    List<String> areas,
+  ) {
+    bool isToMarunda = cities.any((c) => c.toUpperCase().contains("MARUNDA"));
 
-  // Cek apakah ada salah satu area tujuan yang masuk dalam daftar di atas
-  bool isContArea = areas.any((a) => contAreas.contains(a.toUpperCase().trim()));
+    const contAreas = [
+      'GORONTALO',
+      'KALIMANTAN BARAT',
+      'KALIMANTAN SELATAN',
+      'KALIMANTAN TENGAH',
+      'KALIMANTAN TIMUR',
+      'KALIMANTAN UTARA',
+      'KEPULAUAN RIAU',
+      'MALUKU',
+      'MALUKU UTARA',
+      'NTB',
+      'NTT',
+      'P. BANGKA & BELITUNG',
+      'PAPUA',
+      'PAPUA BARAT',
+      'RIAU',
+      'SULAWESI SELATAN',
+      'SULAWESI TENGAH',
+      'SULAWESI TENGGARA',
+      'SULAWESI UTARA',
+      'SUMATERA BARAT',
+      'SUMATERA SELATAN',
+      'SUMATERA UTARA',
+      'NUSA TENGGARA BARAT',
+      'NUSA TENGGARA TIMUR',
+    ];
 
-  if (ton <= 2.8) return "CDE";
-  if (ton <= 5.5) return "CDD";
-  if (ton <= 12.0) return "FUSO";
-  
-  // LOGIKA BERAT > 12 TON
-  if (isToMarunda) {
-    return "CONT (KA)";
-  } else if (isContArea) {
-    return "CONT"; // Menggunakan Container jika area sesuai gambar
-  } else {
-    return "WB"; // Default menggunakan Wingbox untuk area lainnya (Jawa/Lokal)
+    bool isContArea = areas.any(
+      (a) => contAreas.contains(a.toUpperCase().trim()),
+    );
+
+    if (ton <= 2.8) return "CDE";
+    if (ton <= 5.5) return "CDD";
+    if (ton <= 12.0) return "FUSO";
+
+    // LOGIKA BERAT > 12 TON
+    if (isToMarunda) {
+      return "CONT (KA)";
+    } else if (isContArea) {
+      return "CONT";
+    } else {
+      return "WB";
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -362,74 +299,103 @@ if (mounted) {
       child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.red))
           : Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDetailedSummary(),
-                  const Padding(
-  padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-  child: Text("STATUS DEDICATED", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-),
-Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 16),
-  child: Container(
-    decoration: BoxDecoration(
-      color: Colors.grey.shade50,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.grey.shade300),
-    ),
-    child: Column(
-      children: [
-        RadioListTile<String>(
-          title: const Text("Dedicated", style: TextStyle(fontSize: 13)),
-          value: "dedicated",
-          groupValue: _selectedDedicated,
-          activeColor: Colors.red.shade700,
-          onChanged: (val) => setState(() => _selectedDedicated = val),
-        ),
-        Divider(height: 1, color: Colors.grey.shade300),
-        RadioListTile<String>(
-          title: const Text("Non-Dedicated", style: TextStyle(fontSize: 13)),
-          value: "non-dedicated",
-          groupValue: _selectedDedicated,
-          activeColor: Colors.red.shade700,
-          onChanged: (val) => setState(() => _selectedDedicated = val),
-        ),
-      ],
-    ),
-  ),
-),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Text("🏆 REKOMENDASI VENDOR (SISTEM)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 20),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ..._recommendations.map((v) => _buildVendorTile(v)),
-                        if (_recommendations.isEmpty) _emptyRecommendationBox(),
+                        _buildDetailedSummary(),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Text(
+                            "STATUS DEDICATED",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Column(
+                              children: [
+                                RadioListTile<String>(
+                                  title: const Text(
+                                    "Dedicated",
+                                    style: TextStyle(fontSize: 13),
+                                  ),
+                                  value: "dedicated",
+                                  groupValue: _selectedDedicated,
+                                  activeColor: Colors.red.shade700,
+                                  onChanged: (val) =>
+                                      setState(() => _selectedDedicated = val),
+                                ),
+                                Divider(height: 1, color: Colors.grey.shade300),
+                                RadioListTile<String>(
+                                  title: const Text(
+                                    "Non-Dedicated",
+                                    style: TextStyle(fontSize: 13),
+                                  ),
+                                  value: "non-dedicated",
+                                  groupValue: _selectedDedicated,
+                                  activeColor: Colors.red.shade700,
+                                  onChanged: (val) =>
+                                      setState(() => _selectedDedicated = val),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Text(
+                            "🏆 REKOMENDASI VENDOR (SISTEM)",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            children: [
+                              ..._recommendations.map(
+                                (v) => _buildVendorTile(v),
+                              ),
+                              if (_recommendations.isEmpty)
+                                _emptyRecommendationBox(),
+                            ],
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Text(
+                            "🔍 PILIH MANUAL VENDOR LAIN",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _buildManualDropdown(),
+                        ),
                       ],
                     ),
-                  
                   ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Text("🔍 PILIH MANUAL VENDOR LAIN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildManualDropdown(),
-                  ),
-                ],
-              ),
-            ),
-              ),  
-              _buildBottomAction(),
+                ),
+                _buildBottomAction(),
               ],
             ),
     );
@@ -437,18 +403,39 @@ Padding(
 
   Widget _buildBottomAction() {
     return Container(
-              decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -2))]),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildCalculationFooter(),
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, minimumSize: const Size(double.infinity, 52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      onPressed: _selectedVendor == null ? null : _processToDatabase,
-                      child: const Text("KONFIRMASI & ASSIGN VENDOR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildCalculationFooter(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: _selectedVendor == null ? null : _processToDatabase,
+              child: const Text(
+                "KONFIRMASI & ASSIGN VENDOR",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -460,13 +447,16 @@ Padding(
     final bool isGroup = data['group_id'] != null;
     final List dos = data['delivery_order'] ?? [];
     final List rejectList = data['reject_list'] ?? [];
-    //final List rawDetails = data['shipping_request_details'] ?? [];
-    //final Map<String, dynamic> details = rawDetails.isNotEmpty ? rawDetails[0] : {};
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(left: BorderSide(color: isGroup ? Colors.blue.shade700 : Colors.red.shade700, width: 6)),
+        border: Border(
+          left: BorderSide(
+            color: isGroup ? Colors.blue.shade700 : Colors.red.shade700,
+            width: 6,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,124 +469,148 @@ Padding(
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-                    // _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                    Text(
+                      isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isGroup
+                            ? Colors.blue.shade900
+                            : Colors.red.shade900,
+                        letterSpacing: 1.1,
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(isGroup ? "ID Grup: ${data['group_id']}" : "ID Shipping: ${data['shipping_id']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                Text(
+                  isGroup
+                      ? "ID Grup: ${data['group_id']}"
+                      : "ID Shipping: ${data['shipping_id']}",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                   // _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
                     const Spacer(),
-                     _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
-                   // _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _buildBadge(
+                      data['warehouse']?.toString().toUpperCase() ?? "-",
+                      Colors.red.shade700,
+                    ),
                   ],
                 ),
-                // --- BAGIAN RIWAYAT REJECT ---
-              if (rejectList.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
-                          const SizedBox(width: 6),
-                          Text("RIWAYAT VENDOR:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      ...rejectList.map((rej) {
-                        String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
-                       String status = rej['status_assignment'];
-                        
-                        // Menentukan Alasan (Reason) secara dinamis
-                        String reasonText = "";
-                        // if (status == 'rejected unit') {
-                        //   // Jika ditolak saat check-in, ambil dari kolom 'catatan'
-                        //   reasonText = "UNIT DITOLAK SAAT CHECK-IN";
-                        //   if (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) {
-                        //     reasonText += " - ${rej['catatan']}";
-                        //   }
-                        // } else {
-                        //   // Jika ditolak via konfirmasi vendor, ambil dari 'reason_rejected'
-                        //   reasonText = "VENDOR MENOLAK ORDER";
-                        //   if (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) {
-                        //     reasonText += " - ${rej['reason_rejected']}";
-                        //   }
-                        // }
-                        if (status == 'rejected unit') {
-    // Jika ditolak saat check-in kelayakan unit
-    reasonText = "UNIT DITOLAK SAAT CHECK-IN";
-    if (rej['catatan'] != null && rej['catatan'].toString().isNotEmpty) {
-      reasonText += " - ${rej['catatan']}";
-    }
-  } 
-  else if (status == 'no response') {
-    // Pesan khusus No Response sesuai permintaan Anda
-    reasonText = "tidak merespon penugasan hingga batas waktu.";
-  }
-  else if (status == 'cancel booking') {
-    // --- PENAMBAHAN KONDISI UNTUK CANCEL BOOKING ---
-    reasonText = "BOOKING DIBATALKAN";
-    // Mengambil alasan pembatalan (Silakan sesuaikan kolomnya, di sini dicontohkan pakai 'reason_rejected' atau 'catatan')
-    var alasanCancel = rej['reason_rejected'] ?? rej['catatan'];
-    if (alasanCancel != null && alasanCancel.toString().isNotEmpty) {
-      reasonText += " - $alasanCancel";
-    }
-  } 
-  else {
-    // Jika ditolak via konfirmasi penawaran awal oleh vendor (status == 'rejected' atau lainnya)
-    reasonText = "VENDOR MENOLAK ORDER";
-    if (rej['reason_rejected'] != null && rej['reason_rejected'].toString().isNotEmpty) {
-      reasonText += " - ${rej['reason_rejected']}";
-    }
-  }
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            // "• $vendorName: $reasonText",
-                            // style: const TextStyle(fontSize: 11, color: Colors.black87, height: 1.3),
-                            status == 'no response' 
-        ? "• Vendor ($vendorName) $reasonText" 
-        : "• $vendorName: $reasonText",
-      style: TextStyle(
-        fontSize: 11, 
-        color: (status == 'rejected unit' || status == 'no response') 
-            ? Colors.red.shade900 
-            : Colors.black87, 
-        height: 1.3,
-        fontWeight: (status == 'rejected unit' || status == 'no response') 
-            ? FontWeight.bold 
-            : FontWeight.normal
-      ),
-                          ),
-                        );
-                      }).toList(),
-                    ],
+                if (rejectList.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 14,
+                              color: Colors.orange.shade900,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "RIWAYAT VENDOR:",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ...rejectList.map((rej) {
+                          String vendorName =
+                              rej['vendor_transportasi']?['master_vendor']?['vendor_name'] ??
+                              "Unknown Vendor";
+                          String status = rej['status_assignment'];
+
+                          String reasonText = "";
+
+                          if (status == 'rejected unit') {
+                            reasonText = "UNIT DITOLAK SAAT CHECK-IN";
+                            if (rej['catatan'] != null &&
+                                rej['catatan'].toString().isNotEmpty) {
+                              reasonText += " - ${rej['catatan']}";
+                            }
+                          } else if (status == 'no response') {
+                            reasonText =
+                                "tidak merespon penugasan hingga batas waktu.";
+                          } else if (status == 'cancel booking') {
+                            reasonText = "BOOKING DIBATALKAN";
+                            var alasanCancel =
+                                rej['reason_rejected'] ?? rej['catatan'];
+                            if (alasanCancel != null &&
+                                alasanCancel.toString().isNotEmpty) {
+                              reasonText += " - $alasanCancel";
+                            }
+                          } else {
+                            reasonText = "VENDOR MENOLAK ORDER";
+                            if (rej['reason_rejected'] != null &&
+                                rej['reason_rejected'].toString().isNotEmpty) {
+                              reasonText += " - ${rej['reason_rejected']}";
+                            }
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              status == 'no response'
+                                  ? "• Vendor ($vendorName) $reasonText"
+                                  : "• $vendorName: $reasonText",
+                              style: TextStyle(
+                                fontSize: 11,
+                                color:
+                                    (status == 'rejected unit' ||
+                                        status == 'no response')
+                                    ? Colors.red.shade900
+                                    : Colors.black87,
+                                height: 1.3,
+                                fontWeight:
+                                    (status == 'rejected unit' ||
+                                        status == 'no response')
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
-          ),
-              
+            ),
           ),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey.shade100,
-            child: const Text("DETAIL ITEM & CUSTOMER", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            child: const Text(
+              "DETAIL ITEM & CUSTOMER",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey,
+              ),
+            ),
           ),
           ...dos.map((doItem) {
             final List doDetails = doItem['do_details'] ?? [];
@@ -608,60 +622,124 @@ Padding(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-          //         Padding(
-          // padding: const EdgeInsets.only(left: 4, bottom: 4),
-          Row(
-            children: [
-              Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-              const SizedBox(width: 6),
-              Text(
-                "RDD: $rddSpesifik",
-                style: TextStyle(
-                  fontSize: 12, 
-                  fontWeight: FontWeight.bold, 
-                  color: Colors.black
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.description_outlined, size: 16, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      const SizedBox(width: 20),
-                      Text("SO: $soNum", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Icon(
+                        Icons.calendar_month,
+                        size: 14,
+                        color: Colors.red.shade700,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "RDD: $rddSpesifik",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.description_outlined,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "DO: ${doItem['do_number']}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Text(
+                        "SO: $soNum",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}",
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
                   const SizedBox(height: 10),
                   Container(
-                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade200)),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
                     child: Table(
-                      columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(3), 2: FlexColumnWidth(0.8), 3: FlexColumnWidth(1.3)},
+                      columnWidths: const {
+                        0: FlexColumnWidth(1.2),
+                        1: FlexColumnWidth(3),
+                        2: FlexColumnWidth(0.8),
+                        3: FlexColumnWidth(1.3),
+                      },
                       children: [
                         TableRow(
-                          decoration: BoxDecoration(color: Colors.grey.shade200),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                          ),
                           children: [
                             _tableCell("ID Mat", isBold: true, isHeader: true),
                             _tableCell("Name", isBold: true, isHeader: true),
-                            _tableCell("Qty", isBold: true, align: TextAlign.right, isHeader: true),
-                            _tableCell("NW (Kg)", isBold: true, align: TextAlign.right, isHeader: true),
+                            _tableCell(
+                              "Qty",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
+                            _tableCell(
+                              "NW (Kg)",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
                           ],
                         ),
                         ...doDetails.map((det) {
-                          double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+                          double qty =
+                              double.tryParse(det['qty']?.toString() ?? "0") ??
+                              0;
                           var matSource = det['material'];
-                          Map<String, dynamic>? matData = (matSource is List && matSource.isNotEmpty) ? matSource[0] : (matSource is Map ? matSource as Map<String, dynamic> : null);
-                          double unitWeight = double.tryParse(matData?['net_weight']?.toString() ?? "0") ?? 0;
+                          Map<String, dynamic>? matData =
+                              (matSource is List && matSource.isNotEmpty)
+                              ? matSource[0]
+                              : (matSource is Map
+                                    ? matSource as Map<String, dynamic>
+                                    : null);
+                          double unitWeight =
+                              double.tryParse(
+                                matData?['net_weight']?.toString() ?? "0",
+                              ) ??
+                              0;
                           return TableRow(
                             children: [
-                              _tableCell(matData?['material_id']?.toString() ?? "-"),
-                              _tableCell(matData?['material_name']?.toString() ?? "-"),
-                              _tableCell(qty.toInt().toString(), align: TextAlign.right, isBold: true),
-                              _tableCell((qty * unitWeight).toStringAsFixed(2), align: TextAlign.right),
+                              _tableCell(
+                                matData?['material_id']?.toString() ?? "-",
+                              ),
+                              _tableCell(
+                                matData?['material_name']?.toString() ?? "-",
+                              ),
+                              _tableCell(
+                                qty.toInt().toString(),
+                                align: TextAlign.right,
+                                isBold: true,
+                              ),
+                              _tableCell(
+                                (qty * unitWeight).toStringAsFixed(2),
+                                align: TextAlign.right,
+                              ),
                             ],
                           );
                         }).toList(),
@@ -673,21 +751,25 @@ Padding(
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
   }
 
   Widget _buildVendorTile(Map<String, dynamic> vendor) {
-    bool hasManualSelection = _selectedVendor != null && !_recommendations.any((v) => v['id'] == _selectedVendor?['id']);
+    bool hasManualSelection =
+        _selectedVendor != null &&
+        !_recommendations.any((v) => v['id'] == _selectedVendor?['id']);
     bool isSelected = _selectedVendor?['id'] == vendor['id'];
     int rank = vendor['winner_rank'] ?? 0;
     bool isMatchingCity = targetCities.contains(vendor['city']);
 
     dynamic rawAlokasi = vendor['alokasi_persen'] ?? 0;
     double alokasiVal = double.tryParse(rawAlokasi.toString()) ?? 0;
-    String displayPersen = alokasiVal <= 1 ? "${(alokasiVal * 100).toInt()}%" : "${alokasiVal.toInt()}%";
+    String displayPersen = alokasiVal <= 1
+        ? "${(alokasiVal * 100).toInt()}%"
+        : "${alokasiVal.toInt()}%";
 
     return IgnorePointer(
       ignoring: hasManualSelection,
@@ -698,27 +780,63 @@ Padding(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isSelected ? Colors.green.shade50 : Colors.white,
-            border: Border.all(color: isSelected ? Colors.green : Colors.grey.shade300, width: isSelected ? 2 : 1),
+            border: Border.all(
+              color: isSelected ? Colors.green : Colors.grey.shade300,
+              width: isSelected ? 2 : 1,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: rank == 1 ? Colors.amber.shade100 : Colors.blue.shade50,
-                child: Icon(rank == 1 ? Icons.workspace_premium : Icons.local_shipping, color: rank == 1 ? Colors.orange : Colors.blue, size: 20),
+                backgroundColor: rank == 1
+                    ? Colors.amber.shade100
+                    : Colors.blue.shade50,
+                child: Icon(
+                  rank == 1 ? Icons.workspace_premium : Icons.local_shipping,
+                  color: rank == 1 ? Colors.orange : Colors.blue,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(vendor['vendor_name'] ?? "-", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text("Unit: ${vendor['type_unit']} | Rank: $rank", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text("City: ${vendor['city']} | Area: ${vendor['area'] ?? '-'} | QCF: ${vendor['jenis_qcf'] ?? '-'}", style: TextStyle(fontSize: 11, fontWeight: isMatchingCity ? FontWeight.bold : FontWeight.normal, color: isMatchingCity ? Colors.green.shade700 : Colors.grey.shade500)),
-                    // 🔥 TAMBAHKAN INFORMASI GUDANG DI SINI
-                  const SizedBox(height: 2),
-                  Text("🏠 Gudang: ${vendor['lokasi_gudang'] ?? '-'}", 
-                    style: const TextStyle(fontSize: 10, color: Colors.blueGrey)),
+                    Text(
+                      vendor['master_vendor']?['vendor_name'] ?? "-",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      "Unit: ${vendor['type_unit']} | Rank: $rank",
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    Text(
+                      "City: ${vendor['city']} | Area: ${vendor['area'] ?? '-'} | QCF: ${vendor['jenis_qcf'] ?? '-'}",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isMatchingCity
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isMatchingCity
+                            ? Colors.green.shade700
+                            : Colors.grey.shade500,
+                      ),
+                    ),
+
+                    const SizedBox(height: 2),
+                    Text(
+                      "🏠 Gudang: ${vendor['lokasi_gudang'] ?? '-'}",
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     _miniBadge("Alokasi: $displayPersen", Colors.green),
                   ],
@@ -726,44 +844,69 @@ Padding(
               ),
               const SizedBox(width: 8),
               Column(
-              children: [
-                if (isSelected)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 4),
-                    child: Icon(Icons.check_circle, color: Colors.red, size: 20),
-                  ),
+                children: [
+                  if (isSelected)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Icon(
+                        Icons.check_circle,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
 
-              SizedBox(
-                width: 100,
-                height: 32,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    elevation: 0,
-                    backgroundColor: isSelected ? Colors.red.shade700 : Colors.grey.shade100,
-                    foregroundColor: isSelected ? Colors.white : Colors.black87,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? Colors.green.shade700 : Colors.grey.shade300)),
+                  SizedBox(
+                    width: 100,
+                    height: 32,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: isSelected
+                            ? Colors.red.shade700
+                            : Colors.grey.shade100,
+                        foregroundColor: isSelected
+                            ? Colors.white
+                            : Colors.black87,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                            color: isSelected
+                                ? Colors.green.shade700
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedVendor = null;
+                          } else {
+                            _selectedVendor = vendor;
+                          }
+                        });
+                      },
+                      child: Text(
+                        isSelected ? "TERPILIH" : "PILIH",
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
-                  onPressed: () {
-                    setState(() {
-                      if (isSelected) {
-                        _selectedVendor = null;
-                      } else {
-                        _selectedVendor = vendor;
-                      }
-                    });
-                  },
-                  child: Text(isSelected ? "TERPILIH" : "PILIH", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
+                ],
               ),
-              ],
-            ),
             ],
-          ),        ),
-      ),    );
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildManualDropdown() {
-    bool isFromRec = _recommendations.any((v) => v['id'] == _selectedVendor?['id']);
+    bool isFromRec = _recommendations.any(
+      (v) => v['id'] == _selectedVendor?['id'],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -772,60 +915,91 @@ Padding(
           compareFn: (item, sItem) => item['id'] == sItem['id'],
           filterFn: (vendor, filter) {
             final String query = filter.toLowerCase().trim();
-            final String name = (vendor['vendor_name'] ?? "").toString().toLowerCase().trim();
+            final String name = (vendor['vendor_name'] ?? "")
+                .toString()
+                .toLowerCase()
+                .trim();
             final String city = (vendor['city'] ?? "").toString().toLowerCase();
             final String area = (vendor['area'] ?? "").toString().toLowerCase();
-            final String qcf = (vendor['jenis_qcf'] ?? "").toString().toLowerCase();
-             final String unit = (vendor['type_unit'] ?? "").toString().toLowerCase();
-    final String warehouse = (vendor['lokasi_gudang'] ?? "").toString().toLowerCase();
+            final String qcf = (vendor['jenis_qcf'] ?? "")
+                .toString()
+                .toLowerCase();
+            final String unit = (vendor['type_unit'] ?? "")
+                .toString()
+                .toLowerCase();
+            final String warehouse = (vendor['lokasi_gudang'] ?? "")
+                .toString()
+                .toLowerCase();
 
             return name.contains(query) ||
-           city.contains(query) ||
-           area.contains(query) ||
+                city.contains(query) ||
+                area.contains(query) ||
                 qcf.contains(query) ||
-           unit.contains(query) ||
-           warehouse.contains(query);
-
+                unit.contains(query) ||
+                warehouse.contains(query);
           },
-          itemAsString: (v) => "${v['vendor_name']} (${v['type_unit']}) - ${v['city']} [Area: ${v['area'] ?? '-'}, QCF: ${v['jenis_qcf'] ?? '-'}]",
+          itemAsString: (v) =>
+              "${v['master_vendor']?['vendor_name'] ?? '-'} (${v['type_unit']}) - ${v['city']} [Area: ${v['area'] ?? '-'}, QCF: ${v['jenis_qcf'] ?? '-'}]",
           selectedItem: isFromRec ? null : _selectedVendor,
           enabled: _selectedVendor == null || !isFromRec,
           onChanged: (val) => setState(() => _selectedVendor = val),
           popupProps: PopupProps.menu(
             showSearchBox: true,
             searchFieldProps: TextFieldProps(
-              decoration: InputDecoration(hintText: "Cari nama vendor atau kota...", prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), isDense: true),
+              decoration: InputDecoration(
+                hintText: "Cari nama vendor atau kota...",
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                isDense: true,
+              ),
             ),
             itemBuilder: (context, item, isSelected, isHover) {
-              double alokasiVal = double.tryParse(item['alokasi_persen'].toString()) ?? 0;
-              String p = alokasiVal <= 1 ? "${(alokasiVal * 100).toInt()}%" : "${alokasiVal.toInt()}%";
-              //String displayVendorName = item['master_vendor']?['vendor_name'] ?? "-";
+              double alokasiVal =
+                  double.tryParse(item['alokasi_persen'].toString()) ?? 0;
+              String p = alokasiVal <= 1
+                  ? "${(alokasiVal * 100).toInt()}%"
+                  : "${alokasiVal.toInt()}%";
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 0.5))),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item['vendor_name'] ?? "-",style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(
+                      item['master_vendor']?['vendor_name'] ?? "-",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                  //   Text("📍 ${item['city']} | Rank: ${item['winner_rank']} | Alokasi: $p", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                  //   Text("🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}", style: const TextStyle(fontSize: 10, color: Colors.blueGrey)),
                     Row(
-                    children: [
-                      _miniBadge("${item['type_unit']}", Colors.blue),
-                      const SizedBox(width: 4),
-                      _miniBadge("Rank ${item['winner_rank']}", Colors.orange),
-                      const SizedBox(width: 4),
-                      _miniBadge("Alokasi: $p", Colors.green),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  // --- DETAIL LOKASI & GUDANG ---
-                  Text(
-                    "📍 ${item['city']} | Area: ${item['area'] ?? '-'} | QCF: ${item['jenis_qcf'] ?? '-'} | 🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}",
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
-                   ],
+                      children: [
+                        _miniBadge("${item['type_unit']}", Colors.blue),
+                        const SizedBox(width: 4),
+                        _miniBadge(
+                          "Rank ${item['winner_rank']}",
+                          Colors.orange,
+                        ),
+                        const SizedBox(width: 4),
+                        _miniBadge("Alokasi: $p", Colors.green),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "📍 ${item['city']} | Area: ${item['area'] ?? '-'} | QCF: ${item['jenis_qcf'] ?? '-'} | 🏠 Gudang: ${item['lokasi_gudang'] ?? '-'}",
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
                 ),
               );
             },
@@ -835,9 +1009,16 @@ Padding(
               hintText: "Pilih vendor manual...",
               filled: true,
               fillColor: isFromRec ? Colors.grey.shade100 : Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              helperText: isFromRec ? "Pilihan terkunci (Rekomendasi terpilih)" : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              helperText: isFromRec
+                  ? "Pilihan terkunci (Rekomendasi terpilih)"
+                  : null,
             ),
           ),
         ),
@@ -847,7 +1028,10 @@ Padding(
             child: TextButton.icon(
               onPressed: () => setState(() => _selectedVendor = null),
               icon: const Icon(Icons.refresh, size: 14, color: Colors.red),
-              label: const Text("Reset Pilihan", style: TextStyle(fontSize: 11, color: Colors.red)),
+              label: const Text(
+                "Reset Pilihan",
+                style: TextStyle(fontSize: 11, color: Colors.red),
+              ),
             ),
           ),
       ],
@@ -857,219 +1041,228 @@ Padding(
   Widget _buildCalculationFooter() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade300))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildFooterItem("TOTAL QTY", _qtyTotal.toInt().toString(), Icons.inventory_2_outlined),
+          _buildFooterItem(
+            "TOTAL QTY",
+            _qtyTotal.toInt().toString(),
+            Icons.inventory_2_outlined,
+          ),
           _buildVerticalDivider(),
-          _buildFooterItem("TOTAL NW", "${_nwTotal.toStringAsFixed(2)} KG", Icons.scale_outlined),
+          _buildFooterItem(
+            "TOTAL NW",
+            "${_nwTotal.toStringAsFixed(2)} KG",
+            Icons.scale_outlined,
+          ),
           _buildVerticalDivider(),
-          _buildFooterItem("TOTAL TNW", "${_tnwTotal.toStringAsFixed(3)} TON", Icons.local_shipping_outlined, isHighlight: true),
+          _buildFooterItem(
+            "TOTAL TNW",
+            "${_tnwTotal.toStringAsFixed(3)} TON",
+            Icons.local_shipping_outlined,
+            isHighlight: true,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFooterItem(String label, String value, IconData icon, {bool isHighlight = false}) {
-    return Column(children: [
-      Row(children: [Icon(icon, size: 12, color: Colors.grey.shade600), const SizedBox(width: 4), Text(label, style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.bold))]),
-      const SizedBox(height: 4),
-      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isHighlight ? Colors.red.shade700 : Colors.black87)),
-    ]);
+  Widget _buildFooterItem(
+    String label,
+    String value,
+    IconData icon, {
+    bool isHighlight = false,
+  }) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 12, color: Colors.grey.shade600),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: isHighlight ? Colors.red.shade700 : Colors.black87,
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _infoBox(String label, String value) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))]));
-  Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 11, fontWeight: isBold ? FontWeight.bold : FontWeight.normal, color: isHeader ? Colors.black : Colors.black87)));
-  Widget _miniBadge(String label, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.5), width: 0.5)), child: Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color)));
-  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color, width: 1)), child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)));
-  Widget _buildVerticalDivider() => Container(height: 25, width: 1, color: Colors.grey.shade300);
-  Widget _emptyRecommendationBox() => Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)), child: const Center(child: Text("Tidak ada rekomendasi cocok.", style: TextStyle(fontSize: 11, color: Colors.grey))));
-  void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
-  String _formatDate(String? s) => s == null || s.isEmpty ? "-" : DateFormat('dd/MM/yy').format(DateTime.parse(s));
-  //Future<void> _processToDatabase() async => _showSnackBar("Vendor ${_selectedVendor!['vendor_name']} dipilih!", Colors.green);
+  Widget _infoBox(String label, String value) => Expanded(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    ),
+  );
+  Widget _tableCell(
+    String text, {
+    bool isBold = false,
+    TextAlign align = TextAlign.left,
+    bool isHeader = false,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    child: Text(
+      text,
+      textAlign: align,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+        color: isHeader ? Colors.black : Colors.black87,
+      ),
+    ),
+  );
+  Widget _miniBadge(String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: color.withOpacity(0.5), width: 0.5),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color),
+    ),
+  );
+  Widget _buildBadge(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color, width: 1),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+    ),
+  );
+  Widget _buildVerticalDivider() =>
+      Container(height: 25, width: 1, color: Colors.grey.shade300);
+  Widget _emptyRecommendationBox() => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: const Center(
+      child: Text(
+        "Tidak ada rekomendasi cocok.",
+        style: TextStyle(fontSize: 11, color: Colors.grey),
+      ),
+    ),
+  );
+  void _showSnackBar(String msg, Color color) =>
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  String _formatDate(String? s) => s == null || s.isEmpty
+      ? "-"
+      : DateFormat('dd/MM/yy').format(DateTime.parse(s));
 
-// Future<void> _processToDatabase() async {
-//   if (_selectedVendor == null) return;
+  Future<void> _processToDatabase() async {
+    if (_selectedVendor == null) return;
+    if (_selectedDedicated == null) {
+      _showSnackBar(
+        "Harap pilih status Dedicated atau Non-Dedicated!",
+        Colors.orange,
+      );
+      return;
+    }
 
-//   try {
-//     setState(() => _isLoading = true);
+    try {
+      setState(() => _isLoading = true);
 
-//     // 1. Ambil NIK (No Vendor) dari vendor yang dipilih
-//     final String? noVendor = _selectedVendor!['no_vendor'];
+      final int? idVendorDetails = _selectedVendor!['id'];
 
-//     if (noVendor == null || noVendor.isEmpty) {
-//       throw "Vendor ini tidak memiliki nomor vendor (NIK) yang valid.";
-//     }
-
-//     // 2. Cari UUID di tabel profiles yang NIK-nya cocok
-//     final vendorProfile = await supabase
-//         .from('profiles')
-//         .select('id')
-//         .eq('nik', noVendor)
-//         .maybeSingle();
-
-//     if (vendorProfile == null) {
-//       throw "Akun vendor dengan NIK $noVendor belum terdaftar di sistem.";
-//     }
-
-//     final String vendorUuid = vendorProfile['id'];
-
-//     // 3. Update Shipping Request (Single atau Group)
-//     final groupId = _shippingData!['group_id'];
-    
-//     if (groupId != null) {
-//       // Jika Group, update semua shipping yang memiliki group_id tersebut
-//       await supabase
-//           .from('shipping_request')
-//           .update({
-//             'assigned_vendor_id': vendorUuid,
-//             'status': 'vendor assigned', // Ubah status agar muncul di dashboard vendor
-//           })
-//           .eq('group_id', groupId);
-//     } else {
-//       // Jika Single, update berdasarkan shipping_id saja
-//       await supabase
-//           .from('shipping_request')
-//           .update({
-//             'assigned_vendor_id': vendorUuid,
-//             'status': 'vendor assigned',
-//           })
-//           .eq('shipping_id', widget.shippingId);
-//     }
-
-//     _showSnackBar("Berhasil! Request telah dikirim ke akun ${_selectedVendor!['vendor_name']}", Colors.green);
-    
-//     // Kembali ke halaman sebelumnya setelah sukses
-//     if (mounted) Navigator.pop(context, true);
-
-//   } catch (e) {
-//     _showSnackBar("Gagal Assign: $e", Colors.red);
-//   } finally {
-//     if (mounted) setState(() => _isLoading = false);
-//   }
-// }
-
-Future<void> _processToDatabase() async {
-  if (_selectedVendor == null) return;
-  // 🔥 VALIDASI: Cek apakah status dedicated sudah dipilih
-  if (_selectedDedicated == null) {
-    _showSnackBar("Harap pilih status Dedicated atau Non-Dedicated!", Colors.orange);
-    return;
-  }
-
-  try {
-    setState(() => _isLoading = true);
-
-    // // 1. Ambil regist_code dari vendor_transportasi
-    // final String? registCode = _selectedVendor!['regist_code'];
-
-    // if (registCode == null || registCode.isEmpty) {
-    //   throw "Vendor ini tidak memiliki kode vendor (regist_code) yang valid.";
-    // }
-    // 1. Gunakan NIK dari vendor_transportasi (sesuai tabel baru)
-   // final String? nikVendor = _selectedVendor!['nik']; // Ambil NIK vendor
-final int? idVendorDetails = _selectedVendor!['id'];
-
-    // if (nikVendor == null || nikVendor.isEmpty) {
-    //   throw "Vendor ini tidak memiliki NIK yang valid di database.";
-    // }
-    if (idVendorDetails == null) {
+      if (idVendorDetails == null) {
         throw "Vendor ini tidak memiliki ID valid di database.";
       }
 
-//     final groupId = _shippingData!['group_id'];
-// final String vendorName = _selectedVendor!['vendor_name'] ?? "Vendor";
-//     // 2. Update shipping_request → assign ke VENDOR (bukan user)
-//     if (groupId != null) {
-//       await supabase
-//           .from('shipping_request')
-//           .update({
-//             'vendor_id': registCode, // ✅ INI YANG PALING PENTING
-//             'status': 'vendor assigned',
-//           })
-//           .eq('group_id', groupId);
-//     } else {
-//       await supabase
-//           .from('shipping_request')
-//           .update({
-//             'vendor_id': registCode, // ✅ INI YANG PALING PENTING
-//             'status': 'vendor assigned',
-//           })
-//           .eq('shipping_id', widget.shippingId);
-//     }
-// 2. Siapkan List ID yang akan di-assign (bisa single atau group)
-    final List<int> idsToAssign = List<int>.from(_shippingData!['all_ids']);
+      final List<int> idsToAssign = List<int>.from(_shippingData!['all_ids']);
+      await supabase
+          .from('shipping_request')
+          .update({
+            'status': 'waiting vendor approval',
+            'is_dedicated': _selectedDedicated,
+          })
+          .inFilter('shipping_id', idsToAssign);
 
-    // 3. JALANKAN TRANSACTIONAL LOGIC
-    // A. Masukkan data ke shipping_assignments
-    final List<Map<String, dynamic>> assignmentData = idsToAssign.map((sid) => {
-      'shipping_id': sid,
-      //'nik': nikVendor, // Simpan NIK vendor untuk referensi
-      'id_vendor_details': idVendorDetails,
-      'status_assignment': 'offered', // Status awal sesuai schema Anda
-      // 'assigned_at': DateTime.now().toIso8601String(),
-      'assigned_at': DateTime.now().toIso8601String(),
-    }).toList();
-    await supabase.from('shipping_assignments').insert(assignmentData);
-// if (mounted) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(
-//           content: Text("Berhasil! Shipping di-assign ke vendor $vendorName"),
-//           backgroundColor: Colors.green,
-//           duration: const Duration(seconds: 1), // Pesan muncul sebentar
-//           // behavior: SnackBarBehavior.floating,
-//         ),
-//       );
-//     }
+      final List<Map<String, dynamic>> assignmentData = idsToAssign
+          .map(
+            (sid) => {
+              'shipping_id': sid,
+              'id_vendor_details': idVendorDetails,
+              'status_assignment': 'offered',
+              'assigned_at': DateTime.now().toIso8601String(),
+            },
+          )
+          .toList();
+      await supabase.from('shipping_assignments').insert(assignmentData);
 
-    // _showSnackBar(
-    //   "Berhasil! Shipping di-assign ke vendor ${_selectedVendor!['vendor_name']}",
-    //   Colors.green,
-    // );
-
-    // if (mounted) Navigator.pop(context, true);
-    // await Future.delayed(const Duration(milliseconds: 500));
-
-    // if (mounted) {
-    //   // Menutup halaman detail/assign dan kembali ke halaman sebelumnya
-    //   // Parameter 'true' memberi tahu halaman asal untuk me-refresh data
-    //   Navigator.of(context).pop(true);
-    // }
-// B. Update status di shipping_request utama
-    await supabase
-        .from('shipping_request')
-        .update({'status': 'waiting vendor approval', 
-        'is_dedicated': _selectedDedicated,}) // Status baru agar sinkron dengan 'offered'
-        .inFilter('shipping_id', idsToAssign);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Berhasil! Vendor ditugaskan."), backgroundColor: Colors.green),
-      );
-    }
-
-    // --- PERBAIKAN DI SINI ---
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (mounted) {
-      // 1. Ambil instance dari DynamicTabPage
-      final dynamicTab = DynamicTabPage.of(context);
-      
-      if (dynamicTab != null) {
-        // 2. Tutup tab saat ini secara otomatis
-        // Fungsi ini akan menghapus tab dari list dan pindah ke tab sebelumnya
-        dynamicTab.closeCurrentTab(); 
-      } else {
-        // Fallback jika dibuka via Navigator biasa
-        Navigator.of(context).pop(true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Berhasil! Vendor ditugaskan."),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
-    }
 
-  } catch (e) {
-    _showSnackBar("Gagal Assign: $e", Colors.red);
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (mounted) {
+        final dynamicTab = DynamicTabPage.of(context);
+
+        if (dynamicTab != null) {
+          dynamicTab.closeCurrentTab();
+        } else {
+          Navigator.of(context).pop(true);
+        }
+      }
+    } catch (e) {
+      _showSnackBar("Gagal Assign: $e", Colors.red);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
-}
 }

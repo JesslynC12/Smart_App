@@ -10,21 +10,21 @@ class WarehouseOccupancyForm extends StatefulWidget {
 
 class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
   final _formKey = GlobalKey<FormState>();
-  
+
   late DateTime _selectedDate;
   late TextEditingController _dateController;
 
-  List<Map<String, dynamic>> _warehouseList = []; 
+  List<Map<String, dynamic>> _warehouseList = [];
   List<Map<String, dynamic>> _rows = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    
+
     _selectedDate = DateTime.now();
     _dateController = TextEditingController(
-      text: "${_selectedDate.toLocal()}".split(' ')[0]
+      text: "${_selectedDate.toLocal()}".split(' ')[0],
     );
 
     _initializeForm();
@@ -73,6 +73,7 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
       _showSnackBar("Minimal harus ada satu baris input", Colors.orange);
     }
   }
+
   Future<void> _saveData() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -85,7 +86,7 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
           .from('occupancy')
           .insert({
             'tanggal': _selectedDate.toIso8601String().split('T')[0],
-            'created_by': 'Admin', 
+            'created_by': 'Admin',
           })
           .select()
           .single();
@@ -103,7 +104,7 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
       await supabase.from('occupancy_details').insert(detailsPayload);
 
       _showSnackBar("Data berhasil disimpan ke database!", Colors.green);
-      
+
       _resetForm();
     } catch (e) {
       _showSnackBar("Gagal menyimpan data: $e", Colors.red);
@@ -112,7 +113,7 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
       setState(() => _isLoading = false);
     }
   }
-  
+
   void _resetForm() {
     setState(() {
       for (var row in _rows) {
@@ -126,9 +127,9 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
   }
 
   void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
   @override
@@ -161,7 +162,9 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
                         if (picked != null) {
                           setState(() {
                             _selectedDate = picked;
-                            _dateController.text = "${picked.toLocal()}".split(' ')[0];
+                            _dateController.text = "${picked.toLocal()}".split(
+                              ' ',
+                            )[0];
                           });
                         }
                       },
@@ -169,7 +172,10 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
                     const SizedBox(height: 25),
                     const Text(
                       "Detail Kapasitas Warehouse",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const Divider(),
                     ListView.builder(
@@ -201,17 +207,19 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
                                     );
                                   }).toList(),
                                   onChanged: (val) {
-                                    setState(() => _rows[index]['warehouse_id'] = val);
+                                    setState(
+                                      () => _rows[index]['warehouse_id'] = val,
+                                    );
                                   },
                                   validator: (v) => v == null ? "Pilih!" : null,
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              // Input Kapasitas (Angka)
                               Expanded(
                                 flex: 1,
                                 child: TextFormField(
-                                  controller: _rows[index]['capacity_controller'],
+                                  controller:
+                                      _rows[index]['capacity_controller'],
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
                                     labelText: "Kapasitas",
@@ -219,14 +227,17 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
                                   ),
                                   validator: (v) {
                                     if (v == null || v.isEmpty) return "Isi!";
-                                    if (int.tryParse(v) == null) return "Angka!";
+                                    if (int.tryParse(v) == null)
+                                      return "Angka!";
                                     return null;
                                   },
                                 ),
                               ),
-                              // Tombol Hapus Baris
                               IconButton(
-                                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete_forever,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () => _removeRow(index),
                               ),
                             ],
@@ -254,7 +265,9 @@ class _WarehouseOccupancyFormState extends State<WarehouseOccupancyForm> {
                         ),
                         onPressed: _isLoading ? null : _saveData,
                         child: _isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
                             : const Text(
                                 "SIMPAN KE DATABASE",
                                 style: TextStyle(

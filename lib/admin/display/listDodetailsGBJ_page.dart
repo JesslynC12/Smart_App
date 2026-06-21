@@ -116,7 +116,6 @@ Future<void> _fetchData() async {
             ),
             shipping_pending_history(reason, pending_at)
           ''')
-        // .isFilter('vendor_delivery_request', null)
          .eq('status', 'waiting GBJ')
         .not('status', 'eq', 'pending')
         .order('shipping_id', ascending: false);
@@ -334,7 +333,7 @@ Future<void> _processShippingRequest(Map<String, dynamic> item, String actionTyp
         'warehouse_id': _selectedSLoc,
         'status': 'waiting assign vendor delivery',
         'createdDODetail_at': DateTime.now().toIso8601String(),
-        'createdDODetail_by': _currentUserName ?? 'Unknown Admin', // Sesuaikan dengan user login Anda
+        'createdDODetail_by': _currentUserName ?? 'Unknown Admin',
       }).inFilter('shipping_id', idsToProcess);
  _showSnackBar("Berhasil memproses ${idsToProcess.length} data", Colors.green);
     setState(() {
@@ -607,8 +606,6 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
     await supabase.from('shipping_pending_history').insert(historyInserts);
     await supabase.from('shipping_request').update({
       'status': 'pending',
-      // 'pending_reason': reasonController.text.trim(),
-      // 'pending_at': DateTime.now().toIso8601String(),
     }).inFilter('shipping_id', idsToCancel);
 
     _showSnackBar("Pending Berhasil", Colors.grey.shade800);
@@ -616,7 +613,6 @@ Future<void> _pendingRequest(Map<String, dynamic> item) async {
     setState(() {
       _expandedId = null;
       _selectedSLoc = null;
-      //_selectedDedicated = null;
     });
     
     await _fetchData();

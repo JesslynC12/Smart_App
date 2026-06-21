@@ -17,7 +17,7 @@ class _ComplainConfirmPageState extends State<ComplainConfirmPage> {
   List<Map<String, dynamic>> _filteredData = [];
   
   bool _isLoading = false;
-  bool _showHistory = false; // Sebagai ganti ToggleSwitch JavaFX
+  bool _showHistory = false; 
   Set<int> _selectedIds = {};
 RealtimeChannel? _complainChannel;
 
@@ -30,7 +30,6 @@ RealtimeChannel? _complainChannel;
   
   @override
   void dispose() {
-    // Pastikan untuk menghapus subscription saat halaman ditutup agar tidak memory leak
     if (_complainChannel != null) {
       supabase.removeChannel(_complainChannel!);
     }
@@ -38,16 +37,14 @@ RealtimeChannel? _complainChannel;
     super.dispose();
   }
 
-  // Fungsi untuk mendengarkan perubahan tabel secara realtime
   void _subscribeToComplainRealtime() {
     _complainChannel = supabase
         .channel('public:complain')
         .onPostgresChanges(
-          event: PostgresChangeEvent.all, // Dengarkan INSERT, UPDATE, dan DELETE
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'complain',
           callback: (payload) {
-            // Jika ada perubahan data di database, panggil ulang fungsi RPC
             _loadComplainData(isRealtimeTrigger: true);
           },
         );
@@ -60,14 +57,14 @@ RealtimeChannel? _complainChannel;
       setState(() => _isLoading = true);
     }
     try {
-      final response = await supabase.rpc('get_complain_confirm_data', params: {
+      final response = await supabase.rpc('get_complain_list', params: {
         'p_show_history': _showHistory,
       }) as List<dynamic>;
 
       setState(() {
         _rawMasterData = List<Map<String, dynamic>>.from(response);
         _applyFilter(_searchController.text);
-        _selectedIds.clear(); // Reset pilihan check-box
+        _selectedIds.clear();
       });
     } catch (e) {
       _showSnackbar("Gagal memuat data: $e", isError: true);
@@ -76,7 +73,6 @@ RealtimeChannel? _complainChannel;
     }
   }
 
-  // Fungsi pencarian real-time (Klien-side untuk efisiensi seperti JavaFX FilteredList)
   void _applyFilter(String query) {
     setState(() {
       if (query.isEmpty) {
@@ -94,7 +90,6 @@ RealtimeChannel? _complainChannel;
     });
   }
 
-  // Eksekusi Massal Update Status (Approve / Reject)
   Future<void> _updateComplainStatus(String newStatus) async {
     if (_selectedIds.isEmpty) {
       _showSnackbar("Pilih minimal satu data komplain terlebih dahulu!", isError: true);
@@ -103,7 +98,6 @@ RealtimeChannel? _complainChannel;
 
     setState(() => _isLoading = true);
     try {
-      // Loop untuk update status data komplain yang dicentang
       for (int id in _selectedIds) {
         await supabase
             .from('complain')
@@ -154,10 +148,8 @@ RealtimeChannel? _complainChannel;
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Bar Filter & Aksi Atas
                   _buildActionBar(),
                   const SizedBox(height: 20),
-                  // Tabel Data Utama berbentuk Modern Card
                   Card(
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
@@ -194,7 +186,6 @@ RealtimeChannel? _complainChannel;
   Widget _buildActionBar() {
     return Row(
       children: [
-        // Search Bar Modern
         Expanded(
           flex: 3,
           child: TextField(
@@ -212,7 +203,6 @@ RealtimeChannel? _complainChannel;
           ),
         ),
         const SizedBox(width: 20),
-        // Toggle Switch Riwayat (History)
         Row(
           children: [
             const Text("Tampilkan Riwayat", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
@@ -227,7 +217,6 @@ RealtimeChannel? _complainChannel;
           ],
         ),
         const Spacer(),
-        // Tombol Aksi Massal (Approve & Reject)
         if (_selectedIds.isNotEmpty) ...[
           ElevatedButton.icon(
             icon: const Icon(Icons.close_rounded, size: 18),
@@ -248,7 +237,6 @@ RealtimeChannel? _complainChannel;
   }
 }
 
-// Controller Management Data untuk Paginated Table Source
 class _ComplainDataTableSource extends DataTableSource {
   final List<Map<String, dynamic>> data;
   final Set<int> selectedIds;
@@ -283,7 +271,6 @@ class _ComplainDataTableSource extends DataTableSource {
         DataCell(Text("[${row['material_id']}] ${row['material_name'] ?? '-'}")),
         DataCell(Text(row['qty']?.toString() ?? '0')),
         DataCell(Text(row['complain_note'] ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis)),
-        // Indikator Badge Status Warna Modern
         DataCell(_buildStatusBadge(row['complain_status'])),
       ],
     );

@@ -44,6 +44,8 @@ dependencies:
   flutter_local_notifications: ^17.0.0
   http: ^1.2.0
   fl_chart: ^0.66.0
+  flutter_typeahead: ^5.2.0
+  flutter_keyboard_visibility: ^6.0.0
   # supabase_flutter: ^2.12.2
   
   # # The following adds the Cupertino Icons font to your application.

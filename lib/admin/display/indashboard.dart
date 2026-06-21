@@ -74,89 +74,6 @@ class _DashboardCombinedPageState extends State<DashboardCombinedPage> {
     )..subscribe();
   }
 
-// Future<void> loadDashboardData() async {
-//     setState(() => isLoading = true);
-//     try {
-//       final sDate = DateFormat('yyyy-MM-dd').format(startDate);
-//       final eDate = isRangeMode ? DateFormat('yyyy-MM-dd').format(endDate) : sDate;
-//       final lokasiFilter = selectedLokasi == 'Semua Lokasi' ? ['Rungkut', 'Tambak Langon'] : [selectedLokasi];
-
-//       // Panggil RPC yang sudah diperbaiki (Pastikan RPC mengembalikan kolom 'shift')
-//       final response = await supabase.rpc('get_dashboard_checker_stats_v3', params: {
-//         'p_start_date': sDate,
-//         'p_end_date': eDate,
-//         'p_lokasi': lokasiFilter,
-//       });
-
-//       if (response == null || (response as List).isEmpty) {
-//         setState(() { tableData = []; grandTotalData = []; });
-//         return;
-//       }
-
-//       // 1. Map data mentah dari DB
-//       List<InDashboardItem> rawData = (response as List).map((item) {
-//         return InDashboardItem(
-//           name: item['checker_name'] ?? 'Belum diisi *',
-//           shift: item['shift']?.toString() ?? '*', // Ambil data shift
-//           truck: int.parse(item['truck_count'].toString()),
-//           box: int.parse(item['total_qty'].toString()),
-//           countA: int.parse(item['cat_a'].toString()),
-//           countB: int.parse(item['cat_b'].toString()),
-//           countC: int.parse(item['cat_c'].toString()),
-//           countD: int.parse(item['cat_d'].toString()),
-//         );
-//       }).toList();
-
-//       // 2. LOGIKA GROUPING & SUBTOTAL PER SHIFT
-//       List<InDashboardItem> groupedList = [];
-//       int gTruck = 0, gBox = 0, gA = 0, gB = 0, gC = 0, gD = 0;
-
-//       // Ambil shift unik dan urutkan
-//       var shifts = rawData.map((e) => e.shift).toSet().toList();
-//       shifts.sort();
-
-//       for (var s in shifts) {
-//         var itemsInShift = rawData.where((e) => e.shift == s).toList();
-//         int sTruck = 0, sBox = 0, sA = 0, sB = 0, sC = 0, sD = 0;
-
-//         for (var item in itemsInShift) {
-//           groupedList.add(item);
-//           sTruck += item.truck; sBox += item.box;
-//           sA += item.countA; sB += item.countB; sC += item.countC; sD += item.countD;
-//         }
-
-//         // Tambahkan baris SUBTOTAL setelah setiap grup shift
-//         groupedList.add(InDashboardItem(
-//           name: "SUBTOTAL SHIFT $s",
-//           shift: s,
-//           truck: sTruck, box: sBox,
-//           countA: sA, countB: sB, countC: sC, countD: sD,
-//           isSubtotal: true,
-//         ));
-
-//         // Akumulasi untuk GRAND TOTAL
-//         gTruck += sTruck; gBox += sBox;
-//         gA += sA; gB += sB; gC += sC; gD += sD;
-//       }
-
-//       setState(() {
-//         tableData = groupedList;
-//         grandTotalData = [
-//           InDashboardItem(
-//             name: "GRAND TOTAL",
-//             shift: "",
-//             truck: gTruck, box: gBox,
-//             countA: gA, countB: gB, countC: gC, countD: gD,
-//             isSubtotal: true,
-//           )
-//         ];
-//       });
-//     } catch (e) {
-//       debugPrint("Error Dashboard: $e");
-//     } finally {
-//       setState(() => isLoading = false);
-//     }
-//   }
 Future<void> loadDashboardData() async {
   setState(() => isLoading = true);
   try {
@@ -188,12 +105,11 @@ Future<void> loadDashboardData() async {
       );
     }).toList();
 
-    // 2. PROSES GROUPING & PERHITUNGAN SUBTOTAL
     List<InDashboardItem> processedList = [];
     int gTruck = 0, gBox = 0, gA = 0, gB = 0, gC = 0, gD = 0;
 
     var availableShifts = rawData.map((e) => e.shift).toSet().toList();
-    availableShifts.sort(); // Urutkan A ke Z
+    availableShifts.sort(); 
 
     for (var shiftLabel in availableShifts) {
       var checkersInShift = rawData.where((e) => e.shift == shiftLabel).toList();
@@ -341,7 +257,6 @@ Widget _buildDivisionBarChart() {
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
-        //gridData: const FlGridData(show: false),
 gridData: FlGridData(
           show: true, 
           drawVerticalLine: false,

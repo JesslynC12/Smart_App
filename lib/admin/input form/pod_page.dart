@@ -33,7 +33,7 @@ class _PODReturnPageState extends State<PODReturnPage> {
     _loadHolidaysData();
   }
 
-@override
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -41,7 +41,7 @@ class _PODReturnPageState extends State<PODReturnPage> {
 
   Future<void> _loadHolidaysData() async {
     int tahunSekarang = DateTime.now().year;
-    
+
     List<DateTime> dataLibur = await getHolidays(tahunSekarang);
     if (!mounted) return;
     setState(() {
@@ -50,25 +50,29 @@ class _PODReturnPageState extends State<PODReturnPage> {
   }
 
   int _calculateLeadTime() {
-    if (_tanggalTibaCustomer == null || _foundData?['stuffing_date'] == null) return 0;
+    if (_tanggalTibaCustomer == null || _foundData?['stuffing_date'] == null)
+      return 0;
     try {
-    DateTime stuffingDate = DateTime.parse(_foundData!['stuffing_date']);
+      DateTime stuffingDate = DateTime.parse(_foundData!['stuffing_date']);
       DateTime arrivalDate = _tanggalTibaCustomer!;
 
       if (stuffingDate.isAfter(arrivalDate)) return 0;
 
-      // Ubah daftar ke format string 
-      List<String> formattedHolidays = _daftarLiburNasional.map((date) =>
-          "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}"
-      ).toList();
+      List<String> formattedHolidays = _daftarLiburNasional
+          .map(
+            (date) =>
+                "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}",
+          )
+          .toList();
 
       int totalHariKerja = 0;
       DateTime currentDay = stuffingDate;
 
-      while (currentDay.isBefore(arrivalDate) || currentDay.isAtSameMomentAs(arrivalDate)) {
-
+      while (currentDay.isBefore(arrivalDate) ||
+          currentDay.isAtSameMomentAs(arrivalDate)) {
         bool isSunday = currentDay.weekday == DateTime.sunday;
-        String currentDayStr = "${currentDay.year}-${currentDay.month.toString().padLeft(2, '0')}-${currentDay.day.toString().padLeft(2, '0')}";
+        String currentDayStr =
+            "${currentDay.year}-${currentDay.month.toString().padLeft(2, '0')}-${currentDay.day.toString().padLeft(2, '0')}";
         bool isHoliday = formattedHolidays.contains(currentDayStr);
         if (!isSunday && !isHoliday) {
           totalHariKerja++;
@@ -83,118 +87,114 @@ class _PODReturnPageState extends State<PODReturnPage> {
     }
   }
 
-int _calculatePODActual() {
-  if (_tanggalBongkar == null || _tanggalSJKembali == null) return 0;
-  if (_foundData?['stuffing_date'] == null) return 0;
-  try {
-    DateTime startDate = _tanggalBongkar!;
-    DateTime endDate = _tanggalSJKembali!;
+  int _calculatePODActual() {
+    if (_tanggalBongkar == null || _tanggalSJKembali == null) return 0;
+    if (_foundData?['stuffing_date'] == null) return 0;
+    try {
+      DateTime startDate = _tanggalBongkar!;
+      DateTime endDate = _tanggalSJKembali!;
 
-    if (startDate.isAfter(endDate)) return 0;
+      if (startDate.isAfter(endDate)) return 0;
 
-    List<String> formattedHolidays = _daftarLiburNasional.map((date) =>
-        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}"
-    ).toList();
+      List<String> formattedHolidays = _daftarLiburNasional
+          .map(
+            (date) =>
+                "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}",
+          )
+          .toList();
 
-    int totalHariKerja = 0;
-    DateTime currentDay = startDate;
+      int totalHariKerja = 0;
+      DateTime currentDay = startDate;
 
-    while (currentDay.isBefore(endDate) || currentDay.isAtSameMomentAs(endDate)) {
-      bool isSunday = currentDay.weekday == DateTime.sunday;
+      while (currentDay.isBefore(endDate) ||
+          currentDay.isAtSameMomentAs(endDate)) {
+        bool isSunday = currentDay.weekday == DateTime.sunday;
 
-      String currentDayStr = "${currentDay.year}-${currentDay.month.toString().padLeft(2, '0')}-${currentDay.day.toString().padLeft(2, '0')}";
-      bool isHoliday = formattedHolidays.contains(currentDayStr);
-      if (!isSunday && !isHoliday) {
-        totalHariKerja++;
+        String currentDayStr =
+            "${currentDay.year}-${currentDay.month.toString().padLeft(2, '0')}-${currentDay.day.toString().padLeft(2, '0')}";
+        bool isHoliday = formattedHolidays.contains(currentDayStr);
+        if (!isSunday && !isHoliday) {
+          totalHariKerja++;
+        }
+
+        currentDay = currentDay.add(const Duration(days: 1));
       }
-
-      currentDay = currentDay.add(const Duration(days: 1));
+      int hasilAkhir = totalHariKerja - 1;
+      return hasilAkhir < 0 ? 0 : hasilAkhir;
+    } catch (e) {
+      return 0;
     }
-    int hasilAkhir = totalHariKerja - 1;
-    return hasilAkhir < 0 ? 0 : hasilAkhir;
-
-  } catch (e) {
-    return 0;
-  }
-}
-Future<List<DateTime>> getHolidays(int year) async {
-  final supabase = Supabase.instance.client;
-
-  final cached = await supabase
-      .from('holidays')
-      .select('date')
-      .eq('year', year);
-
-  if (cached.isNotEmpty) {
-    return cached
-        .map<DateTime>(
-          (row) => DateTime.parse(row['date'] as String),
-        )
-        .toList()
-      ..sort();
   }
 
-  List<DateTime> dates = [];
+  Future<List<DateTime>> getHolidays(int year) async {
+    final supabase = Supabase.instance.client;
 
-  try {
-    final response = await http.get(
-      Uri.parse(
-        'https://libur.deno.dev/api?year=$year',
-      ),
-    );
+    final cached = await supabase
+        .from('holidays')
+        .select('date')
+        .eq('year', year);
 
-    if (response.statusCode == 200) {
-      final holidays =
-          jsonDecode(response.body) as List<dynamic>;
-
-      dates = holidays
-          .where(
-            (holiday) =>
-                holiday['is_national_holiday'] == true,
-          )
-          .map<DateTime>(
-            (holiday) =>
-                DateTime.parse(holiday['date'] as String),
-          )
-          .toSet()
+    if (cached.isNotEmpty) {
+      return cached
+          .map<DateTime>((row) => DateTime.parse(row['date'] as String))
           .toList()
         ..sort();
     }
-  } catch (_) {
+
+    List<DateTime> dates = [];
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://libur.deno.dev/api?year=$year'),
+      );
+
+      if (response.statusCode == 200) {
+        final holidays = jsonDecode(response.body) as List<dynamic>;
+
+        dates =
+            holidays
+                .where((holiday) => holiday['is_national_holiday'] == true)
+                .map<DateTime>(
+                  (holiday) => DateTime.parse(holiday['date'] as String),
+                )
+                .toSet()
+                .toList()
+              ..sort();
+      }
+    } catch (_) {}
+
+    if (dates.isEmpty) {
+      dates = _defaultIndonesiaHolidays(year);
+    }
+
+    if (dates.isNotEmpty) {
+      await supabase
+          .from('holidays')
+          .upsert(
+            dates
+                .map(
+                  (date) => {
+                    'year': year,
+                    'date': date.toIso8601String().split('T').first,
+                  },
+                )
+                .toList(),
+            onConflict: 'year,date',
+          );
+    }
+
+    return dates;
   }
 
-  if (dates.isEmpty) {
-    dates = _defaultIndonesiaHolidays(year);
+  List<DateTime> _defaultIndonesiaHolidays(int year) {
+    return [
+      DateTime(year, 1, 1),
+      DateTime(year, 5, 1),
+      DateTime(year, 6, 1),
+      DateTime(year, 8, 17),
+      DateTime(year, 12, 25),
+    ];
   }
-
-  // Cache
-  if (dates.isNotEmpty) {
-    await supabase.from('holidays').upsert(
-      dates
-          .map(
-            (date) => {
-              'year': year,
-              'date': date.toIso8601String().split('T').first,
-            },
-          )
-          .toList(),
-      onConflict: 'year,date',
-    );
-    
-  }
-
-  return dates;
-}
-
-List<DateTime> _defaultIndonesiaHolidays(int year) {
-  return [
-    DateTime(year, 1, 1),   // Tahun Baru Masehi
-    DateTime(year, 5, 1),   // Hari Buruh
-    DateTime(year, 6, 1),   // Hari Lahir Pancasila
-    DateTime(year, 8, 17),  // Hari Kemerdekaan
-    DateTime(year, 12, 25), // Natal
-  ];
-}
 
   Future<void> _searchDO() async {
     final search = _searchController.text.trim();
@@ -225,24 +225,29 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
           .eq('shipping_id', shipId);
 
       final List assignmentsList = assignmentCheck as List;
-      bool alreadyCompleted = assignmentsList.any((a) => 
-        a['status_assignment']?.toString().toLowerCase() == 'completed'
+      bool alreadyCompleted = assignmentsList.any(
+        (a) => a['status_assignment']?.toString().toLowerCase() == 'completed',
       );
 
       if (alreadyCompleted) {
         setState(() => _isSearching = false);
-        _searchController.clear(); 
+        _searchController.clear();
         if (mounted) {
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
               title: const Row(
                 children: [
                   Icon(Icons.error_outline, color: Colors.red, size: 28),
                   SizedBox(width: 10),
-                  Text("Data Sudah Ada", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    "Data Sudah Ada",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
               content: const Text(
@@ -254,9 +259,14 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red.shade800,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text("TUTUP", style: TextStyle(color: Colors.white)),
+                  child: const Text(
+                    "TUTUP",
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ),
               ],
             ),
@@ -288,8 +298,9 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
               no_polisi,
               checkIn_at,        
               keluar_at,
-              master_vendor:nik (vendor_name),
               vendor_transportasi:id_vendor_details(
+                nik,
+                vendor_name,
                 lead_time,
                 pod_return
               )
@@ -308,7 +319,11 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
         final header = list[0];
         final assignments = header['shipping_assignments'] as List? ?? [];
         final activeAssign = assignments.firstWhere(
-          (a) => !['rejected', 'rejected unit', 'cancel booking'].contains(a['status_assignment']),
+          (a) => ![
+            'rejected',
+            'rejected unit',
+            'cancel booking',
+          ].contains(a['status_assignment']),
           orElse: () => null,
         );
 
@@ -316,17 +331,19 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
           _foundData = {
             'group_id': groupId,
             'shipping_id': shipId,
-            'warehouse': header['warehouse'] != null 
-                ? "${header['warehouse']['lokasi']} - ${header['warehouse']['warehouse_name']}" 
+            'warehouse': header['warehouse'] != null
+                ? "${header['warehouse']['lokasi']} - ${header['warehouse']['warehouse_name']}"
                 : "-",
             'stuffing_date': header['stuffing_date'],
             'is_dedicated': header['is_dedicated'],
-            
+
             'no_polisi': activeAssign?['no_polisi'] ?? "-",
             'checkin_at': activeAssign?['checkIn_at'],
             'keluar_at': activeAssign?['keluar_at'],
-            'std_lead_time': activeAssign?['vendor_transportasi']?['lead_time'] ?? 0,
-            'std_pod_return': activeAssign?['vendor_transportasi']?['pod_return'] ?? "-",
+            'std_lead_time':
+                activeAssign?['vendor_transportasi']?['lead_time'] ?? 0,
+            'std_pod_return':
+                activeAssign?['vendor_transportasi']?['pod_return'] ?? "-",
             'delivery_order': list.expand((s) {
               final List dos = s['delivery_order'] as List? ?? [];
               return dos.map((d) {
@@ -335,7 +352,21 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
                 return d;
               });
             }).toList(),
-            'all_shipping_ids': list.map((e) => e['shipping_id'] as int).toList(),
+
+            'reject_list': list.expand((s) {
+              final List assigns = s['shipping_assignments'] as List? ?? [];
+              return assigns.where(
+                (a) => [
+                  'rejected',
+                  'rejected unit',
+                  'cancel booking',
+                ].contains(a['status_assignment']),
+              );
+            }).toList(),
+
+            'all_shipping_ids': list
+                .map((e) => e['shipping_id'] as int)
+                .toList(),
           };
         });
       }
@@ -346,8 +377,10 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
       setState(() => _isSearching = false);
     }
   }
+
   Future<void> _submitPOD() async {
-    if (_tanggalBongkar == null || _tanggalSJKembali == null || 
+    if (_tanggalBongkar == null ||
+        _tanggalSJKembali == null ||
         _tanggalTibaCustomer == null) {
       _showSnackBar("Mohon lengkapi semua tanggal!", Colors.orange);
       return;
@@ -357,7 +390,10 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
     try {
       final currentUser = supabase.auth.currentUser;
       if (currentUser == null) {
-        _showSnackBar("Sesi Anda telah berakhir, silakan login ulang.", Colors.red);
+        _showSnackBar(
+          "Sesi Anda telah berakhir, silakan login ulang.",
+          Colors.red,
+        );
         return;
       }
       final profileRes = await supabase
@@ -365,23 +401,28 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
           .select('name')
           .eq('id', currentUser.id)
           .maybeSingle();
-      final String activeUserName = profileRes?['name'] ?? currentUser.email ?? 'System POD';
+      final String activeUserName =
+          profileRes?['name'] ?? currentUser.email ?? 'System POD';
       final List<int> shipIds = List<int>.from(_foundData!['all_shipping_ids']);
 
-      await supabase.from('shipping_assignments').update({
-        'tanggal_bongkar': _tanggalBongkar!.toIso8601String(),
-        'sj_kembali': _tanggalSJKembali!.toIso8601String(),
-        'tanggal_tiba_customer': _tanggalTibaCustomer!.toIso8601String(),
-        'lead_time_aktual': _calculateLeadTime(),
-        'pod_return_aktual': _calculatePODActual(),
-        'status_assignment': 'completed',
-        'createdpod_at': DateTime.now().toIso8601String(),
-        'createdpod_by': activeUserName,
-      }).inFilter('shipping_id', shipIds);
+      await supabase
+          .from('shipping_assignments')
+          .update({
+            'tanggal_bongkar': _tanggalBongkar!.toIso8601String(),
+            'sj_kembali': _tanggalSJKembali!.toIso8601String(),
+            'tanggal_tiba_customer': _tanggalTibaCustomer!.toIso8601String(),
+            'lead_time_aktual': _calculateLeadTime(),
+            'pod_return_aktual': _calculatePODActual(),
+            'status_assignment': 'completed',
+            'createdpod_at': DateTime.now().toIso8601String(),
+            'createdpod_by': activeUserName,
+          })
+          .inFilter('shipping_id', shipIds);
 
-      await supabase.from('shipping_request').update({
-        'status': 'completed',
-      }).inFilter('shipping_id', shipIds);
+      await supabase
+          .from('shipping_request')
+          .update({'status': 'completed'})
+          .inFilter('shipping_id', shipIds);
       _showSnackBar("Data POD Berhasil Disimpan", Colors.green);
       setState(() {
         _foundData = null;
@@ -405,7 +446,9 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
           Expanded(
             child: _isSearching
                 ? const Center(child: CircularProgressIndicator())
-                : (_foundData == null ? _buildEmptySearch() : _buildFormContent()),
+                : (_foundData == null
+                      ? _buildEmptySearch()
+                      : _buildFormContent()),
           ),
         ],
       ),
@@ -434,9 +477,16 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
           ElevatedButton(
             onPressed: _searchDO,
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade800,
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20)),
-            child: const Text("CARI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.red.shade800,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+            ),
+            child: const Text(
+              "CARI",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -453,81 +503,121 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("INPUT DETAIL PENGIRIMAN & POD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const Text(
+                  "INPUT DETAIL PENGIRIMAN & POD",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
                 const SizedBox(height: 16),
-                _buildDatePicker("Tanggal Tiba di Customer", _tanggalTibaCustomer, (val) => setState(() => _tanggalTibaCustomer = val)),
+                _buildDatePicker(
+                  "Tanggal Tiba di Customer",
+                  _tanggalTibaCustomer,
+                  (val) => setState(() => _tanggalTibaCustomer = val),
+                ),
                 const SizedBox(height: 12),
-                _buildDatePicker("Tanggal Bongkar / Unloading", _tanggalBongkar, (val) => setState(() => _tanggalBongkar = val)),
+                _buildDatePicker(
+                  "Tanggal Bongkar / Unloading",
+                  _tanggalBongkar,
+                  (val) => setState(() => _tanggalBongkar = val),
+                ),
                 const SizedBox(height: 12),
-                // _buildDatePicker("Tanggal POD Aktual", _tanggalPODAktual, (val) => setState(() => _tanggalPODAktual = val)),
-                // const SizedBox(height: 12),
-                _buildDatePicker("Tanggal SJ Kembali ke Logistik", _tanggalSJKembali, (val) => setState(() => _tanggalSJKembali = val)),
+
+                _buildDatePicker(
+                  "Tanggal SJ Kembali ke Logistik",
+                  _tanggalSJKembali,
+                  (val) => setState(() => _tanggalSJKembali = val),
+                ),
                 const SizedBox(height: 32),
                 Row(
-  children: [
-    Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12), 
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade100),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "Lead Time Aktual:",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "${_calculateLeadTime()} Hari",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
-            ),
-          ],
-        ),
-      ),
-    ),
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Lead Time Aktual:",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "${_calculateLeadTime()} Hari",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
-    const SizedBox(width: 12),
-    Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade100),
-        ),
-       child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "POD Aktual:",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "${_calculatePODActual()} Hari",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
-            ),
-          ],
-        ),
-      ),
-    ),
-  ],
-),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "POD Aktual:",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "${_calculatePODActual()} Hari",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _submitPOD,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                    child: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text("SIMPAN DATA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: _isSaving
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            "SIMPAN DATA",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
-                
               ],
             ),
           ),
@@ -540,12 +630,15 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
     final data = _foundData ?? {};
     final bool isGroup = data['group_id'] != null;
     final List dos = (data['delivery_order'] as List? ?? []);
-    //final List rejectList = (data['reject_list'] as List? ?? []);
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(left: BorderSide(color: isGroup ? Colors.blue.shade700 : Colors.red.shade700, width: 6)),
+        border: Border(
+          left: BorderSide(
+            color: isGroup ? Colors.blue.shade700 : Colors.red.shade700,
+            width: 6,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,118 +651,236 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 12)),
-                    _buildBadge(data['warehouse']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
+                    Text(
+                      isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isGroup
+                            ? Colors.blue.shade900
+                            : Colors.red.shade900,
+                        letterSpacing: 1.1,
+                        fontSize: 12,
+                      ),
+                    ),
+                    _buildBadge(
+                      data['warehouse']?.toString().toUpperCase() ?? "-",
+                      Colors.red.shade700,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(isGroup ? "ID Grup: ${data['group_id']}" : "ID Shipping: ${data['shipping_id']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                Text(
+                  isGroup
+                      ? "ID Grup: ${data['group_id']}"
+                      : "ID Shipping: ${data['shipping_id']}",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _infoBox("Stuffing Date", _formatDate(data['stuffing_date'])),
+                    _infoBox(
+                      "Stuffing Date",
+                      _formatDate(data['stuffing_date']),
+                    ),
                     const SizedBox(width: 80),
-                    _infoBox("Lead Time Standard", "${data['std_lead_time']} Hari"),
+                    _infoBox(
+                      "Lead Time Standard",
+                      "${data['std_lead_time']} Hari",
+                    ),
                     const SizedBox(width: 80),
                     _infoBox("POD Standard", "${data['std_pod_return']} Hari"),
                     const Spacer(),
-                    _infoBox("Status", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _infoBox(
+                      "Status",
+                      (data['is_dedicated'] ?? "-").toString().toUpperCase(),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
 
-          //const SizedBox(height: 3),
-          //const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Row(
-                    children: [
-                      Icon(Icons.local_shipping_outlined, size: 12, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text("No. Polisi: ${data['no_polisi']}", style: TextStyle(fontSize: 12,color: Colors.grey.shade800)),
-                      const SizedBox(width: 16),
-                      Icon(Icons.login_rounded, size: 12, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text("Check-in: ${data['checkin_at'] != null ? DateFormat('dd/MM HH:mm').format(DateTime.parse(data['checkin_at'])) : '-'}", style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                      const SizedBox(width: 16),
-                      Icon(Icons.logout_rounded, size: 12, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text("Keluar: ${data['keluar_at'] != null ? DateFormat('dd/MM HH:mm').format(DateTime.parse(data['keluar_at'])) : '-'}", style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                    ],
-                  ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.local_shipping_outlined,
+                  size: 12,
+                  color: Colors.grey.shade600,
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(width: 4),
+                Text(
+                  "No. Polisi: ${data['no_polisi']}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                ),
+                const SizedBox(width: 16),
+                Icon(
+                  Icons.login_rounded,
+                  size: 12,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "Check-in: ${data['checkin_at'] != null ? DateFormat('dd/MM HH:mm').format(DateTime.parse(data['checkin_at'])) : '-'}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
+                const SizedBox(width: 16),
+                Icon(
+                  Icons.logout_rounded,
+                  size: 12,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "Keluar: ${data['keluar_at'] != null ? DateFormat('dd/MM HH:mm').format(DateTime.parse(data['keluar_at'])) : '-'}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 5),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey.shade100,
-            child: const Text("DETAIL ITEM & CUSTOMER", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            child: const Text(
+              "DETAIL ITEM & CUSTOMER",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey,
+              ),
+            ),
           ),
           ...dos.map((doItem) {
             final List doDetails = doItem['do_details'] ?? [];
             return Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 14, color: Colors.red.shade700),
+                      Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: Colors.red.shade700,
+                      ),
                       const SizedBox(width: 6),
-                      Text("RDD: ${_formatDate(doItem['rdd_origin'])}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(
+                        "RDD: ${_formatDate(doItem['rdd_origin'])}",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Text("DO: ${doItem['do_number']} | SO: ${doItem['so_origin'] ?? '-'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  // Text("👤 ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
-                  // const SizedBox(height: 10),
-                   Row(
+                  Row(
                     children: [
-                      const Icon(Icons.description_outlined, size: 16, color: Colors.blue),
+                      const Icon(
+                        Icons.description_outlined,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
                       const SizedBox(width: 8),
-                      Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        "DO: ${doItem['do_number']}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(width: 20),
-                      Text("SO: ${doItem['so_origin'] ?? '-'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        "SO: ${doItem['so_origin'] ?? '-'}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  Text(
+                    "👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}",
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
                   const SizedBox(height: 10),
                   Container(
                     clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade300)),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
                     child: Table(
-                      columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(3), 2: FlexColumnWidth(0.8), 3: FlexColumnWidth(1.3)},
+                      columnWidths: const {
+                        0: FlexColumnWidth(1.2),
+                        1: FlexColumnWidth(3),
+                        2: FlexColumnWidth(0.8),
+                        3: FlexColumnWidth(1.3),
+                      },
                       children: [
                         TableRow(
-                          decoration: BoxDecoration(color: Colors.grey.shade200),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                          ),
                           children: [
                             _tableCell("ID Mat", isBold: true, isHeader: true),
                             _tableCell("Name", isBold: true, isHeader: true),
-                            _tableCell("Qty", isBold: true, align: TextAlign.right, isHeader: true),
-                            _tableCell("NW (Kg)", isBold: true, align: TextAlign.right, isHeader: true),
+                            _tableCell(
+                              "Qty",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
+                            _tableCell(
+                              "NW (Kg)",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
                           ],
                         ),
                         ...doDetails.map((det) {
-                          double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+                          double qty =
+                              double.tryParse(det['qty']?.toString() ?? "0") ??
+                              0;
                           var mat = det['material'] ?? {};
-                          double nw = double.tryParse(mat['net_weight']?.toString() ?? "0") ?? 0;
+                          double nw =
+                              double.tryParse(
+                                mat['net_weight']?.toString() ?? "0",
+                              ) ??
+                              0;
                           return TableRow(
                             children: [
                               _tableCell(mat['material_id']?.toString() ?? "-"),
                               _tableCell(mat['material_name'] ?? "-"),
-                              _tableCell(qty.toInt().toString(), align: TextAlign.right, isBold: true),
-                              _tableCell((qty * nw).toStringAsFixed(2), align: TextAlign.right),
+                              _tableCell(
+                                qty.toInt().toString(),
+                                align: TextAlign.right,
+                                isBold: true,
+                              ),
+                              _tableCell(
+                                (qty * nw).toStringAsFixed(2),
+                                align: TextAlign.right,
+                              ),
                             ],
                           );
                         }),
                       ],
                     ),
                   ),
-                   const SizedBox(height: 12),
+                  const SizedBox(height: 12),
                   const Divider(height: 1),
                 ],
               ),
@@ -680,27 +891,95 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
     );
   }
 
-  Widget _infoBox(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)), Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))]);
+  Widget _infoBox(String label, String value) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      Text(
+        value,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+      ),
+    ],
+  );
 
-  Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 11, fontWeight: isBold ? FontWeight.bold : FontWeight.normal, color: isHeader ? Colors.black : Colors.black87)));
+  Widget _tableCell(
+    String text, {
+    bool isBold = false,
+    TextAlign align = TextAlign.left,
+    bool isHeader = false,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    child: Text(
+      text,
+      textAlign: align,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+        color: isHeader ? Colors.black : Colors.black87,
+      ),
+    ),
+  );
 
-  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color, width: 1)), child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)));
+  Widget _buildBadge(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color, width: 1),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+    ),
+  );
 
-  String _formatDate(String? d) => d == null || d.isEmpty ? "-" : DateFormat('dd MMM yyyy').format(DateTime.parse(d));
+  String _formatDate(String? d) => d == null || d.isEmpty
+      ? "-"
+      : DateFormat('dd MMM yyyy').format(DateTime.parse(d));
 
-  Widget _buildDatePicker(String label, DateTime? selectedDate, Function(DateTime) onSelect) {
+  Widget _buildDatePicker(
+    String label,
+    DateTime? selectedDate,
+    Function(DateTime) onSelect,
+  ) {
     return InkWell(
       onTap: () async {
-        final picked = await showDatePicker(context: context, initialDate: selectedDate ?? DateTime.now(), firstDate: DateTime(2023), lastDate: DateTime.now());
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: selectedDate ?? DateTime.now(),
+          firstDate: DateTime(2023),
+          lastDate: DateTime.now(),
+        );
         if (picked != null) onSelect(picked);
       },
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(8), color: Colors.white),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.white,
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(selectedDate == null ? "Pilih Tanggal" : DateFormat('dd MMMM yyyy').format(selectedDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))]),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                Text(
+                  selectedDate == null
+                      ? "Pilih Tanggal"
+                      : DateFormat('dd MMMM yyyy').format(selectedDate),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
             const Icon(Icons.calendar_today, color: Colors.grey, size: 20),
           ],
         ),
@@ -708,9 +987,31 @@ List<DateTime> _defaultIndonesiaHolidays(int year) {
     );
   }
 
-  Widget _buildEmptySearch() => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.document_scanner_outlined, size: 80, color: Colors.grey.shade200), const SizedBox(height: 16), const Text("Cari Nomor DO untuk memulai POD", style: TextStyle(color: Colors.grey))]));
+  Widget _buildEmptySearch() => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.document_scanner_outlined,
+          size: 80,
+          color: Colors.grey.shade200,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "Cari Nomor DO untuk memulai POD",
+          style: TextStyle(color: Colors.grey),
+        ),
+      ],
+    ),
+  );
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }

@@ -14,8 +14,8 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
   bool _isAccountLoading = false;
 
   List<Map<String, dynamic>> _masterVendors = [];
-  Map<String, dynamic>? _selectedVendor; 
-  List<Map<String, dynamic>> _vendorAccounts = []; 
+  Map<String, dynamic>? _selectedVendor;
+  List<Map<String, dynamic>> _vendorAccounts = [];
 
   @override
   void initState() {
@@ -26,7 +26,10 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
   Future<void> _fetchMasterVendors() async {
     setState(() => _isVendorLoading = true);
     try {
-      final data = await supabase.from('master_vendor').select().order('vendor_name', ascending: true);
+      final data = await supabase
+          .from('master_vendor')
+          .select()
+          .order('vendor_name', ascending: true);
       setState(() {
         _masterVendors = List<Map<String, dynamic>>.from(data);
         _isVendorLoading = false;
@@ -43,7 +46,7 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
       final data = await supabase
           .from('profiles')
           .select()
-          .eq('nik_vendor', nik) 
+          .eq('nik_vendor', nik)
           .order('created_at', ascending: false);
       setState(() {
         _vendorAccounts = List<Map<String, dynamic>>.from(data);
@@ -55,7 +58,10 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
     }
   }
 
-  Future<void> _toggleAccountStatus(String profileId, bool currentStatus) async {
+  Future<void> _toggleAccountStatus(
+    String profileId,
+    bool currentStatus,
+  ) async {
     try {
       await supabase
           .from('profiles')
@@ -85,7 +91,9 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 
   @override
@@ -99,7 +107,12 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                   flex: 2,
                   child: Container(
                     decoration: BoxDecoration(
-                      border: Border(right: BorderSide(color: Colors.grey.shade300, width: 1)),
+                      border: Border(
+                        right: BorderSide(
+                          color: Colors.grey.shade300,
+                          width: 1,
+                        ),
+                      ),
                     ),
                     child: Column(
                       children: [
@@ -108,12 +121,20 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text("Daftar Vendor", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              const Text(
+                                "Daftar Vendor",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red.shade700,
                                   foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                 ),
                                 onPressed: _showAddMasterVendorDialog,
                                 icon: const Icon(Icons.add, size: 18),
@@ -125,22 +146,41 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                         const Divider(height: 1),
                         Expanded(
                           child: _masterVendors.isEmpty
-                              ? const Center(child: Text("Belum ada data vendor."))
+                              ? const Center(
+                                  child: Text("Belum ada data vendor."),
+                                )
                               : ListView.separated(
                                   itemCount: _masterVendors.length,
-                                  separatorBuilder: (context, index) => const Divider(height: 1),
+                                  separatorBuilder: (context, index) =>
+                                      const Divider(height: 1),
                                   itemBuilder: (context, index) {
                                     final vendor = _masterVendors[index];
-                                    final isSelected = _selectedVendor?['nik'] == vendor['nik'];
+                                    final isSelected =
+                                        _selectedVendor?['nik'] ==
+                                        vendor['nik'];
 
                                     return ListTile(
                                       selected: isSelected,
-                                      selectedTileColor: Colors.blueGrey.shade50,
+                                      selectedTileColor:
+                                          Colors.blueGrey.shade50,
                                       selectedColor: Colors.blueGrey.shade900,
-                                      title: Text(vendor['vendor_name'], style: const TextStyle(fontWeight: FontWeight.w600)),
-                                      subtitle: Text("NIK: ${vendor['nik']} \nCode: ${vendor['regist_code'] ?? '-'}"),
+                                      title: Text(
+                                        vendor['vendor_name'],
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        "NIK: ${vendor['nik']} \nCode: ${vendor['regist_code'] ?? '-'}",
+                                      ),
                                       isThreeLine: true,
-                                      trailing: Icon(Icons.arrow_forward_ios, size: 14, color: isSelected ? Colors.blueGrey.shade700 : Colors.grey),
+                                      trailing: Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 14,
+                                        color: isSelected
+                                            ? Colors.blueGrey.shade700
+                                            : Colors.grey,
+                                      ),
                                       onTap: () {
                                         setState(() {
                                           _selectedVendor = vendor;
@@ -162,10 +202,20 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.manage_accounts_outlined, size: 64, color: Colors.grey.shade400),
+                              Icon(
+                                Icons.manage_accounts_outlined,
+                                size: 64,
+                                color: Colors.grey.shade400,
+                              ),
                               const SizedBox(height: 16),
-                              Text("Pilih vendor di sebelah kiri\nuntuk memanajemen hak akses login (Profiles)",
-                                  textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, fontSize: 15)),
+                              Text(
+                                "Pilih vendor di sebelah kiri\nuntuk memanajemen hak akses login (Profiles)",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 15,
+                                ),
+                              ),
                             ],
                           ),
                         )
@@ -178,16 +228,32 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                                 children: [
                                   CircleAvatar(
                                     backgroundColor: Colors.blueGrey.shade100,
-                                    child: Icon(Icons.business, color: Colors.blueGrey.shade900),
+                                    child: Icon(
+                                      Icons.business,
+                                      color: Colors.blueGrey.shade900,
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(_selectedVendor!['vendor_name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                        Text(
+                                          _selectedVendor!['vendor_name'],
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                         const SizedBox(height: 4),
-                                        Text("NIK Vendor Terkunci: ${_selectedVendor!['nik']}", style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                                        Text(
+                                          "NIK Vendor Terkunci: ${_selectedVendor!['nik']}",
+                                          style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -195,75 +261,160 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
                               ),
                             ),
                             const Divider(height: 1),
-                            
+
                             Expanded(
                               child: _isAccountLoading
-                                  ? const Center(child: CircularProgressIndicator())
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
                                   : _vendorAccounts.isEmpty
-                                      ? const Center(child: Text("Belum ada akun login yang terdaftar untuk vendor ini."))
-                                      : ListView.builder(
-                                          padding: const EdgeInsets.all(16),
-                                          itemCount: _vendorAccounts.length,
-                                          itemBuilder: (context, index) {
-                                            final profile = _vendorAccounts[index];
-                                            final bool isActive = profile['is_active'] ?? false;
+                                  ? const Center(
+                                      child: Text(
+                                        "Belum ada akun login yang terdaftar untuk vendor ini.",
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      padding: const EdgeInsets.all(16),
+                                      itemCount: _vendorAccounts.length,
+                                      itemBuilder: (context, index) {
+                                        final profile = _vendorAccounts[index];
+                                        final bool isActive =
+                                            profile['is_active'] ?? false;
 
-                                            return Card(
-                                              elevation: 2,
-                                              margin: const EdgeInsets.only(bottom: 12),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(12.0),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        return Card(
+                                          elevation: 2,
+                                          margin: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12.0),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Row(
                                                         children: [
-                                                          Row(
-                                                            children: [
-                                                              Text(profile['name'] ?? 'No Name', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                                              const SizedBox(width: 8),
-                                                              // Badge Status IsActive
-                                                              Container(
-                                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                                decoration: BoxDecoration(
-                                                                  color: isActive ? Colors.green.shade100 : Colors.red.shade100,
-                                                                  borderRadius: BorderRadius.circular(12),
+                                                          Text(
+                                                            profile['name'] ??
+                                                                'No Name',
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 15,
                                                                 ),
-                                                                child: Text(
-                                                                  isActive ? "AKTIF" : "NON-AKTIF",
-                                                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isActive ? Colors.green.shade800 : Colors.red.shade800),
-                                                                ),
-                                                              ),
-                                                            ],
                                                           ),
-                                                          const SizedBox(height: 4),
-                                                          Text("Email: ${profile['email']}", style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                                                          Text("Role: ${profile['role'] ?? 'Guest'}", style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Container(
+                                                            padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal: 8,
+                                                                  vertical: 2,
+                                                                ),
+                                                            decoration: BoxDecoration(
+                                                              color: isActive
+                                                                  ? Colors
+                                                                        .green
+                                                                        .shade100
+                                                                  : Colors
+                                                                        .red
+                                                                        .shade100,
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    12,
+                                                                  ),
+                                                            ),
+                                                            child: Text(
+                                                              isActive
+                                                                  ? "AKTIF"
+                                                                  : "NON-AKTIF",
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: isActive
+                                                                    ? Colors
+                                                                          .green
+                                                                          .shade800
+                                                                    : Colors
+                                                                          .red
+                                                                          .shade800,
+                                                              ),
+                                                            ),
+                                                          ),
                                                         ],
                                                       ),
-                                                    ),
-                                                    
-                                                    IconButton(
-                                                      tooltip: isActive ? "Non-aktifkan Akun" : "Aktifkan Akun",
-                                                      icon: Icon(
-                                                        isActive ? Icons.block : Icons.check_circle_outline,
-                                                        color: isActive ? Colors.orange.shade800 : Colors.green,
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        "Email: ${profile['email']}",
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade700,
+                                                          fontSize: 13,
+                                                        ),
                                                       ),
-                                                      onPressed: () => _toggleAccountStatus(profile['id'], isActive),
-                                                    ),
-                                                    
-                                                    IconButton(
-                                                      tooltip: "Hapus Akun Permanen",
-                                                      icon: const Icon(Icons.delete_forever, color: Colors.red),
-                                                      onPressed: () => _showConfirmDeleteDialog(profile['id'], profile['name'] ?? 'No Name'),
-                                                    ),
-                                                  ],
+                                                      Text(
+                                                        "Role: ${profile['role'] ?? 'Guest'}",
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade600,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                            );
-                                          },
-                                        ),
+
+                                                IconButton(
+                                                  tooltip: isActive
+                                                      ? "Non-aktifkan Akun"
+                                                      : "Aktifkan Akun",
+                                                  icon: Icon(
+                                                    isActive
+                                                        ? Icons.block
+                                                        : Icons
+                                                              .check_circle_outline,
+                                                    color: isActive
+                                                        ? Colors.orange.shade800
+                                                        : Colors.green,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _toggleAccountStatus(
+                                                        profile['id'],
+                                                        isActive,
+                                                      ),
+                                                ),
+
+                                                IconButton(
+                                                  tooltip:
+                                                      "Hapus Akun Permanen",
+                                                  icon: const Icon(
+                                                    Icons.delete_forever,
+                                                    color: Colors.red,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _showConfirmDeleteDialog(
+                                                        profile['id'],
+                                                        profile['name'] ??
+                                                            'No Name',
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                             ),
                           ],
                         ),
@@ -272,6 +423,7 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
             ),
     );
   }
+
   void _showAddMasterVendorDialog() {
     final nikController = TextEditingController();
     final nameController = TextEditingController();
@@ -286,20 +438,45 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nikController, decoration: const InputDecoration(labelText: "NIK Vendor * (Primary Key)", border: OutlineInputBorder())),
+              TextField(
+                controller: nikController,
+                decoration: const InputDecoration(
+                  labelText: "NIK Vendor * (Primary Key)",
+                  border: OutlineInputBorder(),
+                ),
+              ),
               const SizedBox(height: 10),
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: "Nama Perusahaan/Vendor *", border: OutlineInputBorder())),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: "Nama Perusahaan/Vendor *",
+                  border: OutlineInputBorder(),
+                ),
+              ),
               const SizedBox(height: 10),
-              TextField(controller: codeController, decoration: const InputDecoration(labelText: "Registration Code *", border: OutlineInputBorder())),
+              TextField(
+                controller: codeController,
+                decoration: const InputDecoration(
+                  labelText: "Registration Code *",
+                  border: OutlineInputBorder(),
+                ),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
-              if (nikController.text.trim().isEmpty || nameController.text.trim().isEmpty) {
+              if (nikController.text.trim().isEmpty ||
+                  nameController.text.trim().isEmpty) {
                 _showSnackBar("NIK dan Nama wajib diisi!", Colors.orange);
                 return;
               }
@@ -322,16 +499,25 @@ class _VendorAccountsPageState extends State<VendorAccountsPage> {
       ),
     );
   }
+
   void _showConfirmDeleteDialog(String profileId, String profileName) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Hapus Akun Login?"),
-        content: Text("Apakah Anda yakin ingin menghapus akun milik '$profileName'? \n\nAksi ini akan memicu trigger database untuk menghapus kredensial login (Auth) secara permanen."),
+        content: Text(
+          "Apakah Anda yakin ingin menghapus akun milik '$profileName'? \n\nAksi ini akan memicu trigger database untuk menghapus kredensial login (Auth) secara permanen.",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               Navigator.pop(context);
               _deleteVendorAccount(profileId);

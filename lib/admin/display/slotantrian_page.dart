@@ -18,14 +18,8 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   RealtimeChannel? _requestsChannel;
 
   final List<Map<String, dynamic>> _zones = [
-    {
-      'zone_key': 'rungkut',
-      'zone_name': 'RUNGKUT',
-    },
-    {
-      'zone_key': 'tambak_langon',
-      'zone_name': 'LINK - TAMBAK LANGON',
-    },
+    {'zone_key': 'rungkut', 'zone_name': 'RUNGKUT'},
+    {'zone_key': 'tambak_langon', 'zone_name': 'LINK - TAMBAK LANGON'},
   ];
 
   String _selectedZoneKey = 'rungkut';
@@ -34,7 +28,11 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
     {'warehouse_id': 1, 'warehouse_name': 'GBJ CO CHIYODA', 'zone': 'rungkut'},
     {'warehouse_id': 2, 'warehouse_name': 'GBJ KUNCIMAS', 'zone': 'rungkut'},
     {'warehouse_id': 3, 'warehouse_name': 'GBJ MARSHO VNA', 'zone': 'rungkut'},
-    {'warehouse_id': 6, 'warehouse_name': 'TAMBAK LANGON', 'zone': 'tambak_langon'}, 
+    {
+      'warehouse_id': 6,
+      'warehouse_name': 'TAMBAK LANGON',
+      'zone': 'tambak_langon',
+    },
   ];
 
   final List<String> _rungkutTimeSlots = [
@@ -62,6 +60,7 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   List<Map<String, dynamic>> get _currentWarehouses {
     return _allWarehouses.where((w) => w['zone'] == _selectedZoneKey).toList();
   }
+
   List<String> get _currentTimeSlots {
     if (_selectedZoneKey == 'tambak_langon') {
       return _tambakLangonTimeSlots;
@@ -82,7 +81,8 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
   void dispose() {
     _assignmentsChannel?.unsubscribe();
     _requestsChannel?.unsubscribe();
-    if (_assignmentsChannel != null) supabase.removeChannel(_assignmentsChannel!);
+    if (_assignmentsChannel != null)
+      supabase.removeChannel(_assignmentsChannel!);
     if (_requestsChannel != null) supabase.removeChannel(_requestsChannel!);
     super.dispose();
   }
@@ -114,7 +114,6 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
         .subscribe();
   }
 
-  // Aturan Kapasitas Maksimum per Gudang Tunggal & Jam Muat
   int _getMaxCapacity(int warehouseId, String timeSlot) {
     if (warehouseId == 6) {
       if (timeSlot == '08:00 - 10:00') return 6;
@@ -128,7 +127,8 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
       return 0;
     }
 
-    bool isRestTime = timeSlot == '11:00 - 13:00' || timeSlot == '17:00 - 19:00';
+    bool isRestTime =
+        timeSlot == '11:00 - 13:00' || timeSlot == '17:00 - 19:00';
 
     if (warehouseId == 1) return isRestTime ? 4 : 8;
     if (warehouseId == 2) return isRestTime ? 1 : 3;
@@ -179,7 +179,14 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
               )
             )
           ''')
-          .inFilter('status_assignment', ['accepted', 'check in', 'loading', 'kelayakan unit', 'weighbridge', 'keluar'])
+          .inFilter('status_assignment', [
+            'accepted',
+            'check in',
+            'loading',
+            'kelayakan unit',
+            'weighbridge',
+            'keluar',
+          ])
           .eq('request.stuffing_date', filterDate)
           .not('jam_booking', 'is', null);
 
@@ -208,7 +215,10 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
           String vendorName = row['vendor_transportasi']?['vendor_name'] ?? '-';
           List doList = request['delivery_order'] ?? [];
           String doNumbers = doList.map((e) => e['do_number']).join(", ");
-          String customers = doList.map((e) => e['customer']?['customer_name'] ?? '-').toSet().join(", ");
+          String customers = doList
+              .map((e) => e['customer']?['customer_name'] ?? '-')
+              .toSet()
+              .join(", ");
 
           String noPolisi = row['no_polisi'] ?? '-';
           String typeUnit = row['vendor_transportasi']?['type_unit'] ?? '-';
@@ -228,7 +238,9 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
 
       for (var warehouse in _allWarehouses) {
         int whId = warehouse['warehouse_id'];
-        List<String> currentSlots = warehouse['zone'] == 'tambak_langon' ? _tambakLangonTimeSlots : _rungkutTimeSlots;
+        List<String> currentSlots = warehouse['zone'] == 'tambak_langon'
+            ? _tambakLangonTimeSlots
+            : _rungkutTimeSlots;
 
         for (String slot in currentSlots) {
           String key = '${whId}_$slot';
@@ -269,11 +281,14 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                           border: TableBorder.all(color: Colors.grey.shade400),
                           columnWidths: {
                             0: const FixedColumnWidth(240),
-                            for (int i = 1; i <= _currentWarehouses.length; i++) i: const FixedColumnWidth(350),
+                            for (int i = 1; i <= _currentWarehouses.length; i++)
+                              i: const FixedColumnWidth(350),
                           },
                           children: [
                             _buildHeaderRow(),
-                            ..._currentTimeSlots.map((slot) => _buildTimeRow(slot)),
+                            ..._currentTimeSlots.map(
+                              (slot) => _buildTimeRow(slot),
+                            ),
                           ],
                         ),
                       ),
@@ -302,7 +317,11 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
               child: DropdownButton<String>(
                 value: _selectedZoneKey,
                 icon: const Icon(Icons.arrow_drop_down, color: Colors.red),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  fontSize: 14,
+                ),
                 items: _zones.map((zone) {
                   return DropdownMenuItem<String>(
                     value: zone['zone_key'],
@@ -323,9 +342,16 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
           const Spacer(),
           ElevatedButton.icon(
             onPressed: _pickDate,
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black87, side: BorderSide(color: Colors.grey.shade300)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
             icon: const Icon(Icons.calendar_month, size: 18, color: Colors.red),
-            label: Text(DateFormat('dd MMM yyyy').format(_selectedDate), style: const TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(
+              DateFormat('dd MMM yyyy').format(_selectedDate),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(width: 10),
           IconButton(
@@ -354,10 +380,15 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
       ),
     );
   }
+
   TableRow _buildTimeRow(String slot) {
     return TableRow(
       children: [
@@ -375,20 +406,31 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
           int warehouseId = warehouse['warehouse_id'];
           String key = '${warehouseId}_$slot';
 
-          final data = _slotData[key] ?? {
-            'booked': 0,
-            'max': _getMaxCapacity(warehouseId, slot),
-            'details': [],
-          };
+          final data =
+              _slotData[key] ??
+              {
+                'booked': 0,
+                'max': _getMaxCapacity(warehouseId, slot),
+                'details': [],
+              };
 
           int booked = data['booked'];
           int max = data['max'];
           int remaining = max - booked;
-          List<Map<String, dynamic>> details = List<Map<String, dynamic>>.from(data['details']);
+          List<Map<String, dynamic>> details = List<Map<String, dynamic>>.from(
+            data['details'],
+          );
           bool isFull = booked >= max;
 
           return GestureDetector(
-            onTap: () => _showDetailDialog(warehouse['warehouse_name'], slot, details, remaining, booked, max),
+            onTap: () => _showDetailDialog(
+              warehouse['warehouse_name'],
+              slot,
+              details,
+              remaining,
+              booked,
+              max,
+            ),
             child: Container(
               height: 180,
               padding: const EdgeInsets.all(12),
@@ -398,28 +440,50 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(isFull ? Icons.block : Icons.check_circle, size: 16, color: isFull ? Colors.red : Colors.green),
+                      Icon(
+                        isFull ? Icons.block : Icons.check_circle,
+                        size: 16,
+                        color: isFull ? Colors.red : Colors.green,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           isFull ? "FULL" : "Sisa Slot: $remaining",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isFull ? Colors.red.shade900 : Colors.green.shade900),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: isFull
+                                ? Colors.red.shade900
+                                : Colors.green.shade900,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text("Terisi $booked/$max", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                  Text(
+                    "Terisi $booked/$max",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const Divider(height: 16),
                   Expanded(
                     child: details.isEmpty
-                        ? const Text("-", style: TextStyle(fontSize: 10, color: Colors.grey))
+                        ? const Text(
+                            "-",
+                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                          )
                         : ListView.builder(
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: details.length > 2 ? 2 : details.length,
                             itemBuilder: (context, i) {
-                              final String rawStatus = details[i]['status'] ?? '';
-                              Color statusColor = rawStatus == 'accepted' ? Colors.grey : Colors.blue.shade700;
+                              final String rawStatus =
+                                  details[i]['status'] ?? '';
+                              Color statusColor = rawStatus == 'accepted'
+                                  ? Colors.grey
+                                  : Colors.blue.shade700;
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 6),
@@ -431,28 +495,48 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                                         Expanded(
                                           child: Text(
                                             "• ${details[i]['vendor']}",
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                         const SizedBox(width: 6),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 1,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: statusColor.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: statusColor, width: 0.5),
+                                            color: statusColor.withValues(
+                                              alpha: 0.1,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            border: Border.all(
+                                              color: statusColor,
+                                              width: 0.5,
+                                            ),
                                           ),
                                           child: Text(
                                             rawStatus.toUpperCase(),
-                                            style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: statusColor),
+                                            style: TextStyle(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                              color: statusColor,
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
                                     Text(
                                       "  Tujuan: ${details[i]['customer']}",
-                                      style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.black54,
+                                      ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
@@ -470,12 +554,21 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
     );
   }
 
-  void _showDetailDialog(String warehouse, String slot, List<Map<String, dynamic>> details, int remaining, int booked, int max) {
+  void _showDetailDialog(
+    String warehouse,
+    String slot,
+    List<Map<String, dynamic>> details,
+    int remaining,
+    int booked,
+    int max,
+  ) {
     showDialog(
       context: context,
       builder: (_) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           title: Text(
             "$warehouse\n$slot",
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -486,14 +579,26 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Terisi: $booked/$max", style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  "Terisi: $booked/$max",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   "Sisa Slot: $remaining",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: remaining <= 0 ? Colors.red : Colors.green),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: remaining <= 0 ? Colors.red : Colors.green,
+                  ),
                 ),
                 const Divider(height: 24),
-                const Text("Daftar Booking Gudang Ini:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                const Text(
+                  "Daftar Booking Gudang Ini:",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 if (details.isEmpty)
                   const Text("- Belum ada booking")
@@ -506,8 +611,11 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                       itemBuilder: (context, i) {
                         final d = details[i];
                         final String status = d['status'] ?? '-';
-                        Color statusColor = status == 'accepted' ? Colors.grey : Colors.blue.shade700;
-                        bool sudahCheckIn = status.toLowerCase() == 'kelayakan unit';
+                        Color statusColor = status == 'accepted'
+                            ? Colors.grey
+                            : Colors.blue.shade700;
+                        bool sudahCheckIn =
+                            status.toLowerCase() == 'kelayakan unit';
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -516,32 +624,66 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
                                 Expanded(
                                   child: Text(
                                     "${d['vendor']}",
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                      fontSize: 13,
+                                    ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: statusColor.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: statusColor, width: 0.5),
+                                    border: Border.all(
+                                      color: statusColor,
+                                      width: 0.5,
+                                    ),
                                   ),
                                   child: Text(
-                                    status == 'accepted' ? "BELUM TIBA" : status.toUpperCase(),
-                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
+                                    status == 'accepted'
+                                        ? "BELUM TIBA"
+                                        : status.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColor,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 6),
-                            Text("ID: ${d['id']}", style: const TextStyle(fontSize: 11)),
-                            Text("Tujuan: ${d['customer']}", style: const TextStyle(fontSize: 11)),
-                             Text("DO: ${d['dos']}", style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey)),
+                            Text(
+                              "ID: ${d['id']}",
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            Text(
+                              "Tujuan: ${d['customer']}",
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            Text(
+                              "DO: ${d['dos']}",
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey,
+                              ),
+                            ),
                             if (sudahCheckIn) ...[
-                              Text("Kendaraan: ${d['type_unit']} (${d['no_polisi']})", 
-                                style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                              Text(
+                                "Kendaraan: ${d['type_unit']} (${d['no_polisi']})",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black87,
+                                ),
+                              ),
                             ],
                           ],
                         );
@@ -554,7 +696,13 @@ class _QueueSlotPageState extends State<QueueSlotPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Tutup", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              child: const Text(
+                "Tutup",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         );

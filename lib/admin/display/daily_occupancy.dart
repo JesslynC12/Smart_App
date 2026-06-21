@@ -52,7 +52,7 @@ class _MasterReviewDailyPageState extends State<MasterReviewDailyPage> {
   List<MasterReviewDailyItem> cookingOilDataList = [];
   List<MasterReviewDailyItem> totalDataList = [];
 
-RealtimeChannel? _realtimeChannel;
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
@@ -60,7 +60,8 @@ RealtimeChannel? _realtimeChannel;
     loadAllData();
     _setupRealtimeListeners();
   }
-@override
+
+  @override
   void dispose() {
     if (_realtimeChannel != null) {
       supabase.removeChannel(_realtimeChannel!);
@@ -105,9 +106,9 @@ RealtimeChannel? _realtimeChannel;
     } catch (e) {
       debugPrint("Error loading data: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Gagal memuat data: $e")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Gagal memuat data: $e")));
       }
     } finally {
       setState(() => isLoading = false);
@@ -119,56 +120,79 @@ RealtimeChannel? _realtimeChannel;
     String formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
 
     for (var id in ids) {
-      // Get Warehouse Info
-      final wh = await supabase.from('warehouse').select().eq('warehouse_id', id).maybeSingle();
+      final wh = await supabase
+          .from('warehouse')
+          .select()
+          .eq('warehouse_id', id)
+          .maybeSingle();
       if (wh == null) continue;
 
       int whId = wh['warehouse_id'];
       int kapasitas = wh['kapasitas'] ?? 0;
       int maxUtilize = wh['max_utilize'] ?? 0;
 
-      // Get H Pagi (Occupancy)
       final occ = await supabase
           .from('occupancy_details')
           .select('kapasitas_tersedia, occupancy!inner(tanggal)')
           .eq('warehouse_id', whId)
           .eq('occupancy.tanggal', formattedDate)
-          .order('occupancy_id', ascending: false) 
-    .limit(1)                    
-    .maybeSingle();
+          .order('occupancy_id', ascending: false)
+          .limit(1)
+          .maybeSingle();
 
       int hPagi = occ?['kapasitas_tersedia'] ?? 0;
       double hPagiPersen = kapasitas > 0 ? (hPagi / kapasitas) * 100 : 0;
 
-      // Calculate Pallets logic (H-1 & H+1)
-      int actOutbound = await _getPalletSum(whId, selectedDate.subtract(const Duration(days: 1)), isProduction: false);
-      int prodHmin1 = await _getPalletSum(whId, selectedDate.subtract(const Duration(days: 1)), isProduction: true);
-      int prodHplus1 = await _getPalletSum(whId, selectedDate.add(const Duration(days: 1)), isProduction: true);
-      int delivHplus1 = await _getPalletSum(whId, selectedDate.add(const Duration(days: 1)), isProduction: false);
+      int actOutbound = await _getPalletSum(
+        whId,
+        selectedDate.subtract(const Duration(days: 1)),
+        isProduction: false,
+      );
+      int prodHmin1 = await _getPalletSum(
+        whId,
+        selectedDate.subtract(const Duration(days: 1)),
+        isProduction: true,
+      );
+      int prodHplus1 = await _getPalletSum(
+        whId,
+        selectedDate.add(const Duration(days: 1)),
+        isProduction: true,
+      );
+      int delivHplus1 = await _getPalletSum(
+        whId,
+        selectedDate.add(const Duration(days: 1)),
+        isProduction: false,
+      );
 
       int predictOccupancy = (hPagi - prodHmin1) + actOutbound;
       int finalOccupancy = predictOccupancy - prodHplus1 + delivHplus1;
       int sisaKapasitas = maxUtilize - finalOccupancy;
 
-      results.add(MasterReviewDailyItem(
-        location: wh['warehouse_name'],
-        kapasitas: kapasitas,
-        maxUtilize: maxUtilize,
-        hPagi: hPagi,
-        hPagiPersen: hPagiPersen,
-        actOutbound: actOutbound,
-        productionPlanHmin1: prodHmin1,
-        predictOccupancy: predictOccupancy,
-        productionPlanHplus1: prodHplus1,
-        deliveryPlanHplus1: delivHplus1,
-        finalOccupancy: finalOccupancy,
-        sisaKapasitas: sisaKapasitas,
-      ));
+      results.add(
+        MasterReviewDailyItem(
+          location: wh['warehouse_name'],
+          kapasitas: kapasitas,
+          maxUtilize: maxUtilize,
+          hPagi: hPagi,
+          hPagiPersen: hPagiPersen,
+          actOutbound: actOutbound,
+          productionPlanHmin1: prodHmin1,
+          predictOccupancy: predictOccupancy,
+          productionPlanHplus1: prodHplus1,
+          deliveryPlanHplus1: delivHplus1,
+          finalOccupancy: finalOccupancy,
+          sisaKapasitas: sisaKapasitas,
+        ),
+      );
     }
     return results;
   }
 
-  Future<int> _getPalletSum(int whId, DateTime date, {required bool isProduction}) async {
+  Future<int> _getPalletSum(
+    int whId,
+    DateTime date, {
+    required bool isProduction,
+  }) async {
     String dateStr = DateFormat('yyyy-MM-dd').format(date);
     double totalPallet = 0;
 
@@ -182,33 +206,39 @@ RealtimeChannel? _realtimeChannel;
           ''')
           .eq('material.warehouse_id', whId)
           .eq('ppic_forms.tanggal', dateStr);
-      
+
       for (var row in (res as List)) {
-        // double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
         final int bpp = row['material']['box_per_pallet'] ?? 1;
         totalPallet += (row['qty'] ?? 0) / (bpp == 0 ? 1 : bpp);
       }
     } else {
       final res = await supabase
           .from('do_details')
-          .select('qty, material!inner(box_per_pallet, warehouse_id), delivery_order!inner(shipping_request!inner(stuffing_date))')
+          .select(
+            'qty, material!inner(box_per_pallet, warehouse_id), delivery_order!inner(shipping_request!inner(stuffing_date))',
+          )
           .eq('material.warehouse_id', whId)
           .eq('delivery_order.shipping_request.stuffing_date', dateStr);
 
       for (var row in (res as List)) {
-        double bpp = double.tryParse(row['material']['box_per_pallet'].toString()) ?? 1.0;
+        double bpp =
+            double.tryParse(row['material']['box_per_pallet'].toString()) ??
+            1.0;
         totalPallet += (row['qty'] ?? 0) / (bpp == 0 ? 1 : bpp);
       }
     }
     return totalPallet.ceil();
   }
 
-Future<void> _exportToExcel() async {
+  Future<void> _exportToExcel() async {
     if (isLoading) return;
 
     if (marshoDataList.isEmpty && cookingOilDataList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Data kosong, tidak ada yang bisa diekspor"), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text("Data kosong, tidak ada yang bisa diekspor"),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -225,25 +255,37 @@ Future<void> _exportToExcel() async {
         horizontalAlign: HorizontalAlign.Center,
       );
 
-      CellStyle grandTotalStyle = CellStyle(
-        bold: true,
-      );
+      CellStyle grandTotalStyle = CellStyle(bold: true);
 
       List<String> columns = [
-        'Location', 'Kapasitas', 'Max Utilize', 'H Pagi (PP)', 'H Pagi (%)',
-        'Deliv Plan (H-1)', 'Prod Plan (H-1)', 'Predict Occ', 'Prod Plan (H+1)',
-        'Deliv Plan (H+1)', 'Final Occ', 'Sisa Kapasitas'
+        'Location',
+        'Kapasitas',
+        'Max Utilize',
+        'H Pagi (PP)',
+        'H Pagi (%)',
+        'Deliv Plan (H-1)',
+        'Prod Plan (H-1)',
+        'Predict Occ',
+        'Prod Plan (H+1)',
+        'Deliv Plan (H+1)',
+        'Final Occ',
+        'Sisa Kapasitas',
       ];
 
       for (var i = 0; i < columns.length; i++) {
-        var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        var cell = sheetObject.cell(
+          CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
+        );
         cell.value = TextCellValue(columns[i]);
         cell.cellStyle = headerStyle;
       }
 
       int currentRow = 1;
 
-      void appendDataRows(List<MasterReviewDailyItem> items, {bool isTotal = false}) {
+      void appendDataRows(
+        List<MasterReviewDailyItem> items, {
+        bool isTotal = false,
+      }) {
         for (var item in items) {
           sheetObject.appendRow([
             TextCellValue(item.location),
@@ -262,7 +304,15 @@ Future<void> _exportToExcel() async {
 
           if (isTotal) {
             for (var col = 0; col < columns.length; col++) {
-              sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow)).cellStyle = grandTotalStyle;
+              sheetObject
+                      .cell(
+                        CellIndex.indexByColumnRow(
+                          columnIndex: col,
+                          rowIndex: currentRow,
+                        ),
+                      )
+                      .cellStyle =
+                  grandTotalStyle;
             }
           }
           currentRow++;
@@ -275,7 +325,6 @@ Future<void> _exportToExcel() async {
 
       appendDataRows(totalDataList, isTotal: true);
 
-      // 4. Proses Encoding & Download menggunakan FileSaver (Aman untuk Web & Mobile)
       var fileBytes = excel.encode();
       if (fileBytes != null) {
         String formattedDate = DateFormat('yyyyMMdd').format(selectedDate);
@@ -290,7 +339,10 @@ Future<void> _exportToExcel() async {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Data berhasil diekspor ke Excel"), backgroundColor: Colors.green),
+            const SnackBar(
+              content: Text("Data berhasil diekspor ke Excel"),
+              backgroundColor: Colors.green,
+            ),
           );
         }
       }
@@ -298,7 +350,10 @@ Future<void> _exportToExcel() async {
       debugPrint("Export Error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Terjadi kesalahan saat eksport: $e"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("Terjadi kesalahan saat eksport: $e"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -307,7 +362,10 @@ Future<void> _exportToExcel() async {
   }
 
   void _calculateGrandTotal() {
-    List<MasterReviewDailyItem> combined = [...marshoDataList, ...cookingOilDataList];
+    List<MasterReviewDailyItem> combined = [
+      ...marshoDataList,
+      ...cookingOilDataList,
+    ];
     if (combined.isEmpty) return;
 
     totalDataList = [
@@ -316,15 +374,35 @@ Future<void> _exportToExcel() async {
         kapasitas: combined.fold(0, (sum, item) => sum + item.kapasitas),
         maxUtilize: combined.fold(0, (sum, item) => sum + item.maxUtilize),
         hPagi: combined.fold(0, (sum, item) => sum + item.hPagi),
-        hPagiPersen: combined.fold(0.0, (sum, item) => sum + item.hPagiPersen) / combined.length,
+        hPagiPersen:
+            combined.fold(0.0, (sum, item) => sum + item.hPagiPersen) /
+            combined.length,
         actOutbound: combined.fold(0, (sum, item) => sum + item.actOutbound),
-        productionPlanHmin1: combined.fold(0, (sum, item) => sum + item.productionPlanHmin1),
-        predictOccupancy: combined.fold(0, (sum, item) => sum + item.predictOccupancy),
-        productionPlanHplus1: combined.fold(0, (sum, item) => sum + item.productionPlanHplus1),
-        deliveryPlanHplus1: combined.fold(0, (sum, item) => sum + item.deliveryPlanHplus1),
-        finalOccupancy: combined.fold(0, (sum, item) => sum + item.finalOccupancy),
-        sisaKapasitas: combined.fold(0, (sum, item) => sum + item.sisaKapasitas),
-      )
+        productionPlanHmin1: combined.fold(
+          0,
+          (sum, item) => sum + item.productionPlanHmin1,
+        ),
+        predictOccupancy: combined.fold(
+          0,
+          (sum, item) => sum + item.predictOccupancy,
+        ),
+        productionPlanHplus1: combined.fold(
+          0,
+          (sum, item) => sum + item.productionPlanHplus1,
+        ),
+        deliveryPlanHplus1: combined.fold(
+          0,
+          (sum, item) => sum + item.deliveryPlanHplus1,
+        ),
+        finalOccupancy: combined.fold(
+          0,
+          (sum, item) => sum + item.finalOccupancy,
+        ),
+        sisaKapasitas: combined.fold(
+          0,
+          (sum, item) => sum + item.sisaKapasitas,
+        ),
+      ),
     ];
   }
 
@@ -346,27 +424,28 @@ Future<void> _exportToExcel() async {
       ),
     );
   }
-Widget _buildUnifiedTable() {
-  List<DataRow> allRows = [];
 
-  allRows.addAll(marshoDataList.map((item) => _buildRow(item, false)));
+  Widget _buildUnifiedTable() {
+    List<DataRow> allRows = [];
 
-  allRows.addAll(cookingOilDataList.map((item) => _buildRow(item, false)));
+    allRows.addAll(marshoDataList.map((item) => _buildRow(item, false)));
 
-  allRows.addAll(totalDataList.map((item) => _buildRow(item, true)));
+    allRows.addAll(cookingOilDataList.map((item) => _buildRow(item, false)));
 
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      columnSpacing: 20, 
-      headingRowColor: WidgetStateProperty.all(Colors.blueGrey[50]),
-      dataRowMinHeight: 45,
-      dataRowMaxHeight: 45,
-      columns: _buildColumns(),
-      rows: allRows,
-    ),
-  );
-}
+    allRows.addAll(totalDataList.map((item) => _buildRow(item, true)));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columnSpacing: 20,
+        headingRowColor: WidgetStateProperty.all(Colors.blueGrey[50]),
+        dataRowMinHeight: 45,
+        dataRowMaxHeight: 45,
+        columns: _buildColumns(),
+        rows: allRows,
+      ),
+    );
+  }
 
   Widget _buildHeader() {
     final now = DateTime.now();
@@ -389,41 +468,41 @@ Widget _buildUnifiedTable() {
                 loadAllData();
               }
             },
-             icon: const Icon(Icons.calendar_today),
+            icon: const Icon(Icons.calendar_today),
             label: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
           ),
-         const Spacer(), 
-         _buildActionButton(
-          icon: Icons.file_download,
-          color: Colors.green,
-          tooltip: "Export Excel",
-          onPressed: _exportToExcel,
-         ),
+          const Spacer(),
+          _buildActionButton(
+            icon: Icons.file_download,
+            color: Colors.green,
+            tooltip: "Export Excel",
+            onPressed: _exportToExcel,
+          ),
         ],
       ),
     );
   }
 
-Widget _buildActionButton({
-  required IconData icon, 
-  required Color color, 
-  required String tooltip, 
-  required VoidCallback onPressed
-}) {
-  return Container(
-    height: 55,
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: color.withValues(alpha: 0.3)),
-    ),
-    child: IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon, color: color, size: 26),
-      tooltip: tooltip,
-    ),
-  );
-}
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 55,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, color: color, size: 26),
+        tooltip: tooltip,
+      ),
+    );
+  }
 
   List<DataColumn> _buildColumns() {
     return [
@@ -442,29 +521,67 @@ Widget _buildActionButton({
     ];
   }
 
-DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
-  final fmt = NumberFormat('#,###');
-  final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
+  DataRow _buildRow(MasterReviewDailyItem item, bool isTotal) {
+    final fmt = NumberFormat('#,###');
+    final style = isTotal ? const TextStyle(fontWeight: FontWeight.bold) : null;
 
-
-  return DataRow(
-    color: isTotal ? WidgetStateProperty.all(Colors.grey[300]) : null,
-    cells: [
-    
-     DataCell(Text(item.location, style: style)),
+    return DataRow(
+      color: isTotal ? WidgetStateProperty.all(Colors.grey[300]) : null,
+      cells: [
+        DataCell(Text(item.location, style: style)),
         DataCell(Text(fmt.format(item.kapasitas), style: style)),
         DataCell(Text(fmt.format(item.maxUtilize), style: style)),
-        DataCell(Text(fmt.format(item.hPagi), style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
-        DataCell(Text("${item.hPagiPersen.toStringAsFixed(2)}%", style: style?.copyWith(color: Colors.green) ?? const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
+        DataCell(
+          Text(
+            fmt.format(item.hPagi),
+            style:
+                style?.copyWith(color: Colors.green) ??
+                const TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
+        DataCell(
+          Text(
+            "${item.hPagiPersen.toStringAsFixed(2)}%",
+            style:
+                style?.copyWith(color: Colors.green) ??
+                const TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
         DataCell(Text(fmt.format(item.actOutbound), style: style)),
         DataCell(Text(fmt.format(item.productionPlanHmin1), style: style)),
-        DataCell( Text(fmt.format(item.predictOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        DataCell(
+          Text(
+            fmt.format(item.predictOccupancy),
+            style:
+                style?.copyWith(color: Colors.red) ??
+                const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
+        ),
         DataCell(Text(fmt.format(item.productionPlanHplus1), style: style)),
         DataCell(Text(fmt.format(item.deliveryPlanHplus1), style: style)),
-        DataCell(Text(fmt.format(item.finalOccupancy), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-        DataCell(Text(fmt.format(item.sisaKapasitas), style: style?.copyWith(color: Colors.red) ?? const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        DataCell(
+          Text(
+            fmt.format(item.finalOccupancy),
+            style:
+                style?.copyWith(color: Colors.red) ??
+                const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
+        ),
+        DataCell(
+          Text(
+            fmt.format(item.sisaKapasitas),
+            style:
+                style?.copyWith(color: Colors.red) ??
+                const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
+        ),
       ],
-  );
-}
- 
+    );
+  }
 }

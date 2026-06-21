@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:project_app/dynamic_tab_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 class CheckInFormPage extends StatefulWidget {
   final Map<String, dynamic> item;
@@ -14,7 +15,6 @@ class CheckInFormPage extends StatefulWidget {
 }
 
 class _CheckInFormPageState extends State<CheckInFormPage> {
-  
   final _formKey = GlobalKey<FormState>();
   final supabase = Supabase.instance.client;
   bool _isSubmitting = false;
@@ -25,27 +25,95 @@ class _CheckInFormPageState extends State<CheckInFormPage> {
   final TextEditingController _namaSupirController = TextEditingController();
   final TextEditingController _noHpSupirController = TextEditingController();
   final TextEditingController _catatanController = TextEditingController();
-  final TextEditingController _kondisiLainManualController = TextEditingController();
-  final TextEditingController _treatmentLainManualController = TextEditingController();
+  final TextEditingController _kondisiLainManualController =
+      TextEditingController();
+  final TextEditingController _treatmentLainManualController =
+      TextEditingController();
 
-  final Map<String, bool> _sisiKanan = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiKiri = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiDepan = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiPintu = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiAtap = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Push In/Out': false};
-  final Map<String, bool> _sisiLantai = {'Berkarat': false, 'Bagian Tajam': false, 'Kotor': false, 'Basah': false, 'Berlubang': false, 'Bergelombang': false};
+  final Map<String, bool> _sisiKanan = {
+    'Berkarat': false,
+    'Bagian Tajam': false,
+    'Kotor': false,
+    'Basah': false,
+    'Berlubang': false,
+    'Push In/Out': false,
+  };
+  final Map<String, bool> _sisiKiri = {
+    'Berkarat': false,
+    'Bagian Tajam': false,
+    'Kotor': false,
+    'Basah': false,
+    'Berlubang': false,
+    'Push In/Out': false,
+  };
+  final Map<String, bool> _sisiDepan = {
+    'Berkarat': false,
+    'Bagian Tajam': false,
+    'Kotor': false,
+    'Basah': false,
+    'Berlubang': false,
+    'Push In/Out': false,
+  };
+  final Map<String, bool> _sisiPintu = {
+    'Berkarat': false,
+    'Bagian Tajam': false,
+    'Kotor': false,
+    'Basah': false,
+    'Berlubang': false,
+    'Push In/Out': false,
+  };
+  final Map<String, bool> _sisiAtap = {
+    'Berkarat': false,
+    'Bagian Tajam': false,
+    'Kotor': false,
+    'Basah': false,
+    'Berlubang': false,
+    'Push In/Out': false,
+  };
+  final Map<String, bool> _sisiLantai = {
+    'Berkarat': false,
+    'Bagian Tajam': false,
+    'Kotor': false,
+    'Basah': false,
+    'Berlubang': false,
+    'Bergelombang': false,
+  };
 
-  final Map<String, bool> _kondisiLain = {'Kontainer Berbau': false, 'Karet Seal Pintu Lepas/Rusak': false, 'Lock Container < 4': false, 'Terkontaminasi Serangga': false};
-  final Map<String, bool> _dokumen = {'KTP': false, 'SIM': false, 'STNK': false, 'Buku KUER': false};
-  final Map<String, bool> _apd = {'Helm': false, 'Sepatu': false, 'Seragam/Rompi': false};
-  final Map<String, bool> _treatment = {'Cleaning': false, 'Las': false, 'Gerinda Sisi Tajam': false, 'Treatment Bau': false, 'Semprot Alkohol': false, 'Silicon Sealent': false, 'Bodem/dongkrak': false, 'Washing': false, 'Pelapisan Dinding': false};
+  final Map<String, bool> _kondisiLain = {
+    'Kontainer Berbau': false,
+    'Karet Seal Pintu Lepas/Rusak': false,
+    'Lock Container < 4': false,
+    'Terkontaminasi Serangga': false,
+  };
+  final Map<String, bool> _dokumen = {
+    'KTP': false,
+    'SIM': false,
+    'STNK': false,
+    'Buku KUER': false,
+  };
+  final Map<String, bool> _apd = {
+    'Helm': false,
+    'Sepatu': false,
+    'Seragam/Rompi': false,
+  };
+  final Map<String, bool> _treatment = {
+    'Cleaning': false,
+    'Las': false,
+    'Gerinda Sisi Tajam': false,
+    'Treatment Bau': false,
+    'Semprot Alkohol': false,
+    'Silicon Sealent': false,
+    'Bodem/dongkrak': false,
+    'Washing': false,
+    'Pelapisan Dinding': false,
+  };
 
   String? _ganjalRoda;
   String? _remHandRem;
   String? _decision;
-bool _isKondisiLainLainChecked = false; 
-bool _isTreatmentLainLainChecked = false;
-String _currentUserName = 'admin';
+  bool _isKondisiLainLainChecked = false;
+  bool _isTreatmentLainLainChecked = false;
+  String _currentUserName = 'admin';
 
   @override
   void initState() {
@@ -54,12 +122,25 @@ String _currentUserName = 'admin';
     _getProfileName();
   }
 
-Future<void> _loadData() async {
-  try {
-    final assignmentId = widget.item['id_assignment'];
-    final response = await supabase
-        .from('shipping_assignments')
-        .select('''
+
+  @override
+  void dispose() {
+    _noPolisiController.dispose();
+    _tahunKendaraanController.dispose();
+    _namaSupirController.dispose();
+    _noHpSupirController.dispose();
+    _catatanController.dispose();
+    _kondisiLainManualController.dispose();
+    _treatmentLainManualController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final assignmentId = widget.item['id_assignment'];
+      final response = await supabase
+          .from('shipping_assignments')
+          .select('''
           *,
           vendor_transportasi:id_vendor_details(*),
           request:shipping_id (
@@ -77,50 +158,602 @@ Future<void> _loadData() async {
             )
           )
         ''')
-        .eq('id_assignment', assignmentId)
-        .single();
-
-    if (mounted) {
-      setState(() {
-        _shippingData = response;
-      });
-    }
-  } catch (e) {
-    debugPrint("Error load data vendor: $e");
-  }
-}
-Future<void> _getProfileName() async {
-  try {
-    final user = supabase.auth.currentUser;
-    if (user != null) {
-      final data = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
+          .eq('id_assignment', assignmentId)
           .single();
-      
-      if (mounted && data['name'] != null) {
+
+      if (mounted) {
         setState(() {
-          _currentUserName = data['name'];
+          _shippingData = response;
         });
       }
+    } catch (e) {
+      debugPrint("Error load data vendor: $e");
     }
+  }
+
+  Future<void> _getProfileName() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        final data = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', user.id)
+            .single();
+
+        if (mounted && data['name'] != null) {
+          setState(() {
+            _currentUserName = data['name'];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error ambil profil: $e");
+    }
+  }
+
+Future<List<Map<String, dynamic>>> _searchSupir(String query) async {
+  if (query.isEmpty) return [];
+  try {
+    final response = await supabase
+        .from('master_supir')
+        .select('nama, nopol, tahun')
+        .or('nama.ilike.%$query%,nopol.ilike.%$query%')
+        .limit(10);
+
+    return List<Map<String, dynamic>>.from(response);
   } catch (e) {
-    debugPrint("Error ambil profil: $e");
+    debugPrint("Error search supir: $e");
+    return [];
   }
 }
 
-  @override
-  void dispose() {
-    _noPolisiController.dispose();
-    _tahunKendaraanController.dispose();
-    _namaSupirController.dispose();
-    _noHpSupirController.dispose();
-    _catatanController.dispose();
-    _kondisiLainManualController.dispose();
-    _treatmentLainManualController.dispose();
-    super.dispose();
-  }
+// Widget _buildDriverForm() {
+//   return Padding(
+//     padding: const EdgeInsets.all(16),
+//     child: Form(
+//       key: _formKey,
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Row(
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               // FIELD NO POLISI (Dengan Autocomplete Map)
+//               Expanded(
+//                 child: LayoutBuilder(
+//                   builder: (context, constraints) => Autocomplete<Map<String, dynamic>>(
+//                     optionsBuilder: (TextEditingValue textEditingValue) {
+//                       return _searchSupir(textEditingValue.text);
+//                     },
+//                     displayStringForOption: (option) => option['nopol'] ?? '',
+//                     onSelected: (Map<String, dynamic> selection) {
+//                       setState(() {
+//                         _noPolisiController.text = (selection['nopol'] ?? '').toString().toUpperCase();
+//                         _namaSupirController.text = (selection['nama'] ?? '').toString();
+//                         if (selection['tahun'] != null) {
+//                           _tahunKendaraanController.text = selection['tahun'].toString();
+//                         }
+//                       });
+//                     },
+//                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+//                       if (controller.text.isEmpty && _noPolisiController.text.isNotEmpty) {
+//                         controller.text = _noPolisiController.text;
+//                       }
+//                       controller.addListener(() {
+//                         _noPolisiController.text = controller.text;
+//                       });
+                      
+//                       return _buildTextFieldCustom(
+//                         controller,
+//                         focusNode,
+//                         'No Polisi *',
+//                         isUpperCase: true,
+//                         maxLength: 12,
+//                       );
+//                     },
+//                     optionsViewBuilder: (context, onSelected, options) {
+//                       return _buildAutocompleteOptions(constraints, options, onSelected);
+//                     },
+//                   ),
+//                 ),
+//               ),
+//               const SizedBox(width: 10),
+//               // FIELD TAHUN
+//               Expanded(
+//                 child: _buildTextField(
+//                   _tahunKendaraanController,
+//                   'Tahun',
+//                   isNumber: true,
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 10),
+          
+//           // FIELD NAMA SUPIR (Dengan Autocomplete Map)
+//           LayoutBuilder(
+//             builder: (context, constraints) => Autocomplete<Map<String, dynamic>>(
+//               optionsBuilder: (TextEditingValue textEditingValue) {
+//                 return _searchSupir(textEditingValue.text);
+//               },
+//               displayStringForOption: (option) => option['nama'] ?? '',
+//               onSelected: (Map<String, dynamic> selection) {
+//                 setState(() {
+//                   _noPolisiController.text = (selection['nopol'] ?? '').toString().toUpperCase();
+//                   _namaSupirController.text = (selection['nama'] ?? '').toString();
+//                   if (selection['tahun'] != null) {
+//                     _tahunKendaraanController.text = selection['tahun'].toString();
+//                   }
+//                 });
+//               },
+//               fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+//                 if (controller.text.isEmpty && _namaSupirController.text.isNotEmpty) {
+//                   controller.text = _namaSupirController.text;
+//                 }
+//                 controller.addListener(() {
+//                   _namaSupirController.text = controller.text;
+//                 });
+                
+//                 return _buildTextFieldCustom(
+//                   controller,
+//                   focusNode,
+//                   'Nama Supir *',
+//                 );
+//               },
+//               optionsViewBuilder: (context, onSelected, options) {
+//                 return _buildAutocompleteOptions(constraints, options, onSelected);
+//               },
+//             ),
+//           ),
+//           const SizedBox(height: 10),
+          
+//           _buildTextField(
+//             _noHpSupirController,
+//             'No HP Supir *',
+//             isNumber: true,
+//           ),
+
+//           if (widget.lateReason != null) ...[
+//             const SizedBox(height: 10),
+//             _buildLateWarning(),
+//           ],
+//         ],
+//       ),
+//     ),
+//   );
+// }
+
+// Widget _buildDriverForm() {
+//   return Padding(
+//     padding: const EdgeInsets.all(16),
+//     child: Form(
+//       key: _formKey,
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Row(
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               // FIELD NO POLISI (Dengan Autocomplete Map)
+//               Expanded(
+//                 child: LayoutBuilder(
+//                   builder: (context, constraints) => Autocomplete<Map<String, dynamic>>(
+//                     optionsBuilder: (TextEditingValue textEditingValue) {
+//                       return _searchSupir(textEditingValue.text);
+//                     },
+//                     displayStringForOption: (option) => option['nopol'] ?? '',
+//                     onSelected: (Map<String, dynamic> selection) {
+//                       setState(() {
+//                         _noPolisiController.text = (selection['nopol'] ?? '').toString().toUpperCase();
+//                         _namaSupirController.text = (selection['nama'] ?? '').toString();
+//                         if (selection['tahun'] != null) {
+//                           _tahunKendaraanController.text = selection['tahun'].toString();
+//                         }
+//                       });
+//                     },
+//                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+//                       // Singkronisasi awal dengan aman tanpa addListener berkelanjutan
+//                       if (controller.text.isEmpty && _noPolisiController.text.isNotEmpty) {
+//                         controller.text = _noPolisiController.text;
+//                       }
+                      
+//                       return TextFormField(
+//                         controller: controller,
+//                         focusNode: focusNode,
+//                         textCapitalization: TextCapitalization.characters,
+//                         maxLength: 12,
+//                         decoration: const InputDecoration(
+//                           labelText: 'No Polisi *',
+//                           labelStyle: TextStyle(fontSize: 13),
+//                           border: OutlineInputBorder(),
+//                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+//                           counterText: "",
+//                         ),
+//                         onChanged: (val) {
+//                           _noPolisiController.text = val;
+//                         },
+//                         validator: (v) {
+//                           if (v == null || v.trim().isEmpty) return "Wajib diisi";
+//                           return null;
+//                         },
+//                       );
+//                     },
+//                     optionsViewBuilder: (context, onSelected, options) {
+//                       return _buildAutocompleteOptions(constraints, options, onSelected);
+//                     },
+//                   ),
+//                 ),
+//               ),
+//               const SizedBox(width: 10),
+//               // FIELD TAHUN
+//               Expanded(
+//                 child: _buildTextField(
+//                   _tahunKendaraanController,
+//                   'Tahun',
+//                   isNumber: true,
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 10),
+          
+//           // FIELD NAMA SUPIR (Dengan Autocomplete Map)
+//           LayoutBuilder(
+//             builder: (context, constraints) => Autocomplete<Map<String, dynamic>>(
+//               optionsBuilder: (TextEditingValue textEditingValue) {
+//                 return _searchSupir(textEditingValue.text);
+//               },
+//               displayStringForOption: (option) => option['nama'] ?? '',
+//               onSelected: (Map<String, dynamic> selection) {
+//                 setState(() {
+//                   _noPolisiController.text = (selection['nopol'] ?? '').toString().toUpperCase();
+//                   _namaSupirController.text = (selection['nama'] ?? '').toString();
+//                   if (selection['tahun'] != null) {
+//                     _tahunKendaraanController.text = selection['tahun'].toString();
+//                   }
+//                 });
+//               },
+//               fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+//                 if (controller.text.isEmpty && _namaSupirController.text.isNotEmpty) {
+//                   controller.text = _namaSupirController.text;
+//                 }
+                
+//                 return TextFormField(
+//                   controller: controller,
+//                   focusNode: focusNode,
+//                   decoration: const InputDecoration(
+//                     labelText: 'Nama Supir *',
+//                     labelStyle: TextStyle(fontSize: 13),
+//                     border: OutlineInputBorder(),
+//                     contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+//                   ),
+//                   onChanged: (val) {
+//                     _namaSupirController.text = val;
+//                   },
+//                   validator: (v) {
+//                     if (v == null || v.trim().isEmpty) return "Wajib diisi";
+//                     return null;
+//                   },
+//                 );
+//               },
+//               optionsViewBuilder: (context, onSelected, options) {
+//                 return _buildAutocompleteOptions(constraints, options, onSelected);
+//               },
+//             ),
+//           ),
+//           const SizedBox(height: 10),
+          
+//           _buildTextField(
+//             _noHpSupirController,
+//             'No HP Supir *',
+//             isNumber: true,
+//           ),
+
+//           if (widget.lateReason != null) ...[
+//             const SizedBox(height: 10),
+//             _buildLateWarning(),
+//           ],
+//         ],
+//       ),
+//     ),
+//   );
+// }
+Widget _buildDriverForm() {
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ==========================================
+              // FIELD NO POLISI (SEARCH DROPDOWN AUTOFILL)
+              // ==========================================
+              Expanded(
+                child: TypeAheadField<Map<String, dynamic>>(
+                  controller: _noPolisiController,
+                  builder: (context, controller, focusNode) {
+                    return TextFormField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      textCapitalization: TextCapitalization.characters,
+                      maxLength: 12,
+                      decoration: const InputDecoration(
+                        labelText: 'No Polisi *',
+                        labelStyle: TextStyle(fontSize: 13),
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        counterText: "",
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? "Wajib diisi" : null,
+                    );
+                  },
+                  // Fungsi nyari data ke Supabase saat user mengetik
+                  suggestionsCallback: (search) async {
+                    return await _searchSupir(search);
+                  },
+                  // Desain tampilan item di dalam dropdown list
+                  itemBuilder: (context, supir) {
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        (supir['nopol'] ?? '-').toString().toUpperCase(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(supir['nama'] ?? '-'),
+                    );
+                  },
+                  // Aksi autofill saat salah satu opsi dropdown di-KLIK
+                  onSelected: (supir) {
+                    setState(() {
+                      _noPolisiController.text = (supir['nopol'] ?? '').toString().toUpperCase();
+                      _namaSupirController.text = (supir['nama'] ?? '').toString();
+                      if (supir['tahun'] != null) {
+                        _tahunKendaraanController.text = supir['tahun'].toString();
+                      }
+                    });
+                  },
+                  emptyBuilder: (context) => const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('Data supir tidak ditemukan', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              
+              // ==========================================
+              // FIELD TAHUN KENDARAAN (AUTOFILL / MANUAL)
+              // ==========================================
+              Expanded(
+                child: _buildTextField(
+                  _tahunKendaraanController,
+                  'Tahun',
+                  isNumber: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          
+          // ==========================================
+          // FIELD NAMA SUPIR (SEARCH DROPDOWN AUTOFILL)
+          // ==========================================
+          TypeAheadField<Map<String, dynamic>>(
+            controller: _namaSupirController,
+            builder: (context, controller, focusNode) {
+              return TextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Supir *',
+                  labelStyle: TextStyle(fontSize: 13),
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Wajib diisi" : null,
+              );
+            },
+            suggestionsCallback: (search) async {
+              return await _searchSupir(search);
+            },
+            itemBuilder: (context, supir) {
+              return ListTile(
+                dense: true,
+                title: Text(
+                  supir['nama'] ?? '-',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text((supir['nopol'] ?? '-').toString().toUpperCase()),
+              );
+            },
+            onSelected: (supir) {
+              setState(() {
+                _noPolisiController.text = (supir['nopol'] ?? '').toString().toUpperCase();
+                _namaSupirController.text = (supir['nama'] ?? '').toString();
+                if (supir['tahun'] != null) {
+                  _tahunKendaraanController.text = supir['tahun'].toString();
+                }
+              });
+            },
+            emptyBuilder: (context) => const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Data supir tidak ditemukan', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          
+          // FIELD NO HP SUPIR
+          _buildTextField(
+            _noHpSupirController,
+            'No HP Supir *',
+            isNumber: true,
+          ),
+
+          if (widget.lateReason != null) ...[
+            const SizedBox(height: 10),
+            _buildLateWarning(),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+// Widget _buildAutocompleteOptions(
+//   BoxConstraints constraints,
+//   Iterable<Map<String, dynamic>> options,
+//   AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+// ) {
+//   return Align(
+//     alignment: Alignment.topLeft,
+//     child: Padding(
+//       padding: const EdgeInsets.only(top: 4.0),
+//       child: Material(
+//         elevation: 4.0,
+//         borderRadius: BorderRadius.circular(8),
+//         child: Container(
+//           width: constraints.maxWidth,
+//           height: 200,
+//           decoration: BoxDecoration(
+//             color: Colors.white,
+//             borderRadius: BorderRadius.circular(8),
+//             border: Border.all(color: Colors.grey.shade300),
+//           ),
+//           child: ListView.builder(
+//             padding: EdgeInsets.zero,
+//             shrinkWrap: true,
+//             itemCount: options.length,
+//             itemBuilder: (BuildContext context, int index) {
+//               final Map<String, dynamic> option = options.elementAt(index);
+//               final String nama = option['nama'] ?? '-';
+//               final String nopol = option['nopol'] ?? '-';
+
+//               return InkWell(
+//                 onTap: () => onSelected(option),
+//                 child: Padding(
+//                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+//                   child: Row(
+//                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                     children: [
+//                       Expanded(
+//                         child: Text(
+//                           nama,
+//                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+//                         ),
+//                       ),
+//                       Text(
+//                         nopol.toUpperCase(),
+//                         style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//               );
+//             },
+//           ),
+//         ),
+//       ),
+//     ),
+//   );
+// }
+
+Widget _buildAutocompleteOptions(
+  BoxConstraints constraints,
+  Iterable<Map<String, dynamic>> options,
+  AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+) {
+  return Align(
+    alignment: Alignment.topLeft,
+    child: Padding(
+      padding: const EdgeInsets.only(top: 4.0),
+      child: Material(
+        elevation: 4.0,
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        child: SizedBox(
+          width: constraints.maxWidth, // Memaksa lebar dropdown sama persis dengan textfield-nya
+          child: Container(
+            height: 200, // Batasi tinggi max agar tidak merusak layout bawahnya
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              itemCount: options.length,
+              itemBuilder: (BuildContext context, int index) {
+                final Map<String, dynamic> option = options.elementAt(index);
+                final String nama = option['nama'] ?? '-';
+                final String nopol = option['nopol'] ?? '-';
+
+                return InkWell(
+                  onTap: () => onSelected(option),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            nama,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        Text(
+                          nopol.toUpperCase(),
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildTextFieldCustom(
+  TextEditingController controller,
+  FocusNode focusNode,
+  String label, {
+  bool isNumber = false,
+  bool isUpperCase = false,
+  int? maxLength,
+}) {
+  return TextFormField(
+    controller: controller,
+    focusNode: focusNode,
+    keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+    textCapitalization: isUpperCase ? TextCapitalization.characters : TextCapitalization.none,
+    inputFormatters: [
+      if (isNumber) FilteringTextInputFormatter.digitsOnly,
+      if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+    ],
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontSize: 13),
+      border: const OutlineInputBorder(),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      errorStyle: const TextStyle(fontSize: 11, height: 0.8),
+      counterText: "",
+    ),
+    validator: (v) {
+      if (v == null || v.trim().isEmpty) {
+        return "Wajib diisi";
+      }
+      return null;
+    },
+  );
+}
 
   List<String> _mapToList(Map<String, bool> map) {
     return map.entries.where((e) => e.value).map((e) => e.key).toList();
@@ -128,15 +761,20 @@ Future<void> _getProfileName() async {
 
   bool _isValidationSuccess() {
     bool isDocChecked = _dokumen.values.contains(true);
-    //bool isApdChecked = _apd.values.contains(true);
 
-  if (!_formKey.currentState!.validate()) {
-    _showSnackBar("Harap lengkapi Identitas Kendaraan & Supir!", Colors.orange);
-    return false;
-  }
+    if (!_formKey.currentState!.validate()) {
+      _showSnackBar(
+        "Harap lengkapi Identitas Kendaraan & Supir!",
+        Colors.orange,
+      );
+      return false;
+    }
 
     if (!isDocChecked || _ganjalRoda == null || _remHandRem == null) {
-      _showSnackBar("Safety Factor (Dokumen, Ganjal, Rem, APD) wajib diisi!", Colors.orange);
+      _showSnackBar(
+        "Safety Factor (Dokumen, Ganjal, Rem, APD) wajib diisi!",
+        Colors.orange,
+      );
       return false;
     }
     if (_decision == null) {
@@ -148,65 +786,81 @@ Future<void> _getProfileName() async {
   }
 
   Future<void> _submitCheckIn() async {
-   if (!_isValidationSuccess()) {
+    if (!_isValidationSuccess()) {
       return;
     }
 
     setState(() => _isSubmitting = true);
     List<String> kondisiLainFinal = _mapToList(_kondisiLain);
-    if (_isKondisiLainLainChecked && _kondisiLainManualController.text.isNotEmpty) {
-      kondisiLainFinal.add("Lainnya: ${_kondisiLainManualController.text.trim()}");
+    if (_isKondisiLainLainChecked &&
+        _kondisiLainManualController.text.isNotEmpty) {
+      kondisiLainFinal.add(
+        "Lainnya: ${_kondisiLainManualController.text.trim()}",
+      );
     }
 
     List<String> treatmentFinal = _mapToList(_treatment);
-    if (_isTreatmentLainLainChecked && _treatmentLainManualController.text.isNotEmpty) {
-      treatmentFinal.add("Lainnya: ${_treatmentLainManualController.text.trim()}");
+    if (_isTreatmentLainLainChecked &&
+        _treatmentLainManualController.text.isNotEmpty) {
+      treatmentFinal.add(
+        "Lainnya: ${_treatmentLainManualController.text.trim()}",
+      );
     }
     try {
       final item = widget.item;
-      final List<int> assignmentIds = List<int>.from(item['grouped_assignment_ids'] ?? [item['id_assignment']]);
-      final List<int> shipIds = List<int>.from(item['grouped_shipping_ids'] ?? [item['shipping_id']]);
-      String targetStatusAssignment = (_decision == 'DITOLAK') 
-          ? 'rejected unit' 
-          : 'kelayakan unit';
-          
-      String targetStatusRequest = (_decision == 'DITOLAK') 
-          ? 'waiting assign vendor delivery' 
+      final List<int> assignmentIds = List<int>.from(
+        item['grouped_assignment_ids'] ?? [item['id_assignment']],
+      );
+      final List<int> shipIds = List<int>.from(
+        item['grouped_shipping_ids'] ?? [item['shipping_id']],
+      );
+      String targetStatusAssignment = (_decision == 'DITOLAK')
+          ? 'rejected unit'
           : 'kelayakan unit';
 
-      await supabase.from('shipping_assignments').update({
-        'status_assignment': targetStatusAssignment, 
-        'kelayakan_at': DateTime.now().toIso8601String(),
-        'kelayakan_by': _currentUserName,
-        'no_polisi': _noPolisiController.text.toUpperCase(),
-        'tahun_kendaraan': _tahunKendaraanController.text,
-        'nama_supir': _namaSupirController.text,
-        'no_hp_supir': _noHpSupirController.text,
-        'sisi_kanan': _mapToList(_sisiKanan),
-        'sisi_kiri': _mapToList(_sisiKiri),
-        'sisi_depan': _mapToList(_sisiDepan),
-        'sisi_pintu_belakang': _mapToList(_sisiPintu),
-        'sisi_atap': _mapToList(_sisiAtap),
-        'sisi_lantai': _mapToList(_sisiLantai),
-        'kondisi_tidak_standar_lainnya': kondisiLainFinal,
-        'dokumen_pendukung': _mapToList(_dokumen),
-        'ganjal_roda': _ganjalRoda,
-        'rem_handrem': _remHandRem,
-        'apd_supir': _mapToList(_apd),
-        'rekomendasi_treatment': treatmentFinal,
-        'decision_for_unit': _decision,
-        'catatan': _catatanController.text, 
-        'latecheckIn_reason': widget.lateReason,
-      }).inFilter('id_assignment', assignmentIds);
+      String targetStatusRequest = (_decision == 'DITOLAK')
+          ? 'waiting assign vendor delivery'
+          : 'kelayakan unit';
 
-      await supabase.from('shipping_request').update({
-        'status': targetStatusRequest,
-      }).inFilter('shipping_id', shipIds);
+      await supabase
+          .from('shipping_assignments')
+          .update({
+            'status_assignment': targetStatusAssignment,
+            'kelayakan_at': DateTime.now().toIso8601String(),
+            'kelayakan_by': _currentUserName,
+            'no_polisi': _noPolisiController.text.toUpperCase(),
+            'tahun_kendaraan': _tahunKendaraanController.text,
+            'nama_supir': _namaSupirController.text,
+            'no_hp_supir': _noHpSupirController.text,
+            'sisi_kanan': _mapToList(_sisiKanan),
+            'sisi_kiri': _mapToList(_sisiKiri),
+            'sisi_depan': _mapToList(_sisiDepan),
+            'sisi_pintu_belakang': _mapToList(_sisiPintu),
+            'sisi_atap': _mapToList(_sisiAtap),
+            'sisi_lantai': _mapToList(_sisiLantai),
+            'kondisi_tidak_standar_lainnya': kondisiLainFinal,
+            'dokumen_pendukung': _mapToList(_dokumen),
+            'ganjal_roda': _ganjalRoda,
+            'rem_handrem': _remHandRem,
+            'apd_supir': _mapToList(_apd),
+            'rekomendasi_treatment': treatmentFinal,
+            'decision_for_unit': _decision,
+            'catatan': _catatanController.text,
+            'latecheckIn_reason': widget.lateReason,
+          })
+          .inFilter('id_assignment', assignmentIds);
+
+      await supabase
+          .from('shipping_request')
+          .update({'status': targetStatusRequest})
+          .inFilter('shipping_id', shipIds);
 
       if (mounted) {
         _showSnackBar(
-          _decision == 'DITOLAK' ? "Unit Ditolak. Status kembali ke Waiting Assign Vendor." : "Check-in Berhasil!", 
-          _decision == 'DITOLAK' ? Colors.orange : Colors.green
+          _decision == 'DITOLAK'
+              ? "Unit Ditolak. Status kembali ke Waiting Assign Vendor."
+              : "Check-in Berhasil!",
+          _decision == 'DITOLAK' ? Colors.orange : Colors.green,
         );
         DynamicTabPage.of(context)?.closeCurrentTab();
       }
@@ -232,27 +886,26 @@ Future<void> _getProfileName() async {
                   const SizedBox(height: 25),
                   _buildSectionTitle("1. IDENTITAS KENDARAAN & SUPIR"),
                   _buildDriverForm(),
-                  //const Divider(),
                   _buildSectionTitle("2. KONDISI CONTAINER (SISI)"),
                   _buildContainerGrid(),
                   _buildSectionTitle("3. KONDISI TIDAK STANDAR LAINNYA"),
-                  // _buildCheckboxGroup(_kondisiLain),
                   _buildCheckboxGroup(_kondisiLain, isKondisiLain: true),
-                  //const Divider(),
                   _buildSectionTitle("4. SAFETY FACTOR"),
                   _buildSafetyFactor(),
-                  //const Divider(),
                   _buildSectionTitle("5. REKOMENDASI TREATMENT"),
                   _buildTreatmentCheckboxGroup(_treatment),
-                  //const Divider(),
                   _buildSectionTitle("6. DECISION FOR UNIT"),
                   _buildDecisionSection(),
-                  //Text("Catatan Logistic", style: const TextStyle(fontSize: 12, fontStyle: FontStyle.bold, color: Colors.blueGrey)),
-                  // _buildCatatanField(),
-                  // const SizedBox(height: 20),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text("Catatan Logistic", style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "Catatan Logistic",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                   _buildCatatanField(),
                   const SizedBox(height: 30),
@@ -271,288 +924,343 @@ Future<void> _getProfileName() async {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Colors.grey.shade100,
-      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
-    );
-  }
-
-  Widget _buildDriverForm() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child:_buildTextField(
-  _noPolisiController, 
-  'No Polisi *', 
-  isUpperCase: true, 
-  maxLength: 12
-),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: _buildTextField(
-  _tahunKendaraanController, 
-  'Tahun', 
-  isNumber: true
-)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _buildTextField(
-  _namaSupirController, 
-  'Nama Supir *', 
-),
-            const SizedBox(height: 10),
-            _buildTextField(
-  _noHpSupirController, 
-  'No HP Supir *', 
-  isNumber: true
-),
-        
-            if (widget.lateReason != null) ...[
-              const SizedBox(height: 10),
-              _buildLateWarning(),
-            ],
-        
-          ],
-          
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+          color: Colors.blueGrey,
         ),
-        
       ),
-      
     );
   }
 
+  // Widget _buildDriverForm() {
+  //   return Padding(
+  //     padding: const EdgeInsets.all(16),
+  //     child: Form(
+  //       key: _formKey,
+  //       child: Column(
+  //         children: [
+  //           Row(
+  //             children: [
+  //               Expanded(
+  //                 child: _buildTextField(
+  //                   _noPolisiController,
+  //                   'No Polisi *',
+  //                   isUpperCase: true,
+  //                   maxLength: 12,
+  //                 ),
+  //               ),
+  //               const SizedBox(width: 10),
+  //               Expanded(
+  //                 child: _buildTextField(
+  //                   _tahunKendaraanController,
+  //                   'Tahun',
+  //                   isNumber: true,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //           const SizedBox(height: 10),
+  //           _buildTextField(_namaSupirController, 'Nama Supir *'),
+  //           const SizedBox(height: 10),
+  //           _buildTextField(
+  //             _noHpSupirController,
+  //             'No HP Supir *',
+  //             isNumber: true,
+  //           ),
 
-Widget _buildContainerGrid() {
-  return Padding(
-    padding: const EdgeInsets.all(8.0),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        int columns = constraints.maxWidth < 600 ? 2 : 6;
-        double ratio = constraints.maxWidth < 600 ? 0.65 : 0.8;
+  //           if (widget.lateReason != null) ...[
+  //             const SizedBox(height: 10),
+  //             _buildLateWarning(),
+  //           ],
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: columns,
-          childAspectRatio: ratio,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          children: [
-            _buildSideChecklist("SISI KANAN", _sisiKanan),
-            _buildSideChecklist("SISI KIRI", _sisiKiri),
-            _buildSideChecklist("SISI DEPAN", _sisiDepan),
-            _buildSideChecklist("SISI BELAKANG", _sisiPintu),
-            _buildSideChecklist("SISI ATAP", _sisiAtap),
-            _buildSideChecklist("SISI LANTAI", _sisiLantai),
-          ],
-        );
-      },
-    ),
-  );
-}
+  Widget _buildContainerGrid() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          int columns = constraints.maxWidth < 600 ? 2 : 6;
+          double ratio = constraints.maxWidth < 600 ? 0.65 : 0.8;
+
+          return GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: columns,
+            childAspectRatio: ratio,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            children: [
+              _buildSideChecklist("SISI KANAN", _sisiKanan),
+              _buildSideChecklist("SISI KIRI", _sisiKiri),
+              _buildSideChecklist("SISI DEPAN", _sisiDepan),
+              _buildSideChecklist("SISI BELAKANG", _sisiPintu),
+              _buildSideChecklist("SISI ATAP", _sisiAtap),
+              _buildSideChecklist("SISI LANTAI", _sisiLantai),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   Widget _buildSideChecklist(String title, Map<String, bool> sideMap) {
-  return Card(
-    elevation: 0,
-    shape: RoundedRectangleBorder(
-      side: BorderSide(color: Colors.grey.shade300), 
-      borderRadius: BorderRadius.circular(8)
-    ),
-    margin: EdgeInsets.zero,
-    child: Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.red.shade50, 
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(8))
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      margin: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
+              ),
+            ),
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+            ),
           ),
-          child: Text(
-            title, 
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red)
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            physics: const NeverScrollableScrollPhysics(),
-            children: sideMap.keys.map((key) {
-              return Theme(
-                data: ThemeData(unselectedWidgetColor: Colors.grey.shade400),
-                child: CheckboxListTile(
-                  title: Text(
-                    key, 
-                    style: const TextStyle(fontSize: 10, height: 1.0)
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              physics: const NeverScrollableScrollPhysics(),
+              children: sideMap.keys.map((key) {
+                return Theme(
+                  data: ThemeData(unselectedWidgetColor: Colors.grey.shade400),
+                  child: CheckboxListTile(
+                    title: Text(
+                      key,
+                      style: const TextStyle(fontSize: 10, height: 1.0),
+                    ),
+                    value: sideMap[key],
+                    dense: true,
+                    visualDensity: const VisualDensity(
+                      horizontal: -4,
+                      vertical: -4,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    activeColor: Colors.red.shade700,
+                    onChanged: (val) => setState(() => sideMap[key] = val!),
                   ),
-                  value: sideMap[key],
-                  dense: true,
-                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  activeColor: Colors.red.shade700,
-                  onChanged: (val) => setState(() => sideMap[key] = val!),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-
-Widget _buildCheckboxGroup(Map<String, bool> map, {bool isKondisiLain = false}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: Column(
-      children: [
-        Wrap(
-          children: [
-            ...map.keys.map((key) {
-              return SizedBox(
-                width: MediaQuery.of(context).size.width * 0.5 - 12,
-                child: CheckboxListTile(
-                  title: Text(key, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                  value: map[key],
-                  dense: true,
-                  activeColor: Colors.red.shade700,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (val) => setState(() => map[key] = val!),
-                ),
-              );
-            }),
-            
-            if (map == _kondisiLain)
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.5 - 12,
-                child: CheckboxListTile(
-                  title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  value: _isKondisiLainLainChecked,
-                  dense: true,
-                  activeColor: Colors.red.shade700,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (val) => setState(() => _isKondisiLainLainChecked = val!),
-                ),
-              ),
-          ],
-        ),
-        
-        if (map == _kondisiLain && _isKondisiLainLainChecked)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: TextField(
-              controller: _kondisiLainManualController,
-              decoration: InputDecoration(
-                labelText: "Sebutkan kondisi lainnya...",
-                labelStyle: const TextStyle(fontSize: 12),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              style: const TextStyle(fontSize: 13),
+                );
+              }).toList(),
             ),
-          ),
-      ],
-    ),
-  );
-}
-
-Widget _buildTreatmentCheckboxGroup(Map<String, bool> map) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: Column(
-      children: [
-         Wrap(
-          children: [
-            ...map.keys.map((key) {
-              return SizedBox(
-                width: MediaQuery.of(context).size.width * 0.5 - 32, 
-                child: CheckboxListTile(
-                  title: Text(key, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                  value: map[key],
-                  dense: true,
-                  activeColor: Colors.red.shade700,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (val) => setState(() => map[key] = val!),
-                ),
-              );
-            }),
-            
-            SizedBox(
-              width: MediaQuery.of(context).size.width * 0.5 - 32,
-              child: CheckboxListTile(
-                title: const Text("Lainnya", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                value: _isTreatmentLainLainChecked,
-                dense: true,
-                activeColor: Colors.red.shade700,
-                controlAffinity: ListTileControlAffinity.leading,
-                onChanged: (val) => setState(() => _isTreatmentLainLainChecked = val!),
-              ),
-            ),
-          ],
-        ),
- 
-if (_isTreatmentLainLainChecked) Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(controller: _treatmentLainManualController, decoration: const InputDecoration(labelText: "Treatment lainnya...", border: OutlineInputBorder(), isDense: true)),
           ),
         ],
       ),
     );
   }
 
-Widget _buildSafetyFactor() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSafetyItemCard(
-          title: "DOKUMEN PENDUKUNG",
-          icon: Icons.assignment_turned_in_outlined,
-          content: _buildCheckboxGroup(_dokumen),
-        ),
-        const SizedBox(height: 12),
-        
-        _buildSafetyItemCard(
-          title: "GANJAL RODA",
-          icon: Icons.stop_circle_outlined,
-          content: _buildModernRadioGroup(
-            ['1 Standard','2 Standard', '1 Tidak Standard', '2 Tidak Standard','Tidak Ada'], 
-            _ganjalRoda, 
-            (v) => setState(() => _ganjalRoda = v)
-          ),
-        ),
-        const SizedBox(height: 12),
+  Widget _buildCheckboxGroup(
+    Map<String, bool> map, {
+    bool isKondisiLain = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        children: [
+          Wrap(
+            children: [
+              ...map.keys.map((key) {
+                return SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.5 - 12,
+                  child: CheckboxListTile(
+                    title: Text(
+                      key,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    value: map[key],
+                    dense: true,
+                    activeColor: Colors.red.shade700,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (val) => setState(() => map[key] = val!),
+                  ),
+                );
+              }),
 
-        _buildSafetyItemCard(
-          title: "REM / HAND REM",
-          icon: Icons.pan_tool_alt_outlined,
-          content: _buildModernRadioGroup(
-            ['Hand Rem', 'Tidak Ada/Tidak Standard'], 
-            _remHandRem, 
-            (v) => setState(() => _remHandRem = v)
+              if (map == _kondisiLain)
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.5 - 12,
+                  child: CheckboxListTile(
+                    title: const Text(
+                      "Lainnya",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    value: _isKondisiLainLainChecked,
+                    dense: true,
+                    activeColor: Colors.red.shade700,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (val) =>
+                        setState(() => _isKondisiLainLainChecked = val!),
+                  ),
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: 12),
 
-        _buildSafetyItemCard(
-          title: "APD SUPIR",
-          icon: Icons.shield_outlined,
-          content: _buildCheckboxGroup(_apd),
-        ),
-      ],
-    ),
-  );
-}
-Widget _buildSafetyItemCard({required String title, required IconData icon, required Widget content}) {
+          if (map == _kondisiLain && _isKondisiLainLainChecked)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: TextField(
+                controller: _kondisiLainManualController,
+                decoration: InputDecoration(
+                  labelText: "Sebutkan kondisi lainnya...",
+                  labelStyle: const TextStyle(fontSize: 12),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTreatmentCheckboxGroup(Map<String, bool> map) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        children: [
+          Wrap(
+            children: [
+              ...map.keys.map((key) {
+                return SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.5 - 32,
+                  child: CheckboxListTile(
+                    title: Text(
+                      key,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    value: map[key],
+                    dense: true,
+                    activeColor: Colors.red.shade700,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (val) => setState(() => map[key] = val!),
+                  ),
+                );
+              }),
+
+              SizedBox(
+                width: MediaQuery.of(context).size.width * 0.5 - 32,
+                child: CheckboxListTile(
+                  title: const Text(
+                    "Lainnya",
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  value: _isTreatmentLainLainChecked,
+                  dense: true,
+                  activeColor: Colors.red.shade700,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: (val) =>
+                      setState(() => _isTreatmentLainLainChecked = val!),
+                ),
+              ),
+            ],
+          ),
+
+          if (_isTreatmentLainLainChecked)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: _treatmentLainManualController,
+                decoration: const InputDecoration(
+                  labelText: "Treatment lainnya...",
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafetyFactor() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSafetyItemCard(
+            title: "DOKUMEN PENDUKUNG",
+            icon: Icons.assignment_turned_in_outlined,
+            content: _buildCheckboxGroup(_dokumen),
+          ),
+          const SizedBox(height: 12),
+
+          _buildSafetyItemCard(
+            title: "GANJAL RODA",
+            icon: Icons.stop_circle_outlined,
+            content: _buildModernRadioGroup(
+              [
+                '1 Standard',
+                '2 Standard',
+                '1 Tidak Standard',
+                '2 Tidak Standard',
+                'Tidak Ada',
+              ],
+              _ganjalRoda,
+              (v) => setState(() => _ganjalRoda = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          _buildSafetyItemCard(
+            title: "REM / HAND REM",
+            icon: Icons.pan_tool_alt_outlined,
+            content: _buildModernRadioGroup(
+              ['Hand Rem', 'Tidak Ada/Tidak Standard'],
+              _remHandRem,
+              (v) => setState(() => _remHandRem = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          _buildSafetyItemCard(
+            title: "APD SUPIR",
+            icon: Icons.shield_outlined,
+            content: _buildCheckboxGroup(_apd),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafetyItemCard({
+    required String title,
+    required IconData icon,
+    required Widget content,
+  }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       width: double.infinity,
@@ -568,7 +1276,9 @@ Widget _buildSafetyItemCard({required String title, required IconData icon, requ
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(10),
+              ),
               border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
             ),
             child: Row(
@@ -595,138 +1305,148 @@ Widget _buildSafetyItemCard({required String title, required IconData icon, requ
       ),
     );
   }
-Widget _buildModernRadioGroup(List<String> options, String? groupVal, Function(String?) onChanged) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-    child: Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((opt) {
-        bool isSelected = groupVal == opt;
-        Color activeColor = opt.contains('Tidak') || opt.contains('Rusak') 
-            ? Colors.red.shade700 
-            : Colors.green.shade700;
 
-        return InkWell(
-          onTap: () => onChanged(opt),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? activeColor.withValues(alpha: 0.1) : Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isSelected ? activeColor : Colors.grey.shade300,
-                width: isSelected ? 1.5 : 1,
+  Widget _buildModernRadioGroup(
+    List<String> options,
+    String? groupVal,
+    Function(String?) onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: options.map((opt) {
+          bool isSelected = groupVal == opt;
+          Color activeColor = opt.contains('Tidak') || opt.contains('Rusak')
+              ? Colors.red.shade700
+              : Colors.green.shade700;
+
+          return InkWell(
+            onTap: () => onChanged(opt),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? activeColor.withValues(alpha: 0.1)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isSelected ? activeColor : Colors.grey.shade300,
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_circle : Icons.circle_outlined,
+                    size: 14,
+                    color: isSelected ? activeColor : Colors.grey,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    opt,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isSelected ? activeColor : Colors.black87,
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                  size: 14,
-                  color: isSelected ? activeColor : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  opt,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? activeColor : Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    ),
-  );
-}
- 
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   Widget _buildDecisionSection() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      children: [
-        _buildModernDecisionCard(
-          label: 'LAYAK SESUAI STANDAR',
-          value: 'LAYAK',
-          icon: Icons.check_circle_rounded,
-          color: Colors.green.shade700,
-        ),
-        const SizedBox(height: 10),
-        _buildModernDecisionCard(
-          label: 'LAYAK SETELAH TREATMENT',
-          value: 'LAYAK SETELAH TREATMENT',
-          icon: Icons.published_with_changes_rounded,
-          color: Colors.orange.shade800,
-        ),
-        const SizedBox(height: 10),
-        _buildModernDecisionCard(
-          label: 'UNIT DITOLAK (REJECT)',
-          value: 'DITOLAK',
-          icon: Icons.cancel_rounded,
-          color: Colors.red.shade800,
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildModernDecisionCard({
-  required String label,
-  required String value,
-  required IconData icon,
-  required Color color,
-}) {
-  bool isSelected = _decision == value;
-
-  return InkWell(
-    onTap: () => setState(() => _decision = value),
-    borderRadius: BorderRadius.circular(12),
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    return Padding(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isSelected ? color : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSelected ? color : Colors.grey.shade300,
-          width: 2,
-        ),
-        boxShadow: isSelected
-            ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))]
-            : [],
-      ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(
-            icon,
-            color: isSelected ? Colors.white : color,
-            size: 20,
+          _buildModernDecisionCard(
+            label: 'LAYAK SESUAI STANDAR',
+            value: 'LAYAK',
+            icon: Icons.check_circle_rounded,
+            color: Colors.green.shade700,
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
+          const SizedBox(height: 10),
+          _buildModernDecisionCard(
+            label: 'LAYAK SETELAH TREATMENT',
+            value: 'LAYAK SETELAH TREATMENT',
+            icon: Icons.published_with_changes_rounded,
+            color: Colors.orange.shade800,
           ),
-          if (isSelected)
-            const Icon(Icons.check_circle, color: Colors.white, size: 16),
+          const SizedBox(height: 10),
+          _buildModernDecisionCard(
+            label: 'UNIT DITOLAK (REJECT)',
+            value: 'DITOLAK',
+            icon: Icons.cancel_rounded,
+            color: Colors.red.shade800,
+          ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _buildModernDecisionCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    bool isSelected = _decision == value;
+
+    return InkWell(
+      onTap: () => setState(() => _decision = value),
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: 2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? Colors.white : color, size: 20),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle, color: Colors.white, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildCatatanField() {
     return Padding(
@@ -734,48 +1454,57 @@ Widget _buildModernDecisionCard({
       child: TextField(
         controller: _catatanController,
         maxLines: 3,
-        decoration: const InputDecoration(labelText: "Catatan Inspeksi", border: OutlineInputBorder(), hintText: "Tambahkan catatan jika ada..."),
+        decoration: const InputDecoration(
+          labelText: "Catatan Inspeksi",
+          border: OutlineInputBorder(),
+          hintText: "Tambahkan catatan jika ada...",
+        ),
       ),
     );
   }
 
-Widget _buildTextField(
-  TextEditingController controller, 
-  String label, {
-  bool isNumber = false, 
-  bool isUpperCase = false,
-  int? maxLength,
-}) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 10), 
-    child: TextFormField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      textCapitalization: isUpperCase ? TextCapitalization.characters : TextCapitalization.none,
-      inputFormatters: [
-        if (isNumber) FilteringTextInputFormatter.digitsOnly,
-        if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
-      ],
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontSize: 13),
-        border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), 
-        errorStyle: const TextStyle(fontSize: 11, height: 0.8),
-        counterText: "", 
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label, {
+    bool isNumber = false,
+    bool isUpperCase = false,
+    int? maxLength,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        textCapitalization: isUpperCase
+            ? TextCapitalization.characters
+            : TextCapitalization.none,
+        inputFormatters: [
+          if (isNumber) FilteringTextInputFormatter.digitsOnly,
+          if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+        ],
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontSize: 13),
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          errorStyle: const TextStyle(fontSize: 11, height: 0.8),
+          counterText: "",
+        ),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) {
+            return "Wajib diisi";
+          }
+          return null;
+        },
       ),
-      validator: (v) {
-        if (v == null || v.trim().isEmpty) {
-          return "Wajib diisi";
-        }
-        return null;
-      },
-    ),
-  );
-}
- 
+    );
+  }
+
   Widget _buildDetailedSummary() {
-final data = _shippingData ?? widget.item;
+    final data = _shippingData ?? widget.item;
     final request = data['request'] ?? {};
 
     final bool isGroup = request['group_id'] != null;
@@ -785,21 +1514,18 @@ final data = _shippingData ?? widget.item;
     final String soGlobal = request['so']?.toString() ?? "-";
     final warehouse = request['warehouse'];
 
-    String warehouseDisplay = warehouse != null 
-
-        ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
+    String warehouseDisplay = warehouse != null
+        ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}"
         : "-";
 
     Map<String, dynamic>? vendorDetails;
-   // Cek di root data (untuk single)
     if (data['vendor_transportasi'] != null) {
       vendorDetails = data['vendor_transportasi'];
-    } 
-    else if (request['shipping_assignments'] != null && (request['shipping_assignments'] as List).isNotEmpty) {
+    } else if (request['shipping_assignments'] != null &&
+        (request['shipping_assignments'] as List).isNotEmpty) {
       var firstAssign = request['shipping_assignments'][0];
       vendorDetails = firstAssign['vendor_transportasi'];
-    }
-    else if (request['vendor_transportasi'] != null) {
+    } else if (request['vendor_transportasi'] != null) {
       vendorDetails = request['vendor_transportasi'];
     }
 
@@ -812,7 +1538,12 @@ final data = _shippingData ?? widget.item;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-       border: Border(left: BorderSide(color: isGroup ? Colors.blue.shade700 : Colors.red.shade700, width: 6)),
+        border: Border(
+          left: BorderSide(
+            color: isGroup ? Colors.blue.shade700 : Colors.red.shade700,
+            width: 6,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -825,18 +1556,42 @@ final data = _shippingData ?? widget.item;
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, letterSpacing: 1.1, fontSize: 11)),
-_buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
+                    Text(
+                      isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isGroup
+                            ? Colors.blue.shade900
+                            : Colors.red.shade900,
+                        letterSpacing: 1.1,
+                        fontSize: 11,
+                      ),
+                    ),
+                    _buildBadge(
+                      warehouseDisplay.toUpperCase(),
+                      Colors.red.shade700,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(isGroup ? "ID Grup: ${request['group_id']}" : "ID Shipping: ${request['shipping_id']}", 
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                Text(
+                  isGroup
+                      ? "ID Grup: ${request['group_id']}"
+                      : "ID Shipping: ${request['shipping_id']}",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
-                 "$vendorNikDisplay - $vVendorName",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                  "$vendorNikDisplay - $vVendorName",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -844,13 +1599,13 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                 ),
                 Row(
                   children: [
-                    _infoBox("Stuffing Date", _formatDate(request['stuffing_date'])),
-                    // _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _infoBox(
+                      "Stuffing Date",
+                      _formatDate(request['stuffing_date']),
+                    ),
                     _infoBox("Type Unit", vUnit),
                     _infoBox("City", vCity),
                     _infoBox("Area", vArea),
-                    //const Spacer(),
-                    // _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                   ],
                 ),
               ],
@@ -860,8 +1615,14 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey.shade100,
-            child: const Text("DETAIL ITEM & CUSTOMER", 
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            child: const Text(
+              "DETAIL ITEM & CUSTOMER",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey,
+              ),
+            ),
           ),
           ...dos.map((doItem) {
             final List doDetails = doItem['do_details'] ?? [];
@@ -872,50 +1633,116 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
+                      Icon(
+                        Icons.calendar_month,
+                        size: 14,
+                        color: Colors.red.shade700,
+                      ),
                       const SizedBox(width: 6),
-                      Text("RDD: $rddGlobal",
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
+                      Text(
+                        "RDD: $rddGlobal",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.description_outlined, size: 16, color: Colors.blue),
+                      const Icon(
+                        Icons.description_outlined,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
                       const SizedBox(width: 8),
-                      Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        "DO: ${doItem['do_number']}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(width: 20),
-                      Text("SO: $soGlobal", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        "SO: $soGlobal",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", 
-                    style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  Text(
+                    "👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}",
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
                   const SizedBox(height: 10),
                   Container(
-                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade200)),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
                     child: Table(
-                      columnWidths: const {0: FlexColumnWidth(1.2), 1: FlexColumnWidth(3), 2: FlexColumnWidth(0.8), 3: FlexColumnWidth(1.3)},
+                      columnWidths: const {
+                        0: FlexColumnWidth(1.2),
+                        1: FlexColumnWidth(3),
+                        2: FlexColumnWidth(0.8),
+                        3: FlexColumnWidth(1.3),
+                      },
                       children: [
                         TableRow(
-                          decoration: BoxDecoration(color: Colors.grey.shade200),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                          ),
                           children: [
                             _tableCell("ID Mat", isBold: true, isHeader: true),
                             _tableCell("Name", isBold: true, isHeader: true),
-                            _tableCell("Qty", isBold: true, align: TextAlign.right, isHeader: true),
-                           _tableCell("NW (Kg)", isBold: true, align: TextAlign.right, isHeader: true),
+                            _tableCell(
+                              "Qty",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
+                            _tableCell(
+                              "NW (Kg)",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
                           ],
                         ),
                         ...doDetails.map((det) {
-                          double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+                          double qty =
+                              double.tryParse(det['qty']?.toString() ?? "0") ??
+                              0;
                           final matData = det['material'] ?? {};
-                          double unitWeight = double.tryParse(matData['net_weight']?.toString() ?? "0") ?? 0;
+                          double unitWeight =
+                              double.tryParse(
+                                matData['net_weight']?.toString() ?? "0",
+                              ) ??
+                              0;
                           return TableRow(
                             children: [
-                              _tableCell(matData['material_id']?.toString() ?? "-"),
-                              _tableCell(matData['material_name']?.toString() ?? "-"),
-                              _tableCell(qty.toInt().toString(), align: TextAlign.right, isBold: true),
-                              _tableCell((qty * unitWeight).toStringAsFixed(2), align: TextAlign.right),
+                              _tableCell(
+                                matData['material_id']?.toString() ?? "-",
+                              ),
+                              _tableCell(
+                                matData['material_name']?.toString() ?? "-",
+                              ),
+                              _tableCell(
+                                qty.toInt().toString(),
+                                align: TextAlign.right,
+                                isBold: true,
+                              ),
+                              _tableCell(
+                                (qty * unitWeight).toStringAsFixed(2),
+                                align: TextAlign.right,
+                              ),
                             ],
                           );
                         }),
@@ -932,17 +1759,40 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
       ),
     );
   }
+
   Widget _buildBottomAction() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -5))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
       child: SizedBox(
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
           onPressed: _isSubmitting ? null : _submitCheckIn,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-          child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Text("SIMPAN HASIL INSPEKSI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade700,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: _isSubmitting
+              ? const CircularProgressIndicator(color: Colors.white)
+              : const Text(
+                  "SIMPAN HASIL INSPEKSI",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
       ),
     );
@@ -951,20 +1801,91 @@ _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
   Widget _buildLateWarning() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red)),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red),
+      ),
       child: Row(
         children: [
           const Icon(Icons.warning, color: Colors.red, size: 18),
           const SizedBox(width: 10),
-          Expanded(child: Text("Terlambat: ${widget.lateReason}", style: const TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(
+            child: Text(
+              "Terlambat: ${widget.lateReason}",
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
- Widget _infoBox(String label, String value) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))]));
-  // Widget _infoBox(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]);
-  Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) => Padding(padding: const EdgeInsets.all(8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 10, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)));
-  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color)), child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)));
-  void _showSnackBar(String msg, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating));
-  String _formatDate(String? s) => s == null || s.isEmpty ? "-" : DateFormat('dd/MM/yy').format(DateTime.parse(s));
+
+  Widget _infoBox(String label, String value) => Expanded(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    ),
+  );
+  Widget _tableCell(
+    String text, {
+    bool isBold = false,
+    TextAlign align = TextAlign.left,
+    bool isHeader = false,
+  }) => Padding(
+    padding: const EdgeInsets.all(8),
+    child: Text(
+      text,
+      textAlign: align,
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+      ),
+    ),
+  );
+  Widget _buildBadge(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+    ),
+  );
+  void _showSnackBar(String msg, Color color) =>
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  String _formatDate(String? s) => s == null || s.isEmpty
+      ? "-"
+      : DateFormat('dd/MM/yy').format(DateTime.parse(s));
 }

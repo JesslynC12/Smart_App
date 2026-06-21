@@ -10,7 +10,6 @@ class ScheduleSelectionPage extends StatefulWidget {
   final String? oldTime;
   final String vendorNik;
   final VoidCallback onSuccess;
-  
 
   const ScheduleSelectionPage({
     super.key,
@@ -33,218 +32,82 @@ class _ScheduleSelectionPageState extends State<ScheduleSelectionPage> {
   String? _selectedTime;
   List<String> _timeSlots = [];
   List<int> _vendorDetailIds = [];
-final TextEditingController _otherReasonController = TextEditingController(); // Tambahkan ini
-  // final List<String> _timeSlots = [
-  //   '08:00', '09:00', '10:00', '11:00', 
-  //   '13:00', '14:00', '15:00', '16:00'
-  // ];
-
-String? _tempSelectedReason;
-final List<String> _rescheduleReasons = [
-  'Tidak Ada Supir',
+  final TextEditingController _otherReasonController = TextEditingController();
+  String? _tempSelectedReason;
+  final List<String> _rescheduleReasons = [
+    'Tidak Ada Supir',
     'Tidak Ada Unit',
     'Unit Rusak',
     'Jalan Macet',
     'Dokumen Expired',
-    'Other'
-];
+    'Other',
+  ];
 
-//   final List<String> _timeSlots = [
-//  '07:00 - 09:00',
-//   '09:00 - 11:00',
-//   '11:00 - 13:00', // Jam Istirahat
-//   '13:00 - 15:00',
-//   '15:00 - 17:00',
-//   '17:00 - 19:00',
-//   '19:00 - 21:00',
-//   '21:00 - 23:00',
-// ];
-
-Map<String, int> _bookedCounts = {};
-//final int _maxCapacity = 14;
-
+  Map<String, int> _bookedCounts = {};
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData(); // Memuat detail SO/DO saat halaman dibuka
-    
+    _loadInitialData();
   }
 
+  Future<void> _loadInitialData() async {
+    _vendorDetailIds = await AuthService.getVendorDetailIds(widget.vendorNik);
+    await _loadData();
+    if (_shippingData != null) {
+      final warehouseId = _shippingData?['warehouse_id'];
 
-// // Fungsi baru untuk menjalankan urutan muat data yang benar
-//   Future<void> _loadInitialData() async {
-//     await _loadData(); // 1. Muat detail shipment dulu
-//     if (_shippingData != null) {
-//       await _checkAvailability(); // 2. Hitung slot berdasarkan tanggal & gudang shipment tersebut
-//     }
-//   }
-Future<void> _loadInitialData() async {
-  _vendorDetailIds = await AuthService.getVendorDetailIds(widget.vendorNik);
-  await _loadData(); // 1. Muat detail shipment dulu
-  if (_shippingData != null) {
-    final warehouseId = _shippingData?['warehouse_id'];
-    
-    setState(() {
-      if (warehouseId == 6) {
-        // Slot khusus Gudang 6
-        _timeSlots = [
-          '08:00 - 10:00',
-          '10:00 - 12:00',
-          '12:00 - 14:00',
-          '14:00 - 16:00',
-          '16:00 - 18:00',
-          '18:00 - 20:00',
-          '20:00 - 22:00',
-          '22:00 - 24:00',
-        ];
-      } else {
-        // Slot Default untuk Gudang 1, 2, 3
-        _timeSlots = [
-          '07:00 - 09:00',
-          '09:00 - 11:00',
-          '11:00 - 13:00',
-          '13:00 - 15:00',
-          '15:00 - 17:00',
-          '17:00 - 19:00',
-          '19:00 - 21:00',
-          '21:00 - 23:00',
-        ];
-      }
-    });
-
-    await _checkAvailability(); // 2. Hitung slot berdasarkan tanggal & gudang
-  }
-}
-
-  // Future<void> _loadData() async {
-  //   try {
-  //     setState(() => _isLoading = true);
-      
-  //     // Mengambil data lengkap shipping termasuk detail material (sama seperti AssignVendorPage)
-  //     final response = await supabase
-  //         .from('shipping_request')
-  //         .select('''
-  //           *,
-  //           delivery_order(
-  //             *,
-  //             customer(*),
-  //             do_details(
-  //               qty,
-  //               material:material_id (material_id, material_name, net_weight)
-  //             )
-  //           )
-  //         ''')
-  //         .eq('shipping_id', widget.shippingId)
-  //         .single();
-
-  //     setState(() {
-  //       _shippingData = response;
-  //       _isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() => _isLoading = false);
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(content: Text("Gagal memuat detail: $e"), backgroundColor: Colors.red),
-  //     );
-  //   }
-  // }
-
-//   Future<void> _loadData() async {
-//   try {
-//     setState(() => _isLoading = true);
-    
-//     final initialRes = await supabase
-//         .from('shipping_request')
-//         .select('group_id')
-//         .eq('shipping_id', widget.shippingId)
-//         .single();
-
-//     final int? groupId = initialRes['group_id'];
-    
-//     // Pastikan kita select kolom 'so' juga
-//     PostgrestFilterBuilder query = supabase.from('shipping_request').select('''
-//           *,
-//           so, 
-//           warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
-//           delivery_order(
-//             *,
-//             customer(*),
-//             do_details(
-//               qty,
-//               material:material_id (material_id, material_name, net_weight)
-//             )
-//           )
-//         ''');
-
-//     dynamic response;
-//     if (groupId != null) {
-//       response = await query.eq('group_id', groupId).order('shipping_id');
-//     } else {
-//       response = await query.eq('shipping_id', widget.shippingId);
-//     }
-
-//     setState(() {
-//       if (groupId != null) {
-//         List list = response as List;
-//         _shippingData = Map<String, dynamic>.from(list[0]);
-//         _shippingData!['all_shipping_ids'] = list.map((e) => e['shipping_id']).toList();
-        
-//         List allDos = [];
-//         for (var item in list) {
-//           // --- PERBAIKAN DI SINI ---
-//           // Ambil semua DO dari baris ini
-//           List currentDos = List.from(item['delivery_order'] ?? []);
-          
-//           // Sisipkan nomor SO dari baris ini ke dalam setiap DO-nya
-//           for (var doItem in currentDos) {
-//             doItem['parent_so'] = item['so']; 
-//           }
-          
-//           allDos.addAll(currentDos);
-//         }
-//         _shippingData!['delivery_order'] = allDos;
-//       } else {
-//         final singleData = (response as List).first;
-//         _shippingData = Map<String, dynamic>.from(singleData);
-        
-//         // Untuk data single juga kita set agar konsisten
-//         if (_shippingData!['delivery_order'] != null) {
-//           for (var doItem in _shippingData!['delivery_order']) {
-//             doItem['parent_so'] = _shippingData!['so'];
-//           }
-//         }
-//       }
-//       _isLoading = false;
-//     });
-//   } catch (e) {
-//     setState(() => _isLoading = false);
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(content: Text("Gagal memuat detail: $e"), backgroundColor: Colors.red),
-//     );
-//   }
-// }
-
-Future<void> _loadData() async {
-  try {
-    setState(() => _isLoading = true);
-    
-    final initialRes = await supabase
-        .from('shipping_request')
-        .select('group_id')
-        .eq('shipping_id', widget.shippingId)
-        .single();
-
-    final int? groupId = initialRes['group_id'];
-    
-    if (_vendorDetailIds.isEmpty) {
       setState(() {
-        _isLoading = false;
+        if (warehouseId == 6) {
+          _timeSlots = [
+            '08:00 - 10:00',
+            '10:00 - 12:00',
+            '12:00 - 14:00',
+            '14:00 - 16:00',
+            '16:00 - 18:00',
+            '18:00 - 20:00',
+            '20:00 - 22:00',
+            '22:00 - 24:00',
+          ];
+        } else {
+          _timeSlots = [
+            '07:00 - 09:00',
+            '09:00 - 11:00',
+            '11:00 - 13:00',
+            '13:00 - 15:00',
+            '15:00 - 17:00',
+            '17:00 - 19:00',
+            '19:00 - 21:00',
+            '21:00 - 23:00',
+          ];
+        }
       });
-      return;
-    }
 
-    PostgrestFilterBuilder query = supabase.from('shipping_request').select('''
+      await _checkAvailability();
+    }
+  }
+
+  Future<void> _loadData() async {
+    try {
+      setState(() => _isLoading = true);
+
+      final initialRes = await supabase
+          .from('shipping_request')
+          .select('group_id')
+          .eq('shipping_id', widget.shippingId)
+          .single();
+
+      final int? groupId = initialRes['group_id'];
+
+      if (_vendorDetailIds.isEmpty) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      PostgrestFilterBuilder query = supabase.from('shipping_request').select(
+        '''
           *,
           so, 
           warehouse:warehouse(warehouse_id, warehouse_name, lokasi),
@@ -267,376 +130,204 @@ Future<void> _loadData() async {
               material:material_id (material_id, material_name, net_weight)
             )
           )
-        ''');
-// Filter agar hanya mengambil assignment milik vendor yang sedang login/dipilih
-    query = query.inFilter('shipping_assignments.id_vendor_details', _vendorDetailIds);
+        ''',
+      );
+      query = query.inFilter(
+        'shipping_assignments.id_vendor_details',
+        _vendorDetailIds,
+      );
 
-    dynamic response;
-    if (groupId != null) {
-      response = await query.eq('group_id', groupId).order('shipping_id');
-    } else {
-      response = await query.eq('shipping_id', widget.shippingId);
-    }
-
-    setState(() {
-      List list = response as List;
-      // Simpan semua ID dalam grup untuk proses update nanti
-      _shippingData = Map<String, dynamic>.from(list[0]);
-      _shippingData!['all_shipping_ids'] = list.map((e) => e['shipping_id']).toList();
-      
-      List allDos = [];
-      for (var item in list) {
-        List currentDos = List.from(item['delivery_order'] ?? []);
-        for (var doItem in currentDos) {
-          doItem['parent_so'] = item['so']; 
-          doItem['rdd_origin'] = item['rdd']; // SUNTIK RDD ASAL DI SINI
-        }
-        allDos.addAll(currentDos);
-      }
-      _shippingData!['delivery_order'] = allDos;
-      _isLoading = false;
-    });
-  } catch (e) {
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Gagal memuat detail: $e"), backgroundColor: Colors.red),
-    );
-  }
-}
-
-// int _getMaxCapacity(String timeSlot) {
-//   final warehouseId = _shippingData?['warehouse_id'];
-//   bool isRestTime = timeSlot == '11:00 - 13:00'|| timeSlot == '17:00 - 19:00';
-
-//   if (warehouseId == 1) {
-//     return isRestTime ? 4 : 8;
-//   } else if (warehouseId == 2) {
-//     return isRestTime ? 1 : 3;
-//   } else if (warehouseId == 3) {
-//     return isRestTime ? 2 : 4;
-//   }
-  
-//   return 14; // Default jika ID lain
-// }
-int _getMaxCapacity(String timeSlot) {
-  final warehouseId = _shippingData?['warehouse_id'];
-
-  // ================= ATURAN KHUSUS GUDANG 6 =================
-  if (warehouseId == 6) {
-    if (timeSlot == '08:00 - 10:00') return 6;
-    if (timeSlot == '10:00 - 12:00') return 4;
-    if (timeSlot == '12:00 - 14:00') return 4;
-    if (timeSlot == '14:00 - 16:00') return 6;
-    if (timeSlot == '16:00 - 18:00') return 6;
-    if (timeSlot == '18:00 - 20:00') return 3;
-    if (timeSlot == '20:00 - 22:00') return 5;
-    if (timeSlot == '22:00 - 24:00') return 6;
-    return 0; // Jaga-jaga jika ada slot tidak dikenal
-  }
-
-  // ================= ATURAN GUDANG LAIN (1, 2, 3) =================
-  bool isRestTime = timeSlot == '11:00 - 13:00' || timeSlot == '17:00 - 19:00';
-
-  if (warehouseId == 1) {
-    return isRestTime ? 4 : 8;
-  } else if (warehouseId == 2) {
-    return isRestTime ? 1 : 3;
-  } else if (warehouseId == 3) {
-    return isRestTime ? 2 : 4;
-  }
-  
-  return 14; // Default jika ID lain
-}
-
-//   Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
-//     if (_selectedTime == null) return;
-//     // Validasi Keamanan: Pastikan jam baru tidak sama dengan jam lama
-//   if (widget.oldTime != null && _selectedTime == widget.oldTime) {
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       const SnackBar(
-//         content: Text("Anda harus memilih jam yang berbeda untuk reschedule!"), 
-//         backgroundColor: Colors.orange
-//       ),
-//     );
-//     return;
-//   }
-//     setState(() => _isSaving = true);
-// //String actionType = widget.oldTime == null ? 'INITIAL_BOOKING' : 'RESCHEDULE';
-//     try {
-//       if (widget.oldTime != null && widget.oldTime != _selectedTime) {
-//         await supabase.from('booking_history').insert({
-//           'id_assignment': widget.assignmentId,
-//           'jam_lama': widget.oldTime,     // Pindahkan jam dari shipping_assignment
-//           'jam_baru': _selectedTime,    // Catat tujuan jam barunya
-//           'changed_by': widget.vendorNik,
-//           //'keterangan': actionType,
-//           'reason_reschedule': rescheduleReasons,
-//           'created_at': DateTime.now().toIso8601String(),
-//         });
-//       }
-//     // 1. Update tabel penugasan vendor
-//       // Kita simpan status 'accepted' dan 'jam_booking' di sini
-//       await supabase.from('shipping_assignments').update({
-//         'status_assignment': 'accepted',
-//         'responded_at': DateTime.now().toIso8601String(),
-//         'jam_booking': _selectedTime, // Disimpan ke tabel assignments
-//       }).eq('id_assignment', widget.assignmentId);
-
-//       // 2. Update tabel request utama
-//       // HANYA update status menjadi 'on process'. 
-//       // Kita hapus baris 'arrival_time' agar tidak menyebabkan error.
-//       await supabase.from('shipping_request').update({
-//         'status': 'on process',
-//       }).eq('shipping_id', widget.shippingId);
-//       if (mounted) {
-//         widget.onSuccess();
-//         // Navigator.pop(context);
-//         // --- PERUBAHAN DI SINI ---
-//         // Ambil instance DynamicTabPage dan tutup tab saat ini
-//         final dynamicTab = DynamicTabPage.of(context);
-//         if (dynamicTab != null) {
-//           dynamicTab.closeCurrentTab();
-//         } else {
-//           // Fallback jika dibuka tidak melalui dynamic tab
-//           Navigator.pop(context);
-//         }
-//         // --------------------------
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(content: Text("Berhasil! Jadwal telah disimpan."), backgroundColor: Colors.green),
-//         );
-//       }
-//     } catch (e) {
-//       setState(() => _isSaving = false);
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red),
-//       );
-//     }
-//   }
-
-// Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
-//   if (_selectedTime == null) return;
-//   if (widget.oldTime != null && _selectedTime == widget.oldTime) {
-//     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pilih jam yang berbeda!"), backgroundColor: Colors.orange));
-//     return;
-//   }
-
-//   setState(() => _isSaving = true);
-//   try {
-//     final List<int> shipIds = List<int>.from(_shippingData!['all_shipping_ids']);
-
-//     // 1. Ambil semua assignment ID yang terkait dengan shipping IDs ini
-//     final assignmentRes = await supabase
-//         .from('shipping_assignments')
-//         .select('id_assignment')
-//         .inFilter('shipping_id', shipIds)
-//         .eq('nik', widget.vendorNik);
-
-//     final List<int> assignmentIds = (assignmentRes as List).map((e) => e['id_assignment'] as int).toList();
-
-//     // 2. Insert ke history jika Reschedule
-//     if (widget.oldTime != null) {
-//       final List<Map<String, dynamic>> historyInserts = assignmentIds.map((id) => {
-//         'id_assignment': id,
-//         'jam_lama': widget.oldTime,
-//         'jam_baru': _selectedTime,
-//         'changed_by': widget.vendorNik,
-//         'reason_reschedule': rescheduleReasons,
-//         'created_at': DateTime.now().toIso8601String(),
-//       }).toList();
-//       await supabase.from('booking_history').insert(historyInserts);
-//     }
-
-//     // 3. Update tabel penugasan vendor (Massal)
-//     await supabase.from('shipping_assignments').update({
-//       'status_assignment': 'accepted',
-//       'responded_at': DateTime.now().toIso8601String(),
-//       'jam_booking': _selectedTime,
-//     }).inFilter('id_assignment', assignmentIds);
-
-//     // 4. Update tabel request utama (Massal)
-//     await supabase.from('shipping_request').update({
-//       'status': 'on process',
-//     }).inFilter('shipping_id', shipIds);
-
-//     if (mounted) {
-//       widget.onSuccess();
-//       final dynamicTab = DynamicTabPage.of(context);
-//       if (dynamicTab != null) {
-//         dynamicTab.closeCurrentTab();
-//       } else {
-//         Navigator.pop(context);
-//       }
-//       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Berhasil! Jadwal grup telah disimpan."), backgroundColor: Colors.green));
-//     }
-//   } catch (e) {
-//     setState(() => _isSaving = false);
-//     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal menyimpan: $e"), backgroundColor: Colors.red));
-//   }
-// }
-Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
-  if (_selectedTime == null) return;
-
-  if (widget.oldTime != null && _selectedTime == widget.oldTime) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Pilih jam yang berbeda!"),
-        backgroundColor: Colors.orange,
-      ),
-    );
-    return;
-  }
-
-  setState(() => _isSaving = true);
-
-  try {
-    final List<int> shipIds =
-        List<int>.from(_shippingData!['all_shipping_ids']);
-
-    // =====================================================
-    // CEK USER LOGIN & ROLE
-    // =====================================================
-    final currentUser = supabase.auth.currentUser;
-
-    String changedBy = widget.vendorNik;
-
-    if (currentUser != null) {
-      final profileRes = await supabase
-          .from('profiles')
-          .select('role, name')
-          .eq('id', currentUser.id)
-          .maybeSingle();
-
-      if (profileRes != null) {
-        final String role =
-            (profileRes['role'] ?? '').toString().toLowerCase();
-
-        // Jika internal/admin -> pakai nama
-        if (role != 'vendor') {
-          changedBy =
-              (profileRes['name'] ?? widget.vendorNik).toString();
-        }
-
-        // Jika vendor -> tetap pakai nik vendor
-        // else {
-        //   changedBy = widget.vendorNik;
-        else {
-          changedBy = 'vendor'; // Opsional: Bisa juga simpan 'vendor' saja untuk menyederhanakan data
-        }
-      }
-    }
-
-    // =====================================================
-    // AMBIL ASSIGNMENT ID
-    // =====================================================
-    // final assignmentRes = await supabase
-    //     .from('shipping_assignments')
-    //     .select('id_assignment')
-    //     .inFilter('shipping_id', shipIds)
-    //     .eq('nik', widget.vendorNik);
-
-    // final List<int> assignmentIds = (assignmentRes as List)
-    //     .map((e) => e['id_assignment'] as int)
-    //     .toList();
-    List<int> assignmentIds = [];
-
-    // Jika ini adalah Group Shipment, kita harus cari id_assignment yang berstatus 'offered' atau 'accepted' 
-    // pada shipping group tersebut, agar ID lama yang 'rejected' atau 'cancel booking' TIDAK IKUT TERBAWA.
-    if (_shippingData?['group_id'] != null) {
-      final assignmentRes = await supabase
-          .from('shipping_assignments')
-          .select('id_assignment')
-          .inFilter('shipping_id', shipIds)
-          .inFilter('id_vendor_details', _vendorDetailIds)
-          .inFilter('status_assignment', ['offered', 'accepted']); // Kunci utama: Abaikan status reject/cancel lama!
-
-      assignmentIds = (assignmentRes as List)
-          .map((e) => e['id_assignment'] as int)
-          .toList();
-          
-      // Amankan jika list kosong, minimal masukkan ID assignment yang dibawa dari halaman sebelumnya
-      if (!assignmentIds.contains(widget.assignmentId)) {
-        assignmentIds.add(widget.assignmentId);
-      }
-    } else {
-      // Jika Single Shipment, langsung pakai ID assignment tunggal yang di-pass ke page ini (Sangat Aman)
-      assignmentIds = [widget.assignmentId];
-    }
-
-    // =====================================================
-    // INSERT HISTORY
-    // =====================================================
-    if (widget.oldTime != null) {
-      final List<Map<String, dynamic>> historyInserts =
-          assignmentIds.map((id) {
-        return {
-          'id_assignment': id,
-          'jam_lama': widget.oldTime,
-          'jam_baru': _selectedTime,
-          'changed_by': changedBy,
-          'reason_reschedule': rescheduleReasons,
-          'created_at': DateTime.now().toIso8601String(),
-        };
-      }).toList();
-
-      await supabase.from('booking_history').insert(historyInserts);
-    }
-
-    // =====================================================
-    // UPDATE ASSIGNMENT
-    // =====================================================
-    await supabase.from('shipping_assignments').update({
-      'status_assignment': 'accepted',
-      'responded_at': DateTime.now().toIso8601String(),
-      'jam_booking': _selectedTime,
-    }).inFilter('id_assignment', assignmentIds);
-
-    // =====================================================
-    // UPDATE SHIPPING REQUEST
-    // =====================================================
-    await supabase.from('shipping_request').update({
-      'status': 'on process',
-    }).inFilter('shipping_id', shipIds);
-
-    if (mounted) {
-      widget.onSuccess();
-
-      final dynamicTab = DynamicTabPage.of(context);
-
-      if (dynamicTab != null) {
-        dynamicTab.closeCurrentTab();
+      dynamic response;
+      if (groupId != null) {
+        response = await query.eq('group_id', groupId).order('shipping_id');
       } else {
-        Navigator.pop(context);
+        response = await query.eq('shipping_id', widget.shippingId);
       }
 
+      setState(() {
+        List list = response as List;
+        _shippingData = Map<String, dynamic>.from(list[0]);
+        _shippingData!['all_shipping_ids'] = list
+            .map((e) => e['shipping_id'])
+            .toList();
+
+        List allDos = [];
+        for (var item in list) {
+          List currentDos = List.from(item['delivery_order'] ?? []);
+          for (var doItem in currentDos) {
+            doItem['parent_so'] = item['so'];
+            doItem['rdd_origin'] = item['rdd'];
+          }
+          allDos.addAll(currentDos);
+        }
+        _shippingData!['delivery_order'] = allDos;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Berhasil! Jadwal grup telah disimpan."),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: Text("Gagal memuat detail: $e"),
+          backgroundColor: Colors.red,
         ),
       );
     }
-  } catch (e) {
-    setState(() => _isSaving = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Gagal menyimpan: $e"),
-        backgroundColor: Colors.red,
-      ),
-    );
   }
-}
-  
+
+  int _getMaxCapacity(String timeSlot) {
+    final warehouseId = _shippingData?['warehouse_id'];
+
+    if (warehouseId == 6) {
+      if (timeSlot == '08:00 - 10:00') return 6;
+      if (timeSlot == '10:00 - 12:00') return 4;
+      if (timeSlot == '12:00 - 14:00') return 4;
+      if (timeSlot == '14:00 - 16:00') return 6;
+      if (timeSlot == '16:00 - 18:00') return 6;
+      if (timeSlot == '18:00 - 20:00') return 3;
+      if (timeSlot == '20:00 - 22:00') return 5;
+      if (timeSlot == '22:00 - 24:00') return 6;
+      return 0;
+    }
+
+    bool isRestTime =
+        timeSlot == '11:00 - 13:00' || timeSlot == '17:00 - 19:00';
+
+    if (warehouseId == 1) {
+      return isRestTime ? 4 : 8;
+    } else if (warehouseId == 2) {
+      return isRestTime ? 1 : 3;
+    } else if (warehouseId == 3) {
+      return isRestTime ? 2 : 4;
+    }
+
+    return 14;
+  }
+
+  Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
+    if (_selectedTime == null) return;
+
+    if (widget.oldTime != null && _selectedTime == widget.oldTime) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Pilih jam yang berbeda!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final List<int> shipIds = List<int>.from(
+        _shippingData!['all_shipping_ids'],
+      );
+
+      final currentUser = supabase.auth.currentUser;
+
+      String changedBy = widget.vendorNik;
+
+      if (currentUser != null) {
+        final profileRes = await supabase
+            .from('profiles')
+            .select('role, name')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+
+        if (profileRes != null) {
+          final String role = (profileRes['role'] ?? '')
+              .toString()
+              .toLowerCase();
+
+          if (role.isNotEmpty) {
+            changedBy = role;
+          }
+        }
+      }
+
+      List<int> assignmentIds = [];
+      if (_shippingData?['group_id'] != null) {
+        final assignmentRes = await supabase
+            .from('shipping_assignments')
+            .select('id_assignment')
+            .inFilter('shipping_id', shipIds)
+            .inFilter('id_vendor_details', _vendorDetailIds)
+            .inFilter('status_assignment', ['offered', 'accepted']);
+        assignmentIds = (assignmentRes as List)
+            .map((e) => e['id_assignment'] as int)
+            .toList();
+        if (!assignmentIds.contains(widget.assignmentId)) {
+          assignmentIds.add(widget.assignmentId);
+        }
+      } else {
+        assignmentIds = [widget.assignmentId];
+      }
+
+      if (widget.oldTime != null) {
+        final List<Map<String, dynamic>> historyInserts = assignmentIds.map((
+          id,
+        ) {
+          return {
+            'id_assignment': id,
+            'jam_lama': widget.oldTime,
+            'jam_baru': _selectedTime,
+            'changed_by': changedBy,
+            'reason_reschedule': rescheduleReasons,
+            'created_at': DateTime.now().toIso8601String(),
+          };
+        }).toList();
+
+        await supabase.from('booking_history').insert(historyInserts);
+      }
+
+      await supabase
+          .from('shipping_assignments')
+          .update({
+            'status_assignment': 'accepted',
+            'responded_at': DateTime.now().toIso8601String(),
+            'jam_booking': _selectedTime,
+          })
+          .inFilter('id_assignment', assignmentIds);
+
+      await supabase
+          .from('shipping_request')
+          .update({'status': 'on process'})
+          .inFilter('shipping_id', shipIds);
+
+      if (mounted) {
+        widget.onSuccess();
+
+        final dynamicTab = DynamicTabPage.of(context);
+
+        if (dynamicTab != null) {
+          dynamicTab.closeCurrentTab();
+        } else {
+          Navigator.pop(context);
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Berhasil! Jadwal grup telah disimpan."),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Gagal menyimpan: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // appBar: AppBar(
-      //   title: const Text("Detail Order & Pilih Jadwal", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      //   backgroundColor: Colors.red.shade700,
-      //   foregroundColor: Colors.white,
-      // ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.red))
           : Column(
@@ -646,10 +337,17 @@ Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDetailedSummary(), // Detail DO & SO di bagian atas
+                        _buildDetailedSummary(),
                         const Padding(
                           padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                          child: Text("⏰ PILIH JAM KEDATANGAN", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13)),
+                          child: Text(
+                            "⏰ PILIH JAM KEDATANGAN",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                         _buildTimePickerGrid(),
                       ],
@@ -662,19 +360,17 @@ Future<void> _confirmAndAccept({String? rescheduleReasons}) async {
     );
   }
 
-Widget _buildDetailedSummary() {
+  Widget _buildDetailedSummary() {
     final data = _shippingData ?? {};
     final bool isGroup = data['group_id'] != null;
     final List dos = data['delivery_order'] ?? [];
     final List rejectList = data['reject_list'] ?? [];
 
-// LOGIKA BARU: Ambil data warehouse dari hasil join
     final warehouse = data['warehouse'];
-    final String warehouseDisplay = warehouse != null 
-        ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}" 
+    final String warehouseDisplay = warehouse != null
+        ? "${warehouse['lokasi'] ?? ''} - ${warehouse['warehouse_name'] ?? ''}"
         : "-";
 
-// AMBIL DATA DETAIL VENDOR DARI HASIL JOIN
     Map<String, dynamic>? vendorDetails;
     final List assignments = data['shipping_assignments'] ?? [];
     if (assignments.isNotEmpty) {
@@ -688,8 +384,12 @@ Widget _buildDetailedSummary() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        // Garis samping berubah Biru jika Group, Merah jika Single
-        border: Border(left: BorderSide(color: isGroup ? Colors.blue.shade700 : Colors.red.shade700, width: 6)),
+        border: Border(
+          left: BorderSide(
+            color: isGroup ? Colors.blue.shade700 : Colors.red.shade700,
+            width: 6,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -703,27 +403,41 @@ Widget _buildDetailedSummary() {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT", 
+                      isGroup ? "📦 GROUP SHIPMENT" : "🚚 SINGLE SHIPMENT",
                       style: TextStyle(
-                        fontWeight: FontWeight.bold, 
-                        color: isGroup ? Colors.blue.shade900 : Colors.red.shade900, 
-                        letterSpacing: 1.1, 
-                        fontSize: 11
-                      )
+                        fontWeight: FontWeight.bold,
+                        color: isGroup
+                            ? Colors.blue.shade900
+                            : Colors.red.shade900,
+                        letterSpacing: 1.1,
+                        fontSize: 11,
+                      ),
                     ),
-                    _buildBadge(warehouseDisplay.toUpperCase(), Colors.red.shade700),
+                    _buildBadge(
+                      warehouseDisplay.toUpperCase(),
+                      Colors.red.shade700,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isGroup ? "ID Grup: ${data['group_id']}" : "ID Shipping: ${data['shipping_id']}", 
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
+                  isGroup
+                      ? "ID Grup: ${data['group_id']}"
+                      : "ID Shipping: ${data['shipping_id']}",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                // INFO UTAMA VENDOR (NIK & NAMA VENDOR)
                 Text(
                   "${widget.vendorNik} - $vVendorName",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -731,15 +445,16 @@ Widget _buildDetailedSummary() {
                 ),
                 Row(
                   children: [
-                   // _infoBox("RDD", _formatDate(data['rdd'])),
                     _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
-                    _infoBox("Dedicated", (data['is_dedicated'] ?? "-").toString().toUpperCase()),
+                    _infoBox(
+                      "Dedicated",
+                      (data['is_dedicated'] ?? "-").toString().toUpperCase(),
+                    ),
                     _infoBox("Type Unit", vUnit),
                     _infoBox("City", vCity),
                     _infoBox("Area", vArea),
                   ],
                 ),
-                // --- BAGIAN RIWAYAT REJECT (DARI ASSIGNVENDORPAGE) ---
                 if (rejectList.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -754,17 +469,36 @@ Widget _buildDetailedSummary() {
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange.shade900),
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 14,
+                              color: Colors.orange.shade900,
+                            ),
                             const SizedBox(width: 6),
-                            Text("RIWAYAT REJECT VENDOR:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                            Text(
+                              "RIWAYAT REJECT VENDOR:",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         ...rejectList.map((rej) {
-                          String vendorName = rej['master_vendor']?['vendor_name'] ?? "Unknown Vendor";
+                          String vendorName =
+                              rej['master_vendor']?['vendor_name'] ??
+                              "Unknown Vendor";
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 2),
-                            child: Text("• $vendorName", style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                            child: Text(
+                              "• $vendorName",
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.black87,
+                              ),
+                            ),
                           );
                         }).toList(),
                       ],
@@ -774,19 +508,27 @@ Widget _buildDetailedSummary() {
               ],
             ),
           ),
-          
+
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey.shade100,
-            child: const Text("DETAIL ITEM & CUSTOMER", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            child: const Text(
+              "DETAIL ITEM & CUSTOMER",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey,
+              ),
+            ),
           ),
 
-          // --- LOOPING DO (MENDUKUNG MULTI-SHIP DALAM GRUP) ---
           ...dos.map((doItem) {
             final List doDetails = doItem['do_details'] ?? [];
-            // PERBAIKAN: Ambil SO dari parent_so (untuk grup) atau fallback ke data['so']
-            final String soNum = doItem['parent_so']?.toString() ?? data['so']?.toString() ?? "-";
+            final String soNum =
+                doItem['parent_so']?.toString() ??
+                data['so']?.toString() ??
+                "-";
             final String rddSpesifik = _formatDate(doItem['rdd_origin']);
 
             return Padding(
@@ -795,69 +537,127 @@ Widget _buildDetailedSummary() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-          children: [
-            Icon(Icons.calendar_month, size: 14, color: Colors.red.shade700),
-            const SizedBox(width: 6),
-            Text("RDD: $rddSpesifik",
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB71C1C))),
-          ],
-        ),
-        const SizedBox(height: 6),
+                    children: [
+                      Icon(
+                        Icons.calendar_month,
+                        size: 14,
+                        color: Colors.red.shade700,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "RDD: $rddSpesifik",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFB71C1C),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.description_outlined, size: 16, color: Colors.blue),
+                      const Icon(
+                        Icons.description_outlined,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
                       const SizedBox(width: 8),
-                      Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        "DO: ${doItem['do_number']}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(width: 20),
-                      // SO Sekarang akan dinamis sesuai masing-masing shipment
-                      Text("SO: $soNum", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
+                      Text(
+                        "SO: $soNum",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Colors.black,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text("👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  Text(
+                    "👤 ${doItem['customer']?['customer_id'] ?? '-'} - ${doItem['customer']?['customer_name'] ?? '-'}",
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
                   const SizedBox(height: 10),
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50, 
-                      borderRadius: BorderRadius.circular(6), 
-                      border: Border.all(color: Colors.grey.shade200)
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Table(
                       columnWidths: const {
-                        0: FlexColumnWidth(1.2), 
-                        1: FlexColumnWidth(3), 
-                        2: FlexColumnWidth(0.8), 
-                        3: FlexColumnWidth(1.3)
+                        0: FlexColumnWidth(1.2),
+                        1: FlexColumnWidth(3),
+                        2: FlexColumnWidth(0.8),
+                        3: FlexColumnWidth(1.3),
                       },
                       children: [
                         TableRow(
-                          decoration: BoxDecoration(color: Colors.grey.shade200),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                          ),
                           children: [
                             _tableCell("ID Mat", isBold: true, isHeader: true),
                             _tableCell("Name", isBold: true, isHeader: true),
-                            _tableCell("Qty", isBold: true, align: TextAlign.right, isHeader: true),
-                            _tableCell("NW (Kg)", isBold: true, align: TextAlign.right, isHeader: true),
+                            _tableCell(
+                              "Qty",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
+                            _tableCell(
+                              "NW (Kg)",
+                              isBold: true,
+                              align: TextAlign.right,
+                              isHeader: true,
+                            ),
                           ],
                         ),
                         ...doDetails.map((det) {
-                          double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
+                          double qty =
+                              double.tryParse(det['qty']?.toString() ?? "0") ??
+                              0;
                           var matSource = det['material'];
                           Map<String, dynamic>? matData;
-                          
+
                           if (matSource is List && matSource.isNotEmpty) {
                             matData = matSource[0];
                           } else if (matSource is Map) {
                             matData = matSource as Map<String, dynamic>;
                           }
 
-                          double unitWeight = double.tryParse(matData?['net_weight']?.toString() ?? "0") ?? 0;
-                          
+                          double unitWeight =
+                              double.tryParse(
+                                matData?['net_weight']?.toString() ?? "0",
+                              ) ??
+                              0;
+
                           return TableRow(
                             children: [
-                              _tableCell(matData?['material_id']?.toString() ?? "-"),
-                              _tableCell(matData?['material_name']?.toString() ?? "-"),
-                              _tableCell(qty.toInt().toString(), align: TextAlign.right, isBold: true),
-                              _tableCell((qty * unitWeight).toStringAsFixed(2), align: TextAlign.right),
+                              _tableCell(
+                                matData?['material_id']?.toString() ?? "-",
+                              ),
+                              _tableCell(
+                                matData?['material_name']?.toString() ?? "-",
+                              ),
+                              _tableCell(
+                                qty.toInt().toString(),
+                                align: TextAlign.right,
+                                isBold: true,
+                              ),
+                              _tableCell(
+                                (qty * unitWeight).toStringAsFixed(2),
+                                align: TextAlign.right,
+                              ),
                             ],
                           );
                         }).toList(),
@@ -875,9 +675,12 @@ Widget _buildDetailedSummary() {
     );
   }
 
-
-  // Tambahkan Helper ini jika belum ada untuk mendukung parameter isHeader
-  Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left, bool isHeader = false}) {
+  Widget _tableCell(
+    String text, {
+    bool isBold = false,
+    TextAlign align = TextAlign.left,
+    bool isHeader = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Text(
@@ -891,629 +694,389 @@ Widget _buildDetailedSummary() {
       ),
     );
   }
-  // // REUSE: Widget Detailed Summary dari kode AssignVendorPage Anda
-  // Widget _buildDetailedSummary() {
-  //   final data = _shippingData ?? {};
-  //   final List dos = data['delivery_order'] ?? [];
 
-  //   return Container(
-  //     decoration: BoxDecoration(
-  //       color: Colors.white,
-  //       border: Border(left: BorderSide(color: Colors.red.shade700, width: 6)),
-  //     ),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         Padding(
-  //           padding: const EdgeInsets.all(16.0),
-  //           child: Column(
-  //             crossAxisAlignment: CrossAxisAlignment.start,
-  //             children: [
-  //               Row(
-  //                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                 children: [
-  //                   const Text("🚚 SHIPMENT DETAIL", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, letterSpacing: 1.1, fontSize: 11)),
-  //                   _buildBadge(data['storage_location']?.toString().toUpperCase() ?? "-", Colors.red.shade700),
-  //                 ],
-  //               ),
-  //               const SizedBox(height: 8),
-  //               Text("ID Shipping: ${data['shipping_id']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-  //               const SizedBox(height: 16),
-  //               Row(
-  //                 children: [
-  //                   _infoBox("RDD", _formatDate(data['rdd'])),
-  //                   _infoBox("Stuffing", _formatDate(data['stuffing_date'])),
-  //                   _infoBox("SO", data['so']?.toString() ?? "-"),
-  //                 ],
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //         Container(
-  //           width: double.infinity,
-  //           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-  //           color: Colors.grey.shade100,
-  //           child: const Text("ITEM YANG AKAN DIKIRIM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-  //         ),
-  //         ...dos.map((doItem) {
-  //           final List doDetails = doItem['do_details'] ?? [];
-  //           return Padding(
-  //             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-  //             child: Column(
-  //               crossAxisAlignment: CrossAxisAlignment.start,
-  //               children: [
-  //                 Text("DO: ${doItem['do_number']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-  //                 Text("👤 ${doItem['customer']?['customer_name'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
-  //                 const SizedBox(height: 8),
-  //                 Container(
-  //                   decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.grey.shade200)),
-  //                   child: Table(
-  //                     columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(3), 2: FlexColumnWidth(1)},
-  //                     children: [
-  //                       ...doDetails.map((det) {
-  //                         double qty = double.tryParse(det['qty']?.toString() ?? "0") ?? 0;
-  //                         Map<String, dynamic>? matData = det['material'];
-  //                         return TableRow(
-  //                           children: [
-  //                             _tableCell(matData?['material_id']?.toString() ?? "-", align: TextAlign.center),
-  //                             _tableCell(matData?['material_name']?.toString() ?? "-"),
-  //                             _tableCell(qty.toInt().toString(), align: TextAlign.right, isBold: true),
-  //                           ],
-  //                         );
-  //                       }).toList(),
-  //                     ],
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //           );
-  //         }).toList(),
-  //       ],
-  //     ),
-  //   );
-  // }
+  Widget _buildTimePickerGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int crossAxisCount = constraints.maxWidth > 900
+            ? 4
+            : (constraints.maxWidth > 600 ? 3 : 2);
 
-//   Widget _buildTimePickerGrid() {
-//     return Padding(
-//       padding: const EdgeInsets.symmetric(horizontal: 90, vertical: 10),
-      
-//       child: GridView.builder(
-//         shrinkWrap: true,
-//         physics: const NeverScrollableScrollPhysics(),
-//         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-//           crossAxisCount: 4,
-//           childAspectRatio: 2.0,
-//           crossAxisSpacing: 10,
-//           mainAxisSpacing: 10,
-//         ),
-//         itemCount: _timeSlots.length,
-//         itemBuilder: (context, index) {
-//           final time = _timeSlots[index];
-//         final int booked = _bookedCounts[time] ?? 0;
-//         final int maxCap = _getMaxCapacity(time);
-//         final bool isFull = booked >= maxCap;
-//         final bool isSelected = _selectedTime == time;
+        double aspectRatio = constraints.maxWidth > 600 ? 1.8 : 1.4;
 
-// final bool isCurrentBooking = widget.oldTime == time;
-//         // Menghitung sisa slot
-//   final int remaining = maxCap - booked;
-// List<String> timeParts = time.split(" - ");
-//           return InkWell(
-//   //           onTap: () => setState(() => _selectedTime = time),
-//   //           child: Container(
-//   //             decoration: BoxDecoration(
-//   //               color: isSelected ? Colors.red.shade700 : Colors.white,
-//   //               borderRadius: BorderRadius.circular(8),
-//   //               border: Border.all(color: isSelected ? Colors.red : Colors.grey.shade300),
-//   //             ),
-//   //             alignment: Alignment.center,
-//   //             child: Text(time, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-//   //           ),
-//   //         );
-//   //       },
-//   //     ),
-//   //   );
-//   // }
-//   // Jika penuh, onTap dinonaktifkan
-//           onTap: isFull ? null : () => setState(() => _selectedTime = time),
-//           child: Container(
-//             alignment: Alignment.center,
-//             decoration: BoxDecoration(
-//               // Warna: Merah (Terpilih), Abu Terang (Penuh), Putih (Tersedia)
-//               color: isSelected 
-//                   ? Colors.red.shade700 
-//                   : (isCurrentBooking 
-//                 ? Colors.yellow.shade100 // Warna berbeda untuk jam yang sedang aktif
-//                 : (isFull ? Colors.grey.shade200 : Colors.white)),
-//               borderRadius: BorderRadius.circular(8),
-//               border: Border.all(
-//                 color: isSelected 
-//                     ? Colors.red 
-//                     : (isFull ? Colors.grey.shade300 : Colors.grey.shade300),
-//                     width: isSelected ? 2 : 1,
-//               ),
-//               boxShadow: isSelected ? [BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 4)] : null,
-//             ),
-//             //alignment: Alignment.center,
-//             child: Column(
-//               mainAxisAlignment: MainAxisAlignment.center,
-//              // crossAxisAlignment: CrossAxisAlignment.center,
-//               children: [
-//                 //const Spacer(),
-//                 // TAMPILAN JAM SEJAJAR KE SAMPING (TANPA -)
-//                 Row(
-//                   mainAxisAlignment: MainAxisAlignment.center,
-//                   children: [
-//                 Text(
-//                       timeParts[0],
-//                       style: TextStyle(
-//                         fontSize: 16,
-//                         fontWeight: FontWeight.bold,
-//                         color: isFull ? Colors.grey.shade500 : (isSelected ? Colors.white : Colors.black),
-//                       ),
-//                     ),
-//                     const SizedBox(width: 4),
-//                     Text(
-//                       timeParts[1],
-//                       style: TextStyle(
-//                         fontSize: 16,
-//                         fontWeight: FontWeight.bold,
-//                         color: isFull ? Colors.grey.shade500 : (isSelected ? Colors.white : Colors.black),
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-              
-//                 // --- BAGIAN YANG DIUBAH MENJADI FORMAT 2/14 ---
-//           Text(
-//             isFull ? "FULL" : "$remaining/$maxCap", // Contoh: 2/14
-//             style: TextStyle(
-//               fontSize: 16,
-//               color: isFull 
-//                   ? Colors.red.shade300 
-//                   : (isSelected ? Colors.white70 : Colors.green.shade700),
-//               fontWeight: FontWeight.bold,
-//               ),
-//           ),
-//          const SizedBox(height: 14),
-//          // const Spacer(),
-//           //       const Divider(height: 1, indent: 8, endIndent: 8),
-//                 // KETERANGAN CHECK-IN (2 JAM SEBELUM)
-//                 Text(
-//                     "Check-in Kedatangan:\n${_getCheckInTime(time)}",
-//                     textAlign: TextAlign.center,
-//                     style: TextStyle(
-//                       fontSize: 14, // Ukuran kecil agar tidak memenuhi kotak
-//                       fontStyle: FontStyle.italic,
-//                       color: isFull ? Colors.grey.shade400 : (isSelected ? Colors.white60 : Colors.blueGrey),
-//                     ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         );
-//       },
-//     ),
-//   );
-// }
-Widget _buildTimePickerGrid() {
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      // Menentukan jumlah kolom berdasarkan lebar layar
-      // Laptop/Layar Lebar (> 900px): 4 kolom
-      // Tablet/Layar Sedang (> 600px): 3 kolom
-      // HP/Layar Kecil: 2 kolom
-      int crossAxisCount = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 600 ? 3 : 2);
-      
-      // Mengatur rasio kotak agar pas (makin lebar layar, makin pendek kotaknya)
-      double aspectRatio = constraints.maxWidth > 600 ? 1.8 : 1.4;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              childAspectRatio: aspectRatio,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: _timeSlots.length,
+            itemBuilder: (context, index) {
+              final time = _timeSlots[index];
+              final int booked = _bookedCounts[time] ?? 0;
+              final int maxCap = _getMaxCapacity(time);
+              final bool isFull = booked >= maxCap;
+              final bool isSelected = _selectedTime == time;
+              final bool isCurrentBooking = widget.oldTime == time;
+              final int remaining = maxCap - booked;
+              List<String> timeParts = time.split(" - ");
 
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: aspectRatio,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          itemCount: _timeSlots.length,
-          itemBuilder: (context, index) {
-            final time = _timeSlots[index];
-            final int booked = _bookedCounts[time] ?? 0;
-            final int maxCap = _getMaxCapacity(time);
-            final bool isFull = booked >= maxCap;
-            final bool isSelected = _selectedTime == time;
-            final bool isCurrentBooking = widget.oldTime == time;
-            final int remaining = maxCap - booked;
-            List<String> timeParts = time.split(" - ");
-
-            return InkWell(
-              onTap: isFull ? null : () => setState(() => _selectedTime = time),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                      ? Colors.red.shade700 
-                      : (isCurrentBooking 
-                          ? Colors.yellow.shade100 
-                          : (isFull ? Colors.grey.shade100 : Colors.white)),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isSelected 
-                        ? Colors.red 
-                        : (isFull ? Colors.grey.shade300 : Colors.grey.shade300),
-                    width: isSelected ? 2 : 1,
+              return InkWell(
+                onTap: isFull
+                    ? null
+                    : () => setState(() => _selectedTime = time),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.red.shade700
+                        : (isCurrentBooking
+                              ? Colors.yellow.shade100
+                              : (isFull ? Colors.grey.shade100 : Colors.white)),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.red
+                          : (isFull
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade300),
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.2),
+                              blurRadius: 4,
+                            ),
+                          ]
+                        : null,
                   ),
-                  boxShadow: isSelected ? [BoxShadow(color: Colors.red.withOpacity(0.2), blurRadius: 4)] : null,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Baris Jam
-                      FittedBox( // Mencegah teks meluap ke samping
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(timeParts[0], style: _slotStyle(isSelected, isFull, fontSize: 13)),
-                            Text(" - ", style: _slotStyle(isSelected, isFull, fontSize: 13)),
-                            Text(timeParts[1], style: _slotStyle(isSelected, isFull, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Baris Kapasitas
-                      Text(
-                        isFull ? "PENUH" : "$remaining/$maxCap Tersedia",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isFull ? Colors.red.shade400 : (isSelected ? Colors.white : Colors.green.shade700),
-                        ),
-                      ),
-                      const Divider(height: 12, indent: 10, endIndent: 10),
-                      // Info Check-in
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          "Check-in: ${_getCheckInTime(time)}",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontStyle: FontStyle.italic,
-                            color: isSelected ? Colors.white70 : Colors.blueGrey,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                timeParts[0],
+                                style: _slotStyle(
+                                  isSelected,
+                                  isFull,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                " - ",
+                                style: _slotStyle(
+                                  isSelected,
+                                  isFull,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                timeParts[1],
+                                style: _slotStyle(
+                                  isSelected,
+                                  isFull,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          isFull ? "PENUH" : "$remaining/$maxCap Tersedia",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isFull
+                                ? Colors.red.shade400
+                                : (isSelected
+                                      ? Colors.white
+                                      : Colors.green.shade700),
+                          ),
+                        ),
+                        const Divider(height: 12, indent: 10, endIndent: 10),
+
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            "Check-in: ${_getCheckInTime(time)}",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color: isSelected
+                                  ? Colors.white70
+                                  : Colors.blueGrey,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-      );
-    },
-  );
-}
-
-// Fungsi bantu untuk style teks slot
-TextStyle _slotStyle(bool isSelected, bool isFull, {double fontSize = 14}) {
-  return TextStyle(
-    fontSize: fontSize,
-    fontWeight: FontWeight.bold,
-    color: isFull ? Colors.grey.shade400 : (isSelected ? Colors.white : Colors.black),
-  );
-}
-
-String _getCheckInTime(String timeSlot) {
-  // Mengambil jam awal (misal "07:00" dari "07:00 - 09:00")
-  String startTimeStr = timeSlot.split(" - ")[0];
-  String endTimeStr = timeSlot.split(" - ")[1];
-
-  int startHour = int.parse(startTimeStr.split(":")[0]);
-  int endHour = int.parse(endTimeStr.split(":")[0]);
-
-  // Mengurangi 2 jam
-  String checkInStart = "${(startHour - 2).toString().padLeft(2, '0')}:00";
-  String checkInEnd = "${(endHour - 2).toString().padLeft(2, '0')}:00";
-
-  return "$checkInStart - $checkInEnd";
-}
-
-// String _getCheckInTime(String timeSlot) {
-//   final warehouseId = _shippingData?['warehouse_id'];
-  
-//   // Ambil jam mulai (misal "08:00" dari "08:00 - 10:00")
-//   String startTimeStr = timeSlot.split(" - ")[0];
-//   String endTimeStr = timeSlot.split(" - ")[1];
-
-//   DateFormat format = DateFormat("HH:mm");
-//   DateTime startDt = format.parse(startTimeStr);
-//   DateTime endDt = format.parse(endTimeStr);
-
-//   // Jika Gudang 6, kurangi 1 jam 30 menit. Selain itu kurangi 2 jam.
-//   int minutesToSubtract = (warehouseId == 6) ? 90 : 120;
-
-//   DateTime checkInStart = startDt.subtract(Duration(minutes: minutesToSubtract));
-//   DateTime checkInEnd = endDt.subtract(Duration(minutes: minutesToSubtract));
-
-//   return "${format.format(checkInStart)} - ${format.format(checkInEnd)}";
-// }
-
-// Future<void> _checkAvailability() async {
-//   try {
-//     String filterDate = _shippingData!['stuffing_date'].toString().split(' ')[0];
-//     final int targetWarehouseId = _shippingData!['warehouse_id'];
-//    // Kita query ke assignments karena jam_booking ada di sana
-//     // Kita join ke request untuk memfilter berdasarkan tanggal dan gudang
-//     // final response = await supabase
-//     //     .from('shipping_assignments')
-//     //     .select('jam_booking')
-//     //     .eq('status_assignment', 'accepted')
-//     //     .eq('request.stuffing_date', _shippingData!['stuffing_date'])
-//     //     .eq('request.storage_location', _shippingData!['storage_location'])
-//     //     .not('jam_booking', 'is', null);
-
-//     final response = await supabase
-//         .from('shipping_assignments')
-//         .select('''
-//           jam_booking,
-//           request:shipping_id (
-//             stuffing_date,
-//             warehouse_id,
-//             group_id,
-//             shipping_id
-//           )
-//         ''') // <--- PERBAIKAN: Tambahkan request:shipping_id agar bisa difilter
-//         //.eq('status_assignment', 'accepted')
-//         .inFilter('status_assignment', [
-//           'accepted', 
-//           'on going', 
-//           'check in',
-//           'kelayakan unit',
-//           'loading', 
-//           'weighbridge', 
-//           'keluar'
-//         ])
-//         .eq('request.stuffing_date', filterDate)
-//         //.eq('request.warehouse_id', _shippingData!['warehouse_id'])
-//         .eq('request.warehouse_id', targetWarehouseId)
-//         .not('jam_booking', 'is', null);
-
-//     Map<String, int> counts = {};
-//     Map<String, Set<String>> uniqueVehiclesPerSlot = {};
-//     if (response != null) {
-//     for (var row in response as List) {
-//       String? time = row['jam_booking'];
-//     //   if (time != null) {
-//     //     counts[time] = (counts[time] ?? 0) + 1;
-//     //   }
-//     // }
-//     final req = row['request'];
-      
-//       if (time == null || req == null) continue;
-
-//       // --- LOGIKA IDENTITAS KENDARAAN ---
-//       // Jika pesanan adalah bagian dari grup, gunakan ID Grup sebagai identitas kendaraan.
-//       // Jika pesanan tunggal, gunakan Shipping ID sebagai identitas kendaraan.
-//       String vehicleKey = req['group_id'] != null 
-//           ? "GRP_${req['group_id']}" 
-//           : "SHIP_${req['shipping_id']}";
-
-//           if (!uniqueVehiclesPerSlot.containsKey(time)) {
-//         uniqueVehiclesPerSlot[time] = {vehicleKey};
-//       } else {
-//         uniqueVehiclesPerSlot[time]!.add(vehicleKey);
-//       }
-//     }
-//     }
-
-//     // 2. Konversi hasil Set menjadi jumlah (integer) untuk ditampilkan di grid
-//     uniqueVehiclesPerSlot.forEach((time, vehicles) {
-//       counts[time] = vehicles.length;
-//     });
-
-//     setState(() {
-//       _bookedCounts = counts;
-//       _isLoading = false;
-//     });
-//   } catch (e) {
-//     print("Error checking slots: $e");
-//   }
-// }
-Future<void> _checkAvailability() async {
-  try {
-    if (_shippingData == null) return;
-
-    final rawDate = _shippingData!['stuffing_date'];
-    final String filterDate = DateFormat('yyyy-MM-dd').format(DateTime.parse(rawDate.toString()));
-    final int targetWarehouseId = int.parse(_shippingData!['warehouse_id'].toString());
-
-    // Panggil fungsi database secara langsung
-    final List<dynamic> response = await supabase.rpc('get_booked_slots', params: {
-      'target_date': filterDate,
-      'target_warehouse_id': targetWarehouseId,
-    });
-
-    Map<String, int> counts = {};
-    for (var row in response) {
-      String? slot = row['slot_time'];
-      int total = int.parse(row['total_booked'].toString());
-      if (slot != null) {
-        counts[slot] = total;
-      }
-    }
-
-    setState(() {
-      _bookedCounts = counts;
-      _isLoading = false;
-    });
-
-    print("DEBUG RPC SLOTS: $_bookedCounts");
-  } catch (e) {
-    print("Error RPC: $e");
-    setState(() => _isLoading = false);
+              );
+            },
+          ),
+        );
+      },
+    );
   }
-}
+
+  TextStyle _slotStyle(bool isSelected, bool isFull, {double fontSize = 14}) {
+    return TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+      color: isFull
+          ? Colors.grey.shade400
+          : (isSelected ? Colors.white : Colors.black),
+    );
+  }
+
+  String _getCheckInTime(String timeSlot) {
+    String startTimeStr = timeSlot.split(" - ")[0];
+    String endTimeStr = timeSlot.split(" - ")[1];
+
+    int startHour = int.parse(startTimeStr.split(":")[0]);
+    int endHour = int.parse(endTimeStr.split(":")[0]);
+
+    String checkInStart = "${(startHour - 2).toString().padLeft(2, '0')}:00";
+    String checkInEnd = "${(endHour - 2).toString().padLeft(2, '0')}:00";
+
+    return "$checkInStart - $checkInEnd";
+  }
+
+  Future<void> _checkAvailability() async {
+    try {
+      if (_shippingData == null) return;
+
+      final rawDate = _shippingData!['stuffing_date'];
+      final String filterDate = DateFormat(
+        'yyyy-MM-dd',
+      ).format(DateTime.parse(rawDate.toString()));
+      final int targetWarehouseId = int.parse(
+        _shippingData!['warehouse_id'].toString(),
+      );
+
+      final List<dynamic> response = await supabase.rpc(
+        'get_booked_slots',
+        params: {
+          'target_date': filterDate,
+          'target_warehouse_id': targetWarehouseId,
+        },
+      );
+
+      Map<String, int> counts = {};
+      for (var row in response) {
+        String? slot = row['slot_time'];
+        int total = int.parse(row['total_booked'].toString());
+        if (slot != null) {
+          counts[slot] = total;
+        }
+      }
+
+      setState(() {
+        _bookedCounts = counts;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   Widget _buildBottomAction() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -2))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.red.shade700,
           minimumSize: const Size(double.infinity, 52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-       // onPressed: _selectedTime == null || _isSaving ? null : _confirmAndAccept,
-        onPressed: _selectedTime == null || _isSaving 
-  ? null 
-  : () {
-      if (widget.oldTime != null) {
-        // JIKA RESCHEDULE, MUNCULKAN POPUP ALASAN
-        _showReasonDialog();
-      } else {
-        // JIKA BOOKING PERTAMA, LANGSUNG SIMPAN
-        _confirmAndAccept();
-      }
-    },
-        child: _isSaving 
+        onPressed: _selectedTime == null || _isSaving
+            ? null
+            : () {
+                if (widget.oldTime != null) {
+                  _showReasonDialog();
+                } else {
+                  _confirmAndAccept();
+                }
+              },
+        child: _isSaving
             ? const CircularProgressIndicator(color: Colors.white)
-            :Text(
-              // JIKA oldTime ADA (NOT NULL), MAKA TAMPILKAN TEKS RESCHEDULE
-              widget.oldTime == null 
-                ? "KONFIRMASI JADWAL & TERIMA ORDER" 
-                : "KONFIRMASI RESCHEDULE JADWAL", 
-              style: const TextStyle(
-                color: Colors.white, 
-                fontWeight: FontWeight.bold
+            : Text(
+                widget.oldTime == null
+                    ? "KONFIRMASI JADWAL & TERIMA ORDER"
+                    : "KONFIRMASI RESCHEDULE JADWAL",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
       ),
     );
   }
 
-// void _showReasonDialog() {
-//   _tempSelectedReason = null;
-//   showDialog(
-//     context: context,
-//     builder: (context) => AlertDialog(
-//       title: const Text("Alasan Reschedule", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-//       content: Column(
-//         mainAxisSize: MainAxisSize.min,
-//         children: _rescheduleReasons.map((reason) {
-//           return ListTile(
-//             title: Text(reason),
-//             leading: const Icon(Icons.info_outline, color: Colors.red),
-//             onTap: () {
-//               Navigator.pop(context); // Tutup dialog
-//               _confirmAndAccept(rescheduleReasons: reason); // Jalankan simpan dengan alasan
-//             },
-//           );
-//         }).toList(),
-//       ),
-//       actions: [
-//         TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
-//       ],
-//     ),
-//   );
-// }
+  void _showReasonDialog() {
+    _tempSelectedReason = null;
+    _otherReasonController.clear();
 
-void _showReasonDialog() {
-  // Reset pilihan setiap kali dialog dibuka
-  _tempSelectedReason = null;
-  _otherReasonController.clear(); 
-
-  showDialog(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: const Text(
-              "Pilih Alasan Reschedule",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            content: SingleChildScrollView( // Tambahkan scroll agar tidak overflow jika keyboard muncul
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ..._rescheduleReasons.map((reason) {
-                    return RadioListTile<String>(
-                      title: Text(reason, style: const TextStyle(fontSize: 14)),
-                      value: reason,
-                      groupValue: _tempSelectedReason,
-                      activeColor: Colors.red.shade700,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (value) {
-                        setStateDialog(() {
-                          _tempSelectedReason = value;
-                        });
-                      },
-                    );
-                  }).toList(),
-                  
-                  // TAMPILKAN FIELD JIKA PILIH 'Other'
-                  if (_tempSelectedReason == 'Other')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: TextField(
-                        controller: _otherReasonController,
-                        autofocus: true,
-                        decoration: InputDecoration(
-                          hintText: "Tulis alasan lainnya...",
-                          hintStyle: const TextStyle(fontSize: 13),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text(
+                "Pilih Alasan Reschedule",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ..._rescheduleReasons.map((reason) {
+                      return RadioListTile<String>(
+                        title: Text(
+                          reason,
+                          style: const TextStyle(fontSize: 14),
                         ),
-                        maxLines: 2,
-                        onChanged: (val) {
-                          // Trigger build agar tombol SIMPAN aktif/nonaktif sesuai isi teks
-                          setStateDialog(() {});
+                        value: reason,
+                        groupValue: _tempSelectedReason,
+                        activeColor: Colors.red.shade700,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (value) {
+                          setStateDialog(() {
+                            _tempSelectedReason = value;
+                          });
                         },
+                      );
+                    }),
+
+                    if (_tempSelectedReason == 'Other')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: TextField(
+                          controller: _otherReasonController,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: "Tulis alasan lainnya...",
+                            hintStyle: const TextStyle(fontSize: 13),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          maxLines: 2,
+                          onChanged: (val) {
+                            setStateDialog(() {});
+                          },
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-          
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("BATAL", style: TextStyle(color: Colors.grey)),
-              ),
-              ElevatedButton(
-                onPressed: _tempSelectedReason == null
-                    ? null
-                    : () {
-                        Navigator.pop(context); // Tutup dialog
-                        _confirmAndAccept(rescheduleReasons: _tempSelectedReason);
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  disabledBackgroundColor: Colors.grey.shade300,
+                  ],
                 ),
-                child: const Text("SIMPAN JADWAL BARU", style: TextStyle(color: Colors.white)),
               ),
-            ],
-          );
-        },
-      );
-    },
+
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    "BATAL",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _tempSelectedReason == null
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          _confirmAndAccept(
+                            rescheduleReasons: _tempSelectedReason,
+                          );
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
+                  child: const Text(
+                    "SIMPAN JADWAL BARU",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _infoBox(String label, String value) => Expanded(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    ),
   );
-}
-  // REUSE: Helpers dari kode Anda
-  Widget _infoBox(String label, String value) => Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87))]));
-  /// Widget _tableCell(String text, {bool isBold = false, TextAlign align = TextAlign.left}) => Padding(padding: const EdgeInsets.all(8), child: Text(text, textAlign: align, style: TextStyle(fontSize: 11, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)));
-  Widget _buildBadge(String text, Color color) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color, width: 1)), child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)));
-  String _formatDate(String? s) => s == null || s.isEmpty ? "-" : DateFormat('dd/MM/yy').format(DateTime.parse(s));
+  Widget _buildBadge(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color, width: 1),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+    ),
+  );
+  String _formatDate(String? s) => s == null || s.isEmpty
+      ? "-"
+      : DateFormat('dd/MM/yy').format(DateTime.parse(s));
 }
